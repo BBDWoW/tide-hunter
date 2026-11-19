@@ -7,18 +7,20 @@ export function reelZoneWidth(rarity: Rarity, hpRatio: number, hasStatus: boolea
   return Math.max(0.1, Math.min(0.5, 0.15 + 0.34 * (1 - hpRatio) + (hasStatus ? 0.06 : 0) - RARITY[rarity].reel * 0.25));
 }
 
-export function Reel({ rarity, hpRatio, hasStatus, name, onDone }: { rarity: Rarity; hpRatio: number; hasStatus: boolean; name: string; onDone: (ok: boolean) => void }) {
+// onDone(ok, quality)：quality 0–1，收線過程中張力越低越高，會影響之後晃動的成功率
+export function Reel({ rarity, hpRatio, hasStatus, name, zoneBonus = 0, onDone }: { rarity: Rarity; hpRatio: number; hasStatus: boolean; name: string; zoneBonus?: number; onDone: (ok: boolean, quality: number) => void }) {
   const zoneRef = useRef<HTMLDivElement>(null), fishRef = useRef<HTMLDivElement>(null);
   const progRef = useRef<HTMLElement>(null), tenRef = useRef<HTMLElement>(null);
   const [phase, setPhase] = useState<'ready' | 'go' | 'ok' | 'fail'>('ready');
   const hold = useHold(true);
-  const w = reelZoneWidth(rarity, hpRatio, hasStatus);
+  const w = Math.min(0.6, reelZoneWidth(rarity, hpRatio, hasStatus) * (1 + zoneBonus));
 
   useEffect(() => {
     const reel = RARITY[rarity].reel;
     const st = { zx: 0.5, zv: 0, fx: 0.5, ft: 0.5, timer: 0, prog: 25, ten: 0, t: 0 };
     let raf = 0, last = performance.now(), ended = false;
-    const end = (ok: boolean) => { if (ended) return; ended = true; setPhase(ok ? 'ok' : 'fail'); setTimeout(() => onDone(ok), 900); };
+    let tenSum = 0, tenT = 0;
+    const end = (ok: boolean) => { if (ended) return; ended = true; setPhase(ok ? 'ok' : 'fail'); const q = 1 - Math.min(1, tenSum / Math.max(0.1, tenT) / 100); setTimeout(() => onDone(ok, q), 900); };
     const loop = (now: number) => {
       const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; st.t += dt;
       if (st.t > 1 && !ended) {
@@ -32,6 +34,7 @@ export function Reel({ rarity, hpRatio, hasStatus, name, onDone }: { rarity: Rar
         const inZ = Math.abs(st.fx - st.zx) < w / 2;
         if (inZ) { st.prog += 24 * dt; st.ten = Math.max(0, st.ten - 30 * dt); }
         else { st.ten += (30 + reel * 45) * dt; st.prog = Math.max(0, st.prog - 5 * dt); }
+        tenSum += st.ten * dt; tenT += dt;
         if (st.prog >= 100) end(true);
         else if (st.ten >= 100) end(false);
         zoneRef.current?.classList.toggle('in', inZ);

@@ -4,7 +4,8 @@ import { FORMS } from '../data/creatures';
 import { SKILLS } from '../data/skills';
 import { RARITY, STAGE_NAME } from '../data/types';
 import { evolve, evolveTarget, formOf, gainXp, maxHp, skillSlots, xpReward, xpToNext, type Mon } from '../game/creature';
-import { markCaught, PARTY_MAX, type RunState } from '../game/run';
+import { applyBoon, boon, isBoss, markCaught, nodeOf, PARTY_MAX, rollBoons, type RunState } from '../game/run';
+import { BOON_TIER, BOONS } from '../data/boons';
 import { EVO_W, playEvolution } from '../render/evo';
 import type { BattleResult } from './Battle';
 import { AbilityLines, Bar, Elems, RarityTag, SkillLine, Sprite, StageTag } from './components';
@@ -23,6 +24,9 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
   const [lines, setLines] = useState<Line[]>([]);
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const caughtMon = useRef<Mon | null>(null);
+  // 戰鬥勝利或收服後：三選一能力卡（霸主戰後直接結算，不抽卡）
+  const [boonOpts] = useState<string[] | null>(() => (result.outcome !== 'fled' && !isBoss(run) ? rollBoons(run, nodeOf(run).kind === 'elite') : null));
+  const [boonDone, setBoonDone] = useState(false);
 
   // 只執行一次：結算所有變化，產生待處理事項
   useEffect(() => {
@@ -41,7 +45,10 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
     }
     if (result.outcome === 'win' || result.outcome === 'caught') {
       run.battlesWon++;
-      const reward = Math.floor(xpReward(enemy) * (result.outcome === 'caught' ? 0.7 : 1));
+      const reward = Math.floor(xpReward(enemy) * (result.outcome === 'caught' ? 0.7 : 1) * (1 + boon(run, 'xp') * 0.3));
+      const coins = Math.floor((8 + enemy.lv * 2) * (nodeOf(run).kind === 'elite' ? 2 : 1));
+      run.shells += coins;
+      out.push({ uid: '_coins', text: `獲得 ${coins} 枚貝殼幣（共 ${run.shells}）` });
       for (const m of run.party) {
         if (m.hp <= 0 || m === enemy) continue;
         const share = result.participants.includes(m.uid) ? reward : Math.floor(reward / 2);
@@ -109,6 +116,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
                 </div>
               ))}
               {result.outcome === 'fled' && <p class="dim">沒有獲得經驗值。</p>}
+              {lines.filter((l) => l.uid === '_coins' || l.uid === '_boon').map((l, i) => <p class="small accent" key={'c' + i}>{l.text}</p>)}
             </div>
             {cur?.k === 'learn' && !autoLearn && <LearnPrompt mon={find(cur.uid)!} skill={cur.skill}
               onPick={(forget) => {
@@ -120,7 +128,8 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
                 shift();
               }} />}
             {cur?.k === 'full' && <FullPrompt run={run} mon={cur.mon} onDone={(text) => { note(cur.mon.uid, text); shift(); }} />}
-            {!cur && <MenuItem onClick={onDone} hot>繼續航行</MenuItem>}
+            {!cur && boonOpts && !boonDone && <BoonPick ids={boonOpts} onPick={(id) => { note('_boon', applyBoon(run, id)); setBoonDone(true); }} />}
+            {!cur && (!boonOpts || boonDone) && <MenuItem onClick={onDone} hot>繼續航行</MenuItem>}
           </>}
         </Win>
       } />
@@ -199,6 +208,26 @@ function FullPrompt({ run, mon, onDone }: { run: RunState; mon: Mon; onDone: (t:
           </button>
         ))}
         <MenuItem onClick={() => onDone(`把 ${formOf(mon).name} 放回了大海。`)}>放生 {formOf(mon).name}</MenuItem>
+      </div>
+    </div>
+  );
+}
+
+function BoonPick({ ids, onPick }: { ids: string[]; onPick: (id: string) => void }) {
+  return (
+    <div class="boon-pick">
+      <p class="win-title">選一張能力卡</p>
+      <div class="boon-row">
+        {ids.map((id) => {
+          const b = BOONS[id], tier = BOON_TIER[b.tier];
+          return (
+            <button class="boon-card" key={id} style={{ '--tier': tier.color }} onClick={() => onPick(id)}>
+              <span class="boon-tier">{tier.name} · {b.cat}</span>
+              <b class="boon-name">{b.name}</b>
+              <span class="small">{b.desc}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

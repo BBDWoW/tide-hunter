@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { healParty, loadRun, markSeen, newRun, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
+import { boon, healParty, isBoss, loadRun, markSeen, newRun, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
 import { AfterBattle } from './AfterBattle';
 import { Battle, type BattleResult } from './Battle';
 import { Fishing } from './Fishing';
@@ -27,11 +27,13 @@ export function App() {
   const [run, setRun] = useState<RunState | null>(null);
   const [n, setN] = useState(0); // 換畫面時強制重新掛載
   const go = (s: Screen) => { setScreen(s); setN((x) => x + 1); };
-  const boss = !!run && run.stations[run.station] === 'boss';
+  const boss = !!run && isBoss(run);
 
   const advance = () => {
     if (!run) return;
+    run.path.push(run.picked ?? 0);
     run.station++;
+    run.picked = null;
     saveRun(run);
     go({ k: 'voyage' });
   };
@@ -47,10 +49,10 @@ export function App() {
       body = <StarterPick vp={vp} onBack={() => go({ k: 'title' })} onPick={(f) => { const r = newRun(f); markSeen(f); updateDex((d) => { if (!d.caught.includes(f)) d.caught.push(f); }); saveRun(r); setRun(r); go({ k: 'voyage' }); }} />;
       break;
     case 'voyage':
-      body = <Voyage vp={vp} run={run!} onGo={() => go({ k: 'fishing' })} onCamp={advance} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
+      body = <Voyage vp={vp} run={run!} onGo={() => go({ k: 'fishing' })} onNext={advance} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
       break;
     case 'fishing':
-      body = <Fishing vp={vp} boss={boss} onHook={(q) => { const enc = devEncounter() ?? rollEncounter(run!, q); markSeen(enc.mon.form); go({ k: 'battle', enc }); }} />;
+      body = <Fishing vp={vp} run={run!} boss={boss} onDone={advance} onHook={(q, sh) => { const enc = devEncounter() ?? rollEncounter(run!, q, sh); markSeen(enc.mon.form); go({ k: 'battle', enc }); }} />;
       break;
     case 'battle':
       body = <Battle vp={vp} run={run!} enc={screen.enc} boss={boss} onEnd={(result) => {
@@ -69,7 +71,7 @@ export function App() {
           go({ k: 'end', win: true });
           return;
         }
-        healParty(run!, 0.15);
+        healParty(run!, 0.15 + boon(run!, 'breeze') * 0.15);
         advance();
       }} />;
       break;

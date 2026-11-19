@@ -274,7 +274,9 @@ export function burst(parts: Particle[], x: number, y: number, kind: 'hit' | 'sp
 }
 
 // ── 釣魚 ──
-export interface FishView { phase: 'cast' | 'flying' | 'wait' | 'bite' | 'hooked'; power: number; castT: number; bobX: number; shadowX: number }
+export type FishPhase = 'choose' | 'cast' | 'flying' | 'wait' | 'nibble' | 'bite' | 'hooked';
+export interface ShadowView { x: number; size: 1 | 2 | 3 }
+export interface FishView { phase: FishPhase; power: number; castT: number; bobX: number; shadows: ShadowView[]; sel: number; spot: string }
 const BOAT = { x: 46, y: 92 };
 function boat(ctx: CanvasRenderingContext2D, bob: number) {
   const x = BOAT.x, y = BOAT.y + bob;
@@ -292,28 +294,65 @@ function boat(ctx: CanvasRenderingContext2D, bob: number) {
   ctx.fillStyle = '#d23a5a'; ctx.fillRect(fx - 1, y - 30, 10, 3); ctx.fillRect(fx + 6, y - 28, 5, 1);
   ctx.fillStyle = '#ffd9b8'; ctx.fillRect(fx + 9, y - 18, 3, 3);
 }
+const SH_W = { 1: 12, 2: 20, 3: 32 } as const;
+function fishShadow(ctx: CanvasRenderingContext2D, x: number, y: number, size: 1 | 2 | 3, t: number, alpha = 0.45) {
+  const w = SH_W[size], h = Math.round(w * 0.35), dir = Math.sin(t * 0.7 + x) > 0 ? 1 : -1;
+  ctx.fillStyle = `rgba(6,30,70,${alpha})`;
+  ctx.fillRect(Math.round(x - w / 2), Math.round(y - h / 2) + 1, w, Math.max(2, h - 2));
+  ctx.fillRect(Math.round(x - w / 2 + 2), Math.round(y - h / 2), w - 4, h);
+  const tx = Math.round(x - (w / 2 + 4) * dir);
+  ctx.fillRect(Math.min(tx, tx + 4 * dir), Math.round(y - h / 2), 4, h);
+}
+function spotDecor(ctx: CanvasRenderingContext2D, spot: string, t: number) {
+  if (spot === 'deep') { ctx.fillStyle = 'rgba(4,16,48,0.28)'; ctx.fillRect(0, 47, W, H - 47); }
+  if (spot === 'reef') {
+    for (const [x, w] of [[150, 14], [232, 18]] as const) { ctx.fillStyle = '#6c5f50'; ctx.fillRect(x, 58, w, 4); ctx.fillStyle = '#8cc474'; ctx.fillRect(x + 2, 57, w - 4, 2); ctx.fillStyle = '#ff6b8a'; ctx.fillRect(x + 4, 55, 2, 2); ctx.fillStyle = '#ffb05a'; ctx.fillRect(x + w - 6, 55, 2, 2); }
+  }
+  if (spot === 'wreck') {
+    const x = 236, sway = Math.round(Math.sin(t * 0.8));
+    ctx.fillStyle = '#4a3020'; ctx.fillRect(x + sway, 30, 3, 32); ctx.fillRect(x - 8 + sway, 36, 18, 2);
+    ctx.fillStyle = '#c8b898'; ctx.fillRect(x + 3 + sway, 32, 8, 6);
+    ctx.fillStyle = '#3a2418'; ctx.fillRect(x - 14, 60, 30, 3);
+  }
+  if (spot === 'shallow') { ctx.fillStyle = 'rgba(246,226,168,0.55)'; ctx.fillRect(170, 128, 86, 16); ctx.fillRect(180, 124, 60, 4); }
+}
+
 export function drawFishing(ctx: CanvasRenderingContext2D, t: number, _dt: number, v: FishView) {
   drawSea(ctx, t, 'day');
+  spotDecor(ctx, v.spot, t);
   const bob = Math.round(Math.sin(t * 1.5));
-  if (v.phase === 'wait' || v.phase === 'bite') {
-    ctx.fillStyle = 'rgba(6,30,70,0.45)';
-    const sx = Math.round(v.shadowX), sy = Math.round(84 + Math.sin(t * 2) * 2);
-    ctx.fillRect(sx - 10, sy - 2, 20, 4); ctx.fillRect(sx - 7, sy - 4, 14, 8); ctx.fillRect(sx - 15, sy - 1, 5, 2);
-  }
+  // 魚影
+  v.shadows.forEach((sh, i) => {
+    const y = 86 + i * 7 + Math.sin(t * 1.6 + i) * 2;
+    if (v.phase === 'choose' || v.phase === 'cast') {
+      fishShadow(ctx, sh.x + Math.sin(t * 0.7 + i * 2) * 6, y, sh.size, t);
+      if (i === v.sel) {
+        const ax = Math.round(sh.x + Math.sin(t * 0.7 + i * 2) * 6), ay = Math.round(y - 14 - Math.abs(Math.sin(t * 4)) * 3);
+        ctx.fillStyle = '#ffcf4a'; ctx.fillRect(ax - 3, ay, 7, 2); ctx.fillRect(ax - 2, ay + 2, 5, 1); ctx.fillRect(ax - 1, ay + 3, 3, 1); ctx.fillRect(ax, ay + 4, 1, 1);
+      }
+    } else if (i === v.sel && v.phase !== 'hooked') {
+      fishShadow(ctx, v.bobX + Math.sin(t * 2) * 3, 72 + Math.sin(t * 2) * 1, sh.size, t, 0.5);
+    } else if (i !== v.sel) {
+      fishShadow(ctx, sh.x + (sh.x > v.bobX ? 1 : -1) * Math.min(60, t * 0), y, sh.size, t, 0.18);
+    }
+  });
   boat(ctx, bob);
   const hx = BOAT.x + 14, hy = BOAT.y - 16 + bob;
   let tipX = hx + 42, tipY = hy - 34;
   if (v.phase === 'cast') { const k = v.power; tipX = hx + 40 - k * 50; tipY = hy - 34 - k * 4; }
   pxLine(ctx, hx, hy, tipX, tipY, '#3a2a1a'); pxLine(ctx, hx + 1, hy, tipX + 1, tipY, '#e8d8a8');
-  if (v.phase !== 'cast') {
+  if (v.phase !== 'cast' && v.phase !== 'choose') {
     const wy = 62;
     let bx = v.bobX, by = wy;
     if (v.phase === 'flying') { const k = Math.min(1, v.castT / 0.6); bx = tipX + (v.bobX - tipX) * k; by = tipY + (wy - tipY) * k - Math.sin(k * Math.PI) * 30; }
-    const dip = v.phase === 'bite' ? (Math.floor(t * 12) % 2 ? 3 : 1) : 0;
+    const dip = v.phase === 'bite' ? (Math.floor(t * 12) % 2 ? 3 : 1) : v.phase === 'nibble' ? (Math.floor(t * 8) % 2) : 0;
     by += dip + (v.phase === 'wait' ? Math.round(Math.sin(t * 2.2) * 0.6) : 0);
     ctx.globalAlpha = 0.8; pxLine(ctx, tipX, tipY, bx + 1, by, '#ffffff'); ctx.globalAlpha = 1;
     ctx.fillStyle = '#ff3a4a'; ctx.fillRect(bx, by, 3, 2); ctx.fillStyle = '#ffffff'; ctx.fillRect(bx, by + 2, 3, 1);
-    if (v.phase === 'wait' || v.phase === 'bite') { ctx.fillStyle = 'rgba(255,255,255,0.7)'; const r = 4 + ((t * 6) % 6); ctx.fillRect(Math.round(bx + 1 - r), wy + 3, 2, 1); ctx.fillRect(Math.round(bx + r), wy + 3, 2, 1); }
+    if (v.phase !== 'flying') { ctx.fillStyle = 'rgba(255,255,255,0.7)'; const r = 4 + ((t * 6) % 6); ctx.fillRect(Math.round(bx + 1 - r), wy + 3, 2, 1); ctx.fillRect(Math.round(bx + r), wy + 3, 2, 1); }
+    if (v.phase === 'nibble') {
+      ctx.fillStyle = '#ffffff'; for (let i = 0; i < 3; i++) ctx.fillRect(bx - 3 + i * 3, by - 8, 2, 2);
+    }
     if (v.phase === 'bite') {
       const qx = bx - 5, qy = by - 22;
       ctx.fillStyle = '#141a33'; ctx.fillRect(qx - 1, qy - 1, 15, 16);
@@ -323,19 +362,33 @@ export function drawFishing(ctx: CanvasRenderingContext2D, t: number, _dt: numbe
   }
 }
 
-// ── 標題：夕陽與躍出水面的潮靈 ──
-const JUMPERS = ['water3a', 'dragon', 'fire2', 'zapeel', 'gull2'];
+// 收服用的泡泡網：wob 為晃動角度（-1～1）
+export function drawNet(ctx: CanvasRenderingContext2D, cx: number, cy: number, wob: number, glow = 0) {
+  const r = 11, ox = Math.round(wob * 4);
+  for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+    const d = x * x + y * y;
+    if (d > r * r) continue;
+    const px = cx + x + Math.round((wob * (y + r)) / 6), py = cy + y;
+    let c = 'rgba(150,225,255,0.55)';
+    if (d > (r - 1.2) * (r - 1.2)) c = '#ffffff';
+    else if ((x + y + 40) % 5 === 0 || (x - y + 40) % 5 === 0) c = 'rgba(232,251,255,0.9)';
+    if (x < -3 && y < -3 && d < 30 && d > 12) c = '#ffffff';
+    ctx.fillStyle = c; ctx.fillRect(px, py, 1, 1);
+  }
+  ctx.fillStyle = '#ffcf4a'; ctx.fillRect(cx - 2 + ox, cy - r - 2, 5, 3);
+  if (glow > 0) {
+    ctx.fillStyle = `rgba(255,236,150,${glow})`;
+    for (let a = 0; a < 12; a++) { const an = (a / 12) * Math.PI * 2, rr = r + 4 + glow * 6; ctx.fillRect(Math.round(cx + Math.cos(an) * rr), Math.round(cy + Math.sin(an) * rr), 2, 2); }
+  }
+}
+
+// ── 標題：安靜的夕陽海面與一艘小船 ──
 export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   drawSea(ctx, t, 'sunset');
-  for (let k = 0; k < 2; k++) {
-    const period = 5.5, tt = (t + k * 2.7) % period, id = JUMPERS[Math.floor((t + k * 2.7) / period) % JUMPERS.length];
-    if (tt > 1.8) continue;
-    const p = tt / 1.8, x = 40 + k * 120 + p * 70, y = 96 - Math.sin(p * Math.PI) * 48;
-    const f = FORMS[id];
-    const hs = spriteSize(f.sprite) / 2;
-    drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(x - hs), Math.round(y - hs), { f: Math.floor(t * 4) % 2, alpha: 0.95 });
-    if (p < 0.12 || p > 0.88) { ctx.fillStyle = '#ffe0c8'; for (let i = 0; i < 6; i++) ctx.fillRect(Math.round(x - 8 + i * 3), Math.round(98 - (i % 2) * 3 - Math.random() * 3), 2, 2); }
-  }
+  const x = 186, y = 100 + Math.round(Math.sin(t * 1.2));
+  ctx.fillStyle = '#2a1430'; ctx.fillRect(x - 16, y, 34, 3); ctx.fillRect(x - 13, y + 3, 28, 2);
+  ctx.fillRect(x, y - 22, 2, 22); ctx.fillStyle = '#ffe0c8'; ctx.fillRect(x + 2, y - 20, 10, 14); ctx.fillStyle = '#f0b0a0'; ctx.fillRect(x + 2, y - 8, 10, 2);
+  ctx.fillStyle = 'rgba(42,20,48,0.4)'; ctx.fillRect(x - 14, y + 6, 30, 1); ctx.fillRect(x - 10, y + 8, 22, 1);
 }
 
 // ── 選初始夥伴：三座礁石台 ──
@@ -358,69 +411,106 @@ export function drawStarterScene(ctx: CanvasRenderingContext2D, t: number, forms
 }
 
 // ── 海圖：俯視的航線 ──
-export const CHART_NODES: [number, number][] = [[24, 78], [52, 56], [80, 76], [104, 50], [130, 70], [156, 44], [180, 66], [206, 42], [232, 60]];
-function chartBase() {
-  return cached('chart', W, H, (x) => {
-    const img = x.createImageData(W, H), r = seeded(77);
-    const isl = CHART_NODES.map(([cx, cy], i) => ({ cx, cy, rr: i === 8 ? 13 : 8 + r() * 3 }));
+export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'boss';
+export interface ChartNode { kind: NodeKind }
+export function chartPos(step: number, idx: number, n: number): [number, number] {
+  const x = 16 + step * 25, ys = n === 1 ? [60] : n === 2 ? [42, 80] : [30, 60, 90];
+  return [x, ys[idx] + (step % 2 ? 4 : -2)];
+}
+function chartBase(route: ChartNode[][], seed: number) {
+  return cached('chart-' + seed, W, H, (x) => {
+    const img = x.createImageData(W, H), r = seeded(seed % 9973);
+    const isl: { cx: number; cy: number; rr: number }[] = [];
+    route.forEach((opts, i) => opts.forEach((_, j) => { const [cx, cy] = chartPos(i, j, opts.length); isl.push({ cx, cy, rr: i === route.length - 1 ? 11 : 6 + r() * 2 }); }));
     for (let y = 0; y < H; y++) for (let xx = 0; xx < W; xx++) {
       let dmin = 99;
-      for (const s of isl) dmin = Math.min(dmin, Math.hypot(xx - s.cx, (y - s.cy) * 1.3) - s.rr);
-      const shallow = Math.max(0, Math.min(1, 1 - dmin / 26));
+      for (const s2 of isl) dmin = Math.min(dmin, Math.hypot(xx - s2.cx, (y - s2.cy) * 1.3) - s2.rr);
+      const shallow = Math.max(0, Math.min(1, 1 - dmin / 22));
       const deep = 0.5 + 0.5 * Math.sin(xx * 0.03 + y * 0.05) * Math.cos(y * 0.04 - xx * 0.01);
       let c = ditherGrad(['#0a3f7a', '#1676b8', '#3fb6d8', '#8fe4ee'], Math.min(1, shallow * 0.85 + deep * 0.2), xx, y, 10);
-      if (dmin < 0) c = dmin < -4 ? (BAYER[y & 3][xx & 3] > 7 ? hex('#5fae5a') : hex('#4c9a4c')) : hex('#f2dc9c');
+      if (dmin < 0) c = dmin < -3 ? (BAYER[y & 3][xx & 3] > 7 ? hex('#5fae5a') : hex('#4c9a4c')) : hex('#f2dc9c');
       else if (dmin < 1.2) c = hex('#e8fbff');
       const i = (y * W + xx) * 4; img.data[i] = c[0]; img.data[i + 1] = c[1]; img.data[i + 2] = c[2]; img.data[i + 3] = 255;
     }
     x.putImageData(img, 0, 0);
-    // 小樹
-    for (const s of isl) { x.fillStyle = '#2f7a3a'; x.fillRect(s.cx - 2, s.cy - 3, 3, 3); x.fillStyle = '#7a4a24'; x.fillRect(s.cx - 1, s.cy, 1, 2); }
-    // 羅盤
-    const cx = 236, cy = 124;
+    const cx = 240, cy = 126;
     x.fillStyle = 'rgba(232,251,255,0.6)';
-    for (let a = 0; a < 40; a++) { const an = (a / 40) * Math.PI * 2; x.fillRect(Math.round(cx + Math.cos(an) * 9), Math.round(cy + Math.sin(an) * 9), 1, 1); }
-    x.fillStyle = '#ff5a6e'; for (let i = 0; i < 7; i++) x.fillRect(cx, cy - 8 + i, 1, 1);
-    x.fillStyle = '#e8fbff'; for (let i = 0; i < 7; i++) x.fillRect(cx, cy + 2 + i, 1, 1);
+    for (let a2 = 0; a2 < 40; a2++) { const an = (a2 / 40) * Math.PI * 2; x.fillRect(Math.round(cx + Math.cos(an) * 8), Math.round(cy + Math.sin(an) * 8), 1, 1); }
+    x.fillStyle = '#ff5a6e'; for (let i = 0; i < 6; i++) x.fillRect(cx, cy - 7 + i, 1, 1);
   });
 }
-export type NodeKind = 'fish' | 'camp' | 'boss';
-export function drawChart(ctx: CanvasRenderingContext2D, t: number, kinds: NodeKind[], cur: number) {
-  ctx.drawImage(chartBase(), 0, 0);
-  // 波紋
-  ctx.fillStyle = 'rgba(232,251,255,0.35)';
-  for (let i = 0; i < 26; i++) { const x = ((i * 53 + t * 5) % (W + 10)) - 5, y = (i * 29) % H; ctx.fillRect(Math.round(x), y, 3, 1); ctx.fillRect(Math.round(x) + 3, y - 1, 2, 1); }
-  // 航線
-  for (let i = 0; i < CHART_NODES.length - 1; i++) {
-    const [x0, y0] = CHART_NODES[i], [x1, y1] = CHART_NODES[i + 1];
-    const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 4);
-    for (let k = 1; k < n; k++) {
-      const px = x0 + ((x1 - x0) * k) / n, py = y0 + ((y1 - y0) * k) / n + Math.sin((k / n) * Math.PI) * 6;
-      ctx.fillStyle = i < cur ? 'rgba(255,207,74,0.95)' : 'rgba(255,255,255,0.75)';
-      ctx.fillRect(Math.round(px), Math.round(py), 2, 2);
+const NODE_COL: Record<NodeKind, string> = { fish: '#f4f8ff', elite: '#c58cff', treasure: '#ffcf4a', camp: '#ff9a3a', shop: '#7ee3c8', boss: '#e8304a' };
+function nodeIcon(ctx: CanvasRenderingContext2D, k: NodeKind, x: number, y: number) {
+  ctx.fillStyle = '#141a33'; ctx.fillRect(x - 6, y - 14, 13, 11);
+  ctx.fillStyle = NODE_COL[k]; ctx.fillRect(x - 5, y - 13, 11, 9);
+  ctx.fillStyle = k === 'boss' || k === 'elite' ? '#ffffff' : '#141a33';
+  if (k === 'fish' || k === 'elite') { ctx.fillRect(x - 3, y - 9, 5, 2); ctx.fillRect(x - 2, y - 10, 3, 4); ctx.fillRect(x + 2, y - 10, 2, 1); ctx.fillRect(x + 2, y - 7, 2, 1); }
+  if (k === 'elite') { ctx.fillStyle = '#ffcf4a'; ctx.fillRect(x - 4, y - 12, 1, 1); ctx.fillRect(x + 4, y - 12, 1, 1); }
+  if (k === 'camp') { ctx.fillRect(x, y - 12, 1, 1); ctx.fillRect(x - 1, y - 11, 3, 1); ctx.fillRect(x - 2, y - 10, 5, 1); ctx.fillRect(x - 3, y - 9, 7, 2); }
+  if (k === 'treasure') { ctx.fillRect(x - 3, y - 11, 7, 6); ctx.fillStyle = '#ffcf4a'; ctx.fillRect(x - 2, y - 10, 5, 2); ctx.fillRect(x, y - 8, 1, 2); }
+  if (k === 'shop') { ctx.fillRect(x - 3, y - 11, 7, 1); ctx.fillRect(x - 2, y - 10, 1, 4); ctx.fillRect(x + 2, y - 10, 1, 4); ctx.fillRect(x - 3, y - 7, 7, 1); }
+  if (k === 'boss') { ctx.fillRect(x - 3, y - 11, 7, 4); ctx.fillStyle = '#e8304a'; ctx.fillRect(x - 2, y - 10, 2, 2); ctx.fillRect(x + 1, y - 10, 2, 2); ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 2, y - 7, 1, 2); ctx.fillRect(x, y - 7, 1, 2); ctx.fillRect(x + 2, y - 7, 1, 2); }
+}
+function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number) {
+  const fog = hex('#e4edf8'), fog2 = hex('#c6d4e8');
+  for (let y = 0; y < H; y++) {
+    const wave = Math.sin(y * 0.18 + t * 0.6) * 3 + Math.sin(y * 0.05 - t * 0.3) * 4;
+    const x0 = Math.round(fx + wave);
+    for (let x = Math.max(0, x0 - 10); x < W; x++) {
+      const d = x - x0;
+      if (d < 0 && BAYER[y & 3][x & 3] > (d + 10) * 1.6) continue;
+      const n = Math.sin(x * 0.07 + t * 0.35) * Math.sin(y * 0.09 - t * 0.2) + Math.sin((x - y) * 0.035 + t * 0.25) * 0.6;
+      const c = n > 0.55 + (BAYER[y & 3][x & 3] / 16) * 0.3 ? fog2 : fog;
+      ctx.fillStyle = css(c, d < 0 ? 0.8 : 1); ctx.fillRect(x, y, 1, 1);
     }
   }
-  // 節點圖示
-  kinds.forEach((k, i) => {
-    const [x, y] = CHART_NODES[i];
-    const done = i < cur, now = i === cur;
-    ctx.globalAlpha = done ? 0.45 : 1;
-    ctx.fillStyle = '#141a33'; ctx.fillRect(x - 6, y - 14, 13, 11);
-    ctx.fillStyle = k === 'boss' ? '#e8304a' : k === 'camp' ? '#ff9a3a' : '#f4f8ff'; ctx.fillRect(x - 5, y - 13, 11, 9);
-    ctx.fillStyle = k === 'boss' ? '#ffffff' : '#141a33';
-    if (k === 'fish') { ctx.fillRect(x - 3, y - 9, 5, 2); ctx.fillRect(x - 2, y - 10, 3, 4); ctx.fillRect(x + 2, y - 10, 2, 1); ctx.fillRect(x + 2, y - 7, 2, 1); }
-    if (k === 'camp') { ctx.fillRect(x, y - 12, 1, 1); ctx.fillRect(x - 1, y - 11, 3, 1); ctx.fillRect(x - 2, y - 10, 5, 1); ctx.fillRect(x - 3, y - 9, 7, 2); }
-    if (k === 'boss') { ctx.fillRect(x - 3, y - 11, 7, 4); ctx.fillStyle = '#e8304a'; ctx.fillRect(x - 2, y - 10, 2, 2); ctx.fillRect(x + 1, y - 10, 2, 2); ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 2, y - 7, 1, 2); ctx.fillRect(x, y - 7, 1, 2); ctx.fillRect(x + 2, y - 7, 1, 2); }
+  // 霧上的雲團
+  for (let k = 0; k < 6; k++) {
+    const cx = fx + 14 + ((k * 37 + t * 3) % Math.max(20, W - fx)), cy = 14 + k * 22;
+    ctx.drawImage(cloudSprite('day', k % 5), Math.round(cx - 30), cy);
+  }
+}
+
+export function drawChart(ctx: CanvasRenderingContext2D, t: number, route: ChartNode[][], station: number, picked: number | null, path: number[], seed: number) {
+  ctx.drawImage(chartBase(route, seed), 0, 0);
+  ctx.fillStyle = 'rgba(232,251,255,0.35)';
+  for (let i = 0; i < 26; i++) { const x = ((i * 53 + t * 5) % (W + 10)) - 5, y = (i * 29) % H; ctx.fillRect(Math.round(x), y, 3, 1); ctx.fillRect(Math.round(x) + 3, y - 1, 2, 1); }
+  // 已走過的航線（金色）
+  const chosen = [...path, ...(picked !== null ? [picked] : [])];
+  for (let i = 0; i < chosen.length - 1; i++) {
+    const [x0, y0] = chartPos(i, chosen[i], route[i].length), [x1, y1] = chartPos(i + 1, chosen[i + 1], route[i + 1].length);
+    const n = Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 3);
+    ctx.fillStyle = '#ffcf4a';
+    for (let k = 1; k < n; k++) ctx.fillRect(Math.round(x0 + ((x1 - x0) * k) / n), Math.round(y0 - 6 + ((y1 - y0) * k) / n), 2, 2);
+  }
+  // 從目前位置到下一站各岔路的虛線
+  const from = chosen.length ? chartPos(chosen.length - 1, chosen[chosen.length - 1], route[chosen.length - 1].length) : null;
+  if (from && picked === null && station < route.length) {
+    route[station].forEach((_, j) => {
+      const [x1, y1] = chartPos(station, j, route[station].length), n = Math.ceil(Math.hypot(x1 - from[0], y1 - from[1]) / 4);
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      for (let k = 1; k < n; k++) if ((k + Math.floor(t * 6)) % 2) ctx.fillRect(Math.round(from[0] + ((x1 - from[0]) * k) / n), Math.round(from[1] - 6 + ((y1 - from[1]) * k) / n), 1, 1);
+    });
+  }
+  route.forEach((opts, i) => opts.forEach((o, j) => {
+    if (i > station) return; // 還沒探索的海域看不見
+    const [x, y] = chartPos(i, j, opts.length);
+    const past = i < station || (i === station && picked !== null && picked !== j);
+    const onPath = chosen[i] === j;
+    ctx.globalAlpha = i < station ? (onPath ? 0.75 : 0.25) : past ? 0.35 : 1;
+    nodeIcon(ctx, o.kind, x, y);
     ctx.globalAlpha = 1;
-    if (now) {
+    if (i === station && (picked === null || picked === j)) {
       ctx.fillStyle = '#ffcf4a';
-      const r = 11 + Math.sin(t * 5) * 1.5;
-      for (let a = 0; a < 36; a++) { if (a % 2) continue; const an = (a / 36) * Math.PI * 2; ctx.fillRect(Math.round(x + Math.cos(an) * r), Math.round(y - 8 + Math.sin(an) * r * 0.8), 1, 1); }
+      const r = 10 + Math.sin(t * 5) * 1.5;
+      for (let a2 = 0; a2 < 32; a2++) { if (a2 % 2) continue; const an = (a2 / 32) * Math.PI * 2; ctx.fillRect(Math.round(x + Math.cos(an) * r), Math.round(y - 8 + Math.sin(an) * r * 0.8), 1, 1); }
     }
-  });
-  // 小船
-  const [bx, by] = CHART_NODES[Math.min(cur, CHART_NODES.length - 1)];
-  const bob = Math.round(Math.sin(t * 3));
+  }));
+  // 迷霧：下一站之後的海域都被雲霧遮住
+  if (station < route.length - 1) drawFog(ctx, t, chartPos(station + 1, 0, 1)[0] - 13);
+  // 小船：在目前所在的位置
+  const at = picked !== null ? chartPos(station, picked, route[station].length) : from ?? chartPos(0, 0, 1);
+  const [bx, by] = at, bob = Math.round(Math.sin(t * 3));
   ctx.fillStyle = '#5a321c'; ctx.fillRect(bx - 5, by + 3 + bob, 11, 2); ctx.fillStyle = '#8a5530'; ctx.fillRect(bx - 6, by + 2 + bob, 13, 1);
   ctx.fillStyle = '#f4f8ff'; ctx.fillRect(bx, by - 5 + bob, 1, 7); ctx.fillRect(bx + 1, by - 4 + bob, 3, 4);
 }

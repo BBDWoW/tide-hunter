@@ -242,3 +242,25 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .end-stats { display: grid; grid-template-columns: auto 1fr; gap: calc(var(--u) * 1) calc(var(--u) * 4); align-items: baseline; }
 
 @media (prefers-reduced-motion: reduce) { .pop, .flash, .mi.hot .cursor { animation: none; } .bar i { transition: none; } }
+
+/* ── 第一階段新增：航線、商店、能力卡、魚影 ── */
+.banner.right { left: auto; right: calc(var(--u) * 4); transform: none; display: flex; gap: calc(var(--u) * 3); }
+.res { font-size: 0.85em; white-space: nowrap; }
+.shop-row { justify-content: space-between; }
+.shop-row .grow { gap: 0; }
+.sub-h { color: var(--amber); font-size: 0.9em; margin-top: calc(var(--u) * 2); }
+.shadow-hit { border-radius: 50%; }
+.shadow-hit.on { outline: calc(var(--u) * 0.5) dashed rgba(255, 207, 74, 0.7); }
+.boon-pick { display: grid; gap: calc(var(--u) * 2); }
+.boon-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--u) * 2.5); }
+.portrait .boon-row { grid-template-columns: 1fr; }
+.boon-card {
+  display: grid; gap: calc(var(--u) * 1); align-content: start; text-align: left; cursor: pointer;
+  padding: calc(var(--u) * 3); min-height: calc(var(--u) * 34);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.02));
+  border: calc(var(--u) * 0.6) solid var(--tier); box-shadow: 0 0 calc(var(--u) * 3) color-mix(in srgb, var(--tier) 35%, transparent);
+  transition: transform 0.12s steps(2);
+}
+.boon-card:hover, .boon-card:focus-visible { transform: translateY(calc(var(--u) * -1.2)); outline: none; background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04)); }
+.boon-tier { font-size: 0.7em; color: var(--tier); letter-spacing: 0.1em; }
+.boon-name { font-size: 1.15em; font-weight: 400; color: #fff; }

@@ -9,8 +9,10 @@ import {
 } from '../game/battle';
 import { formOf, maxHp, type Mon } from '../game/creature';
 import { makeRng, next } from '../game/rng';
+import { catchChance, rollShakes } from '../game/capture';
+import { battleMods, boon } from '../game/run';
 import type { Encounter, RunState } from '../game/run';
-import { auraColor, burst, drawBattle, H, monSlot, W, type Beam, type MonView, type Particle } from '../render/scene';
+import { auraColor, burst, drawBattle, drawNet, H, monSlot, W, type Beam, type MonView, type Particle } from '../render/scene';
 import { Bar, ElemChip, Elems, Energy, RarityTag, Sprite } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
@@ -28,7 +30,7 @@ const readSpeed = () => { try { return localStorage.getItem(SPEED_KEY) === 'fast
 export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunState; enc: Encounter; boss: boolean; onEnd: (r: BattleResult) => void }) {
   const bsRef = useRef<BattleState | null>(null);
   if (!bsRef.current) {
-    bsRef.current = createBattle(makeRng((next(run.rng) * 2 ** 32) >>> 0), { team: run.party, name: '你' }, { team: [enc.mon], name: boss ? '霸主' : '野生' }, true);
+    bsRef.current = createBattle(makeRng((next(run.rng) * 2 ** 32) >>> 0), { team: run.party, name: '你', mods: battleMods(run) }, { team: [enc.mon], name: boss ? '霸主' : '野生' }, true);
   }
   const bs = bsRef.current;
   const snap = (side: SideId): Disp => {
@@ -46,6 +48,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const fastRef = useRef(fast); fastRef.current = fast;
   const participants = useRef(new Set<string>([active(bs, 0).uid]));
   const [hover, setHover] = useState(0);
+  const net = useRef<{ wob: number; glow: number } | null>(null);
 
   const mkView = (side: SideId, form: string): MonView => {
     const p = monSlot(side, form);
@@ -81,6 +84,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       v.alpha = e * a.fade[side];
     }
     drawBattle(ctx, t, dt, a.mons, a.parts, a.beams);
+    if (net.current) { const c = monSlot(1, a.mons[1].form); const n = net.current; n.glow = Math.max(0, n.glow - dt); drawNet(ctx, c.cx, c.cy + 6, n.wob, n.glow); }
   };
 
   // 開場
@@ -175,17 +179,40 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     await afterTurn();
   }
 
-  async function onReel(ok: boolean) {
+  async function onReel(ok: boolean, quality: number) {
     setMode('busy');
     const name = FORMS[enc.mon.form].name;
-    if (ok) {
-      const c = center(1); burst(anim.current.parts, c.x, c.y, 'faint', null);
-      for (let i = 0; i < 10; i++) { anim.current.fade[1] = 1 - (i + 1) / 10; await wait(35); }
-      say(`收服了 ${name}！`);
+    if (!ok) {
+      say(`線斷了！${name} 逃回了水裡。`);
+      await wait(400);
+      await submit({ type: 'pass' });
+      return;
+    }
+    // 收線成功 → 被網住，晃動三次
+    const chanceAll = catchChance(foe, quality, boon(run, 'shake'));
+    const shakes = rollShakes(bs.rng, chanceAll);
+    const a = anim.current, c = center(1);
+    for (let i = 0; i < 10; i++) { a.fade[1] = 1 - (i + 1) / 10; await wait(30); }
+    net.current = { wob: 0, glow: 0 };
+    say(`收線成功！${name} 被網住了……`);
+    await wait(700);
+    for (let i = 0; i < shakes.length; i++) {
+      for (const w of [-1, 1, -0.6, 0.6, 0]) { net.current.wob = w; await wait(110); }
+      if (!shakes[i]) break;
+      say(['晃動了一下……', '又晃了一下……', '再一下……！'][i]);
+      await wait(520);
+    }
+    if (shakes.length === 3 && shakes[2]) {
+      net.current.glow = 1; burst(a.parts, c.x, c.y + 6, 'buff', null);
+      say(`★ 收服了 ${name}！`);
+      await wait(600);
+      net.current = null;
       await finish(true);
     } else {
-      say(`${name} 掙脫了釣線！`);
-      await wait(400);
+      net.current = null; burst(a.parts, c.x, c.y + 6, 'splash', 'water');
+      a.fade[1] = 1;
+      say(`可惡！${name} 掙脫了網子！`);
+      await wait(500);
       await submit({ type: 'pass' });
     }
   }
@@ -214,7 +241,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const meAffordAny = me.skills.some((_, i) => canAfford(bs, 0, i));
   const toggleFast = () => { const v = !fast; setFast(v); try { localStorage.setItem(SPEED_KEY, v ? 'fast' : 'normal'); } catch { /* 略過 */ } };
 
-  const reel = <Reel rarity={FORMS[foe.form].rarity} hpRatio={foe.hp / maxHp(foe)} hasStatus={!!foe.status} name={FORMS[foe.form].name} onDone={onReel} />;
+  const reel = <Reel rarity={FORMS[foe.form].rarity} hpRatio={foe.hp / maxHp(foe)} hasStatus={!!foe.status} name={FORMS[foe.form].name} zoneBonus={boon(run, 'reelzone') * 0.15} onDone={onReel} />;
+  const startReel = () => { if (run.catchBait <= 0) return; run.catchBait--; setMode('reel'); };
   const picking = mode === 'switch' || mode === 'force' || mode === 'itemTarget';
   const hs = mode === 'skills' ? SKILLS[me.skills[hover]] : null;
   const hi = mode === 'items' ? (Object.keys(ITEMS) as ItemId[])[hover] : null;
@@ -279,7 +307,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
             {mode === 'main' && (
               <div class="cmd-grid">
                 <MenuItem onClick={() => { setHover(0); setMode('skills'); }} hot>技能</MenuItem>
-                <MenuItem onClick={() => setMode('reel')} disabled={boss}>收線捕捉</MenuItem>
+                <MenuItem onClick={startReel} disabled={boss || run.catchBait <= 0} sub={boss ? '' : `餌×${run.catchBait}`}>收線捕捉</MenuItem>
                 <MenuItem onClick={() => setMode('switch')}>換人</MenuItem>
                 <MenuItem onClick={() => { setHover(0); setMode('items'); }}>道具</MenuItem>
                 {!boss && <MenuItem onClick={() => submit({ type: 'run' })}>剪線逃跑</MenuItem>}

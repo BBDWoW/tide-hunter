@@ -4,8 +4,9 @@ import { FORMS, STARTERS } from '../data/creatures';
 import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/types';
 import { ITEMS, type ItemId } from '../game/battle';
 import { formOf, maxHp, xpToNext } from '../game/creature';
-import { healParty, loadDex, STATION_INFO, type RunState } from '../game/run';
-import { drawChart, drawDeep, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
+import { healParty, loadDex, NODE_INFO, saveRun, SHOP, SPOT_INFO, type RunState } from '../game/run';
+import { BOONS, LURES } from '../data/boons';
+import { chartPos, drawChart, drawDeep, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
 import { AbilityLines, Bar, Elems, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 
@@ -78,34 +79,54 @@ export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (f: 
 }
 
 // ── 航程（海圖） ──
-export function Voyage({ vp, run, onGo, onCamp, onQuit }: { vp: Viewport; run: RunState; onGo: () => void; onCamp: () => void; onQuit: () => void }) {
-  const kind = run.stations[run.station];
+export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: RunState; onGo: () => void; onNext: () => void; onQuit: () => void }) {
+  const opts = run.route[run.station];
+  if (run.picked === null && opts.length === 1) run.picked = 0;
   const [rested, setRested] = useState(false);
-  const [panel, setPanel] = useState<'party' | 'items' | null>(null);
+  const [panel, setPanel] = useState<'party' | 'items' | 'shop' | null>(null);
+  const [hover, setHover] = useState(0);
   const [, force] = useState(0);
+  const choose = (j: number) => { run.picked = j; saveRun(run); setPanel(null); force((n) => n + 1); };
 
-  const action = kind === 'fish'
-    ? { text: '前方是一處釣點，水面下有東西在游動。', btn: '拋竿出擊', fn: onGo }
-    : kind === 'boss'
-      ? { text: '海面暗了下來……淺灘的霸主就在前方。先整理好隊伍吧。', btn: '挑戰霸主', fn: onGo }
-      : rested
-        ? { text: '夥伴們休息好了，準備出發。', btn: '繼續航行', fn: onCamp }
-        : { text: '找到一座小島可以紮營：全隊回復 60% HP，倒下的夥伴也會醒來。', btn: '紮營休息', fn: () => { healParty(run, 0.6, true); setRested(true); } };
+  const node = run.picked !== null ? opts[run.picked] : null;
+  let action: { text: string; btn: string; fn: () => void } | null = null;
+  if (node) {
+    const spot = SPOT_INFO[node.spot];
+    if (node.kind === 'fish') action = { text: `${spot.name}的釣點。${spot.desc}`, btn: '拋竿出擊', fn: onGo };
+    else if (node.kind === 'elite') action = { text: `精英釣點（${spot.name}）。強大的潮靈盤據在這裡，打贏能挑更好的能力卡。`, btn: '挑戰精英', fn: onGo };
+    else if (node.kind === 'treasure') action = { text: '寶藏點！海面閃閃發光，這裡只會釣到寶箱。', btn: '拋竿撈寶', fn: onGo };
+    else if (node.kind === 'boss') action = { text: '海面暗了下來……淺灘的霸主就在前方。先整理好隊伍吧。', btn: '挑戰霸主', fn: onGo };
+    else if (node.kind === 'shop') action = { text: `漂流商店的老闆揮著手。你有 ${run.shells} 枚貝殼幣。`, btn: '逛商店', fn: () => setPanel('shop') };
+    else action = rested
+      ? { text: '夥伴們休息好了，準備出發。', btn: '繼續航行', fn: onNext }
+      : { text: '找到一座小島可以紮營：全隊回復 60% HP，倒下的夥伴也會醒來。', btn: '紮營休息', fn: () => { healParty(run, 0.6, true); setRested(true); } };
+  }
+  const hv = opts[hover] ?? opts[0];
 
   return (
     <GameScreen vp={vp}
-      scene={<SceneCanvas draw={(c, t) => drawChart(c, t, run.stations, run.station)} label="海圖與航線" />}
-      overlay={<Win class="banner left"><span class="eyebrow">海域 1 · 碧藍淺灘</span><b>第 {run.station + 1} / {run.stations.length} 站 · {STATION_INFO[kind].name}</b></Win>}
+      scene={<SceneCanvas draw={(c, t) => drawChart(c, t, run.route, run.station, run.picked, run.path, run.seed)} label="海圖與航線" />}
+      overlay={<>
+        <Win class="banner left"><span class="eyebrow">海域 1 · 碧藍淺灘</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b></Win>
+        <Win class="banner right"><span class="res">🐚 {run.shells}</span><span class="res">捕捉餌 {run.catchBait}</span></Win>
+        {run.picked === null && opts.map((o, j) => {
+          const [x, y] = chartPos(run.station, j, opts.length);
+          return <button key={j} class="hit" aria-label={NODE_INFO[o.kind].name} onMouseEnter={() => setHover(j)} onClick={() => choose(j)}
+            style={{ left: `${((x - 10) / 256) * 100}%`, top: `${((y - 18) / 144) * 100}%`, width: `${(20 / 256) * 100}%`, height: `${(20 / 144) * 100}%` }} />;
+        })}
+      </>}
       panel={panel && (
-        <Win class="big-panel" title={panel === 'party' ? `隊伍 ${run.party.length}/6` : '道具'}>
-          {panel === 'party' ? <PartyList run={run} onChange={() => force((n) => n + 1)} /> : <ItemList run={run} />}
-          <MenuItem onClick={() => setPanel(null)}>關閉</MenuItem>
+        <Win class="big-panel" title={panel === 'party' ? `隊伍 ${run.party.length}/6` : panel === 'shop' ? `漂流商店　🐚 ${run.shells}` : '道具與能力'}>
+          {panel === 'party' && <PartyList run={run} onChange={() => force((n) => n + 1)} />}
+          {panel === 'items' && <ItemList run={run} />}
+          {panel === 'shop' && <ShopList run={run} onChange={() => { saveRun(run); force((n) => n + 1); }} />}
+          {panel === 'shop' ? <MenuItem onClick={onNext} hot>離開商店，繼續航行</MenuItem> : <MenuItem onClick={() => setPanel(null)}>關閉</MenuItem>}
         </Win>
       )}
       dock={
         <div class="dock-split">
           <Win class="msg">
-            <p>{action.text}</p>
+            {node && action ? <p>{action.text}</p> : <p><b>選擇航線：</b>{NODE_INFO[hv.kind].name}{hv.kind === 'fish' || hv.kind === 'elite' ? `（${SPOT_INFO[hv.spot].name}）` : ''}——{NODE_INFO[hv.kind].desc}</p>}
             <div class="party-strip">
               {run.party.map((m) => (
                 <div class={`slot ${m.hp <= 0 ? 'ko' : ''}`} key={m.uid} title={formOf(m).name}>
@@ -118,7 +139,8 @@ export function Voyage({ vp, run, onGo, onCamp, onQuit }: { vp: Viewport; run: R
           </Win>
           <Win class="cmd">
             <div class="cmd-grid">
-              <MenuItem onClick={action.fn} hot>{action.btn}</MenuItem>
+              {node && action ? <MenuItem onClick={action.fn} hot>{action.btn}</MenuItem>
+                : opts.map((o, j) => <MenuItem key={j} hot={j === hover} onHover={() => setHover(j)} onClick={() => choose(j)}>{NODE_INFO[o.kind].name}{o.kind === 'fish' || o.kind === 'elite' ? `・${SPOT_INFO[o.spot].name}` : ''}</MenuItem>)}
               <MenuItem onClick={() => setPanel(panel === 'party' ? null : 'party')}>隊伍</MenuItem>
               <MenuItem onClick={() => setPanel(panel === 'items' ? null : 'items')}>道具</MenuItem>
               <MenuItem onClick={onQuit}>存檔離開</MenuItem>
@@ -126,6 +148,19 @@ export function Voyage({ vp, run, onGo, onCamp, onQuit }: { vp: Viewport; run: R
           </Win>
         </div>
       } />
+  );
+}
+
+function ShopList({ run, onChange }: { run: RunState; onChange: () => void }) {
+  return (
+    <div class="item-list">
+      {SHOP.map((it) => (
+        <button class="pick shop-row" key={it.id} disabled={run.shells < it.price} onClick={() => { run.shells -= it.price; it.buy(run); onChange(); }}>
+          <span class="grow"><b>{it.name}</b><span class="small dim">{it.desc}</span></span>
+          <span class="num">🐚 {it.price}</span>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -154,11 +189,20 @@ function PartyList({ run, onChange }: { run: RunState; onChange: () => void }) {
 }
 
 function ItemList({ run }: { run: RunState }) {
+  const owned = Object.entries(run.boons).filter(([, n]) => n > 0);
   return (
     <div class="item-list">
+      <div class="item-row"><b>捕捉餌</b><span class="num">×{run.catchBait}</span><span class="small dim">收服夥伴時消耗 1 個。</span></div>
+      <div class="item-row"><b>星光餌</b><span class="num">×{run.lures.star}</span><span class="small dim">{LURES.star.desc}</span></div>
+      <div class="item-row"><b>傳說餌</b><span class="num">×{run.lures.legend}</span><span class="small dim">{LURES.legend.desc}</span></div>
+      <div class="item-row"><b>貝殼幣</b><span class="num">{run.shells}</span><span class="small dim">在漂流商店使用。</span></div>
       {(Object.keys(ITEMS) as ItemId[]).map((id) => (
         <div class="item-row" key={id}><b>{ITEMS[id].name}</b><span class="num">×{run.items[id] ?? 0}</span><span class="small dim">{ITEMS[id].desc}</span></div>
       ))}
+      <h3 class="sub-h">已獲得的能力</h3>
+      {owned.length ? owned.map(([id, n]) => (
+        <div class="item-row" key={id}><b>{BOONS[id].name}</b><span class="num">×{n}</span><span class="small dim">{BOONS[id].desc}</span></div>
+      )) : <p class="small dim">還沒有。每場戰鬥勝利後可以挑選一張能力卡。</p>}
     </div>
   );
 }
@@ -252,6 +296,7 @@ export function End({ vp, run, win, onTitle }: { vp: Viewport; run: RunState; wi
           <p>{win ? 'M1 的內容到這裡結束。之後會開放冰封峽灣、熔岩裂谷與電子海域。' : '隊伍全部倒下了。整理好心情，再出海一次吧。'}</p>
           <div class="end-stats">
             <span>抵達</span><b class="num">第 {run.station + 1} 站</b>
+            <span>貝殼幣</span><b class="num">{run.shells}</b>
             <span>勝利</span><b class="num">{run.battlesWon} 場</b>
             <span>收服</span><b class="num">{run.caught} 隻</b>
           </div>

@@ -19,7 +19,11 @@ export interface Volatile {
   healUses: number;
 }
 
+export interface SideMods { atk: number; def: number; energy: number; crit: number }
+const NO_MODS: SideMods = { atk: 1, def: 1, energy: 0, crit: 0 };
+
 export interface Side {
+  mods?: SideMods; // 能力卡等外部加成（純資料，可序列化）
   team: Mon[];
   active: number;
   vol: Record<string, Volatile>; // 依 uid
@@ -75,11 +79,12 @@ function freshVol(): Volatile {
   return { energy: 2, shield: 0, stages: { atk: 0, def: 0, spd: 0 }, turnsIn: 0, freezeTurns: 0, undyingUsed: false, healUses: 0 };
 }
 
-export function createBattle(rng: Rng, a: { team: Mon[]; name: string }, b: { team: Mon[]; name: string }, wild: boolean): BattleState {
-  const mk = (x: { team: Mon[]; name: string }): Side => {
+type SideInit = { team: Mon[]; name: string; mods?: SideMods };
+export function createBattle(rng: Rng, a: SideInit, b: SideInit, wild: boolean): BattleState {
+  const mk = (x: SideInit): Side => {
     const vol: Record<string, Volatile> = {};
-    x.team.forEach((m) => (vol[m.uid] = freshVol()));
-    return { team: x.team, active: Math.max(0, x.team.findIndex((m) => m.hp > 0)), vol, name: x.name };
+    x.team.forEach((m) => { vol[m.uid] = freshVol(); vol[m.uid].energy += x.mods?.energy ?? 0; });
+    return { team: x.team, active: Math.max(0, x.team.findIndex((m) => m.hp > 0)), vol, name: x.name, mods: x.mods };
   };
   return { rng, turn: 1, sides: [mk(a), mk(b)], wild, over: null, needSwitch: [false, false] };
 }
@@ -311,13 +316,14 @@ export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill)
   const me = active(s, side), tg = active(s, foe);
   const fm = formOf(me), ft = formOf(tg);
   const vm = volOf(s, side), vt = volOf(s, foe);
-  let A = statsOf(me).atk * stageMult(vm.stages.atk);
+  const ma = s.sides[side].mods ?? NO_MODS, md = s.sides[foe].mods ?? NO_MODS;
+  let A = statsOf(me).atk * stageMult(vm.stages.atk) * ma.atk;
   if (me.status === 'burn') A *= 0.75;
-  let D = statsOf(tg).def * stageMult(vt.stages.def);
+  let D = statsOf(tg).def * stageMult(vt.stages.def) * md.def;
   if (hasAb(ft, 'sturdy')) D *= 1.2;
   const base = (((2 * me.lv) / 5 + 2) * sk.power * A) / D / 50 + 2;
   const eff = effectiveness(sk.elem, ft.elems);
-  const crit = chance(s.rng, 0.0625);
+  const crit = chance(s.rng, 0.0625 + ma.crit);
   let mod = eff * (crit ? 1.5 : 1) * range(s.rng, 0.85, 1);
   if (sk.elem && fm.elems.includes(sk.elem)) mod *= 1.3;
   if (hasAb(fm, 'blazing') && sk.elem === 'fire' && me.hp < maxHp(me) / 3) mod *= 1.5;
