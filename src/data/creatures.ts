@@ -173,9 +173,9 @@ const F: Form[] = [
   { id: 'aurorawhale', name: '極光鯨', family: 'aurorawhale', stage: 3, rarity: 'SSR', category: '神獸', elems: ['ice', 'fly'], sprite: 'aurorawhale', pal: 'aurora',
     base: { hp: 110, atk: 92, def: 88, spd: 82 }, ability: 'waterbarrier', extra: ['dragonpresence'],
     learn: [[1, 'aurorabeam'], [1, 'icebeam'], [1, 'gust'], [1, 'surge']], desc: '只在極光之夜浮出海面的神鯨，身上流動著七彩的光。' },
-  { id: 'frostking', name: '冰冠海獅王', family: 'frostking', stage: 3, rarity: 'A', category: '巨獸', elems: ['ice', 'water'], sprite: 'frostking', pal: 'glacier',
+  { id: 'frostking', name: '冰冠海豹王', family: 'frostking', stage: 3, rarity: 'A', category: '巨獸', elems: ['ice', 'water'], sprite: 'frostking', pal: 'seal',
     base: { hp: 115, atk: 92, def: 90, spd: 60 }, ability: 'colossal',
-    learn: [[1, 'icebeam'], [1, 'frostfang'], [1, 'tidewave'], [1, 'hail']], desc: '冰封峽灣的霸主，頭頂萬年不化的冰冠。' },
+    learn: [[1, 'icebeam'], [1, 'frostfang'], [1, 'tidewave'], [1, 'hail']], desc: '冰封峽灣的霸主，頭戴萬年不化的冰冠的巨型海豹。' },
   // ── 熔岩裂谷 ──
   { id: 'lavasnail', name: '火山蝸', family: 'lavasnail', stage: 1, rarity: 'N', category: '礦物', elems: ['fire', 'rock'], sprite: 'lavasnail', pal: 'magma',
     base: { hp: 52, atk: 46, def: 66, spd: 30 }, ability: 'sturdy',

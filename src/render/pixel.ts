@@ -33,10 +33,11 @@ export const PAL = {
   capy: { o: '#2a1a10', d: '#b07a4a', m: '#d9a66c', l: '#f2cc94', b: '#fbf0dc', a: '#3a86d8', a2: '#ffffff', w: '#ffffff', k: '#1a1008', h: '#ff9bb8', k2: '#6a4632', tr: '#8a7a6a' },
   snow: { o: '#14203a', d: '#9ab4d4', m: '#f2f6fc', l: '#ffffff', b: '#ffffff', a: '#ffb13d', a2: '#7ac8f0', w: '#ffffff', k: '#14203a', h: '#ff9bb8', k2: '#4a6a9a', tr: '#ffb13d' },
   glacier: { o: '#0a1a34', d: '#3a6a9a', m: '#7ab8e0', l: '#d8f4ff', b: '#ffffff', a: '#e8fcff', a2: '#5ad8ff', w: '#ffffff', k: '#0a1a34', h: '#ff9bb8', k2: '#5a6878', tr: '#8a96a6' },
-  walrus: { o: '#1a1420', d: '#6a5a6a', m: '#a89aa8', l: '#d8ccd8', b: '#f4f0f4', a: '#e8fcff', a2: '#7ac8f0', w: '#ffffff', k: '#1a1420', h: '#ff9bb8', k2: '#4a3a4a', tr: '#7a6a5a' },
+  walrus: { o: '#0c1838', d: '#2a4a9a', m: '#4a7ad0', l: '#a8c8f4', b: '#f4f8ff', a: '#f2efe6', a2: '#9ad8ff', w: '#ffffff', k: '#0c1838', h: '#ff9bb8', k2: '#c8d8ec', tr: '#c87a4a' },
   aurora: { o: '#0a1430', d: '#2a4a8a', m: '#4a7ad0', l: '#a8d0ff', b: '#e8f4ff', a: '#6affc8', a2: '#c87aff', w: '#ffffff', k: '#0a1430', h: '#ff8ad8', k2: '#1a2a5a', tr: '#6affc8' },
   obsidian: { o: '#0a0814', d: '#1a1428', m: '#342a4a', l: '#6a5a90', b: '#c8b8e8', a: '#ff7a1a', a2: '#ffd04a', w: '#ffffff', k: '#0a0814', h: '#ff4a2a', k2: '#ff5a1a', tr: '#ffd04a' },
   cinder: { o: '#140a0a', d: '#7a6a6a', m: '#c8bab0', l: '#f4ece4', b: '#fff8f0', a: '#ff7a1a', a2: '#ffd04a', w: '#ff4a2a', k: '#140a0a', h: '#ff4a2a', k2: '#2a1818', tr: '#ffd04a' },
+  seal: { o: '#0c1838', d: '#3a62b0', m: '#6a9ae0', l: '#b8d4f8', b: '#f6f9ff', a: '#c8f4ff', a2: '#5ad8ff', w: '#ffffff', k: '#16203a', h: '#e8708e', k2: '#2e4e98', tr: '#f0c868' },
   whale: { o: '#060e26', d: '#1a3a8a', m: '#3068c8', l: '#7aaaf0', b: '#dceaff', a: '#ffffff', a2: '#9ad4ff', w: '#ffffff', k: '#060e26', h: '#e8708e', k2: '#7a1e3e', tr: '#7a4a24' },
 } satisfies Record<string, Palette>;
 export type PalName = keyof typeof PAL;
