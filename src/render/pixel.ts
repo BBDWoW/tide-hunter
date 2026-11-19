@@ -36,8 +36,9 @@ export const PAL = {
   walrus: { o: '#0c1838', d: '#2a4a9a', m: '#4a7ad0', l: '#a8c8f4', b: '#f4f8ff', a: '#f2efe6', a2: '#9ad8ff', w: '#ffffff', k: '#0c1838', h: '#ff9bb8', k2: '#c8d8ec', tr: '#c87a4a' },
   aurora: { o: '#0a1430', d: '#2a4a8a', m: '#4a7ad0', l: '#a8d0ff', b: '#e8f4ff', a: '#6affc8', a2: '#c87aff', w: '#ffffff', k: '#0a1430', h: '#ff8ad8', k2: '#1a2a5a', tr: '#6affc8' },
   obsidian: { o: '#0a0814', d: '#1a1428', m: '#342a4a', l: '#6a5a90', b: '#c8b8e8', a: '#ff7a1a', a2: '#ffd04a', w: '#ffffff', k: '#0a0814', h: '#ff4a2a', k2: '#ff5a1a', tr: '#ffd04a' },
-  cinder: { o: '#140a0a', d: '#7a6a6a', m: '#c8bab0', l: '#f4ece4', b: '#fff8f0', a: '#ff7a1a', a2: '#ffd04a', w: '#ff4a2a', k: '#140a0a', h: '#ff4a2a', k2: '#2a1818', tr: '#ffd04a' },
+  cinder: { o: '#140a0a', d: '#8a7a7a', m: '#e0d6d0', l: '#f8f2ee', b: '#fffaf6', a: '#ff7a1a', a2: '#ffd04a', w: '#ff3a2a', k: '#140a0a', h: '#b04aff', k2: '#2a1818', tr: '#7a2aff' },
   seal: { o: '#0c1838', d: '#3a62b0', m: '#6a9ae0', l: '#b8d4f8', b: '#f6f9ff', a: '#c8f4ff', a2: '#5ad8ff', w: '#ffffff', k: '#16203a', h: '#e8708e', k2: '#2e4e98', tr: '#f0c868' },
+  lavaeel: { o: '#0c0612', d: '#1e1428', m: '#3a2a48', l: '#6a5480', b: '#ffb070', a: '#ff7a1a', a2: '#ffd84a', w: '#ffffff', k: '#0c0612', h: '#ff4a2a', k2: '#ff6a1a', tr: '#3a8ae0' },
   whale: { o: '#060e26', d: '#1a3a8a', m: '#3068c8', l: '#7aaaf0', b: '#dceaff', a: '#ffffff', a2: '#9ad4ff', w: '#ffffff', k: '#060e26', h: '#e8708e', k2: '#7a1e3e', tr: '#7a4a24' },
 } satisfies Record<string, Palette>;
 export type PalName = keyof typeof PAL;

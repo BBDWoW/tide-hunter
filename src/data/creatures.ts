@@ -182,7 +182,7 @@ const F: Form[] = [
     learn: [[1, 'ember'], [1, 'pebble'], [14, 'lavaflow']], evolve: [{ to: 'lavasnail2', level: 18 }], desc: '背著一座小火山慢慢爬，殼裡的岩漿永遠不會冷卻。' },
   { id: 'lavasnail2', name: '熔岩蝸', family: 'lavasnail', stage: 2, rarity: 'N', category: '礦物', elems: ['fire', 'rock'], sprite: 'lavasnail2', pal: 'magma',
     base: { hp: 72, atk: 70, def: 92, spd: 34 }, ability: 'sturdy', learn: [[18, 'rockslide'], [21, 'eruption']], desc: '殼上的火山會定時噴發，附近的海水都在沸騰。' },
-  { id: 'magmaeel', name: '熔岩鰻', family: 'magmaeel', stage: 2, rarity: 'B', category: '魚類', elems: ['fire'], sprite: 'magmaeel', pal: 'fire',
+  { id: 'magmaeel', name: '熔岩鰻', family: 'magmaeel', stage: 2, rarity: 'B', category: '魚類', elems: ['fire'], sprite: 'magmaeel', pal: 'lavaeel',
     base: { hp: 60, atk: 80, def: 54, spd: 82 }, ability: 'blazing',
     learn: [[1, 'ember'], [1, 'flamebite'], [14, 'lavaflow'], [18, 'heatup']], desc: '在岩漿縫隙間穿梭的鰻魚，身上的紋路像流動的熔岩。' },
   { id: 'obsidiancrab', name: '黑曜石蟹', family: 'obsidiancrab', stage: 2, rarity: 'A', category: '甲殼', elems: ['rock', 'fire'], sprite: 'obsidiancrab', pal: 'obsidian',
@@ -194,7 +194,7 @@ const F: Form[] = [
   { id: 'magmacore', name: '熔核巨獸', family: 'magmacore', stage: 3, rarity: 'SSR', category: '巨獸', elems: ['fire', 'rock'], sprite: 'magmacore', pal: 'magma',
     base: { hp: 112, atk: 112, def: 104, spd: 50 }, ability: 'colossal', extra: ['blazing'],
     learn: [[1, 'eruption'], [1, 'obsidianedge'], [1, 'lavaflow'], [1, 'roar']], desc: '心臟是一顆熔岩核心的巨獸，傳說裂谷就是牠翻身時撕開的。' },
-  { id: 'lavadragon', name: '熔岩海龍王', family: 'lavadragon', stage: 3, rarity: 'A', category: '龍', elems: ['fire', 'water'], sprite: 'lavadragon', pal: 'magma',
+  { id: 'lavadragon', name: '熔岩海龍王', family: 'lavadragon', stage: 3, rarity: 'A', category: '龍', elems: ['fire', 'water'], sprite: 'lavadragon', pal: 'lavaeel',
     base: { hp: 112, atk: 98, def: 84, spd: 66 }, ability: 'colossal',
     learn: [[1, 'eruption'], [1, 'lavaflow'], [1, 'tidewave'], [1, 'heatup']], desc: '熔岩裂谷的霸主，在岩漿與海水的交界處沉睡。' },
   // ── 霸主 ──
