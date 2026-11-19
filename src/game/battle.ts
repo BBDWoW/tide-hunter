@@ -4,6 +4,7 @@
 import { SKILLS, type Skill, type StatKey, type StatusId } from '../data/skills';
 import { effectiveness, ELEM } from '../data/types';
 import { formOf, maxHp, statsOf, type Mon } from './creature';
+import { hasAb } from '../data/creatures';
 import { chance, int, next, range, type Rng } from './rng';
 
 export type SideId = 0 | 1;
@@ -90,8 +91,8 @@ function effSpeed(s: BattleState, side: SideId): number {
   const m = active(s, side), v = volOf(s, side), f = formOf(m);
   let spd = statsOf(m).spd * stageMult(v.stages.spd);
   if (m.status === 'para') spd *= 0.5;
-  if (f.ability === 'firststrike' && v.turnsIn === 0) spd *= 2;
-  if (f.ability === 'stormking') spd *= 1.2;
+  if (hasAb(f, 'firststrike') && v.turnsIn === 0) spd *= 2;
+  if (hasAb(f, 'stormking')) spd *= 1.2;
   return spd;
 }
 
@@ -157,7 +158,7 @@ function doAction(s: BattleState, side: SideId, a: Action, ev: BEvent[]) {
 export function switchIn(s: BattleState, side: SideId, to: number, ev: BEvent[]) {
   const sd = s.sides[side], out = active(s, side);
   if (out.hp > 0) {
-    if (formOf(out).ability === 'regen') {
+    if (hasAb(formOf(out), 'regen')) {
       const amt = Math.min(maxHp(out) - out.hp, Math.floor(maxHp(out) / 4));
       out.hp += amt;
     }
@@ -200,7 +201,8 @@ function useItem(s: BattleState, side: SideId, item: ItemId, target: number, ev:
 function applyStatus(s: BattleState, side: SideId, st: StatusId, ev: BEvent[]): boolean {
   const m = active(s, side);
   if (m.status || m.hp <= 0) return false;
-  if (st === 'freeze' && (formOf(m).ability === 'colossal' || formOf(m).elems.includes('ice'))) return false;
+  if (hasAb(formOf(m), 'waterbarrier')) { ev.push({ t: 'msg', text: `${nameOf(s, side)} 的水之結界擋下了異常狀態！` }); return false; }
+  if (st === 'freeze' && (hasAb(formOf(m), 'colossal') || formOf(m).elems.includes('ice'))) return false;
   if (st === 'burn' && formOf(m).elems.includes('fire')) return false;
   if (st === 'para' && formOf(m).elems.includes('elec')) return false;
   m.status = st;
@@ -302,15 +304,15 @@ export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill)
   let A = statsOf(me).atk * stageMult(vm.stages.atk);
   if (me.status === 'burn') A *= 0.75;
   let D = statsOf(tg).def * stageMult(vt.stages.def);
-  if (ft.ability === 'sturdy') D *= 1.2;
+  if (hasAb(ft, 'sturdy')) D *= 1.2;
   const base = (((2 * me.lv) / 5 + 2) * sk.power * A) / D / 50 + 2;
   const eff = effectiveness(sk.elem, ft.elems);
   const crit = chance(s.rng, 0.0625);
   let mod = eff * (crit ? 1.5 : 1) * range(s.rng, 0.85, 1);
   if (sk.elem && fm.elems.includes(sk.elem)) mod *= 1.3;
-  if (fm.ability === 'blazing' && sk.elem === 'fire' && me.hp < maxHp(me) / 3) mod *= 1.5;
-  if (fm.ability === 'tidegod' && sk.elem === 'water') mod *= 1.3;
-  if (ft.ability === 'hardshell') mod *= 0.85;
+  if (hasAb(fm, 'blazing') && sk.elem === 'fire' && me.hp < maxHp(me) / 3) mod *= 1.5;
+  if ((hasAb(fm, 'tidegod') || hasAb(fm, 'oceanpower')) && sk.elem === 'water') mod *= 1.3;
+  if (hasAb(ft, 'hardshell')) mod *= 0.85;
   return { dmg: Math.max(1, Math.floor(base * mod)), eff, crit };
 }
 
@@ -319,7 +321,7 @@ function dealDamage(s: BattleState, side: SideId, dmg: number, eff: number, crit
   let absorbed = 0;
   if (v.shield > 0) { absorbed = Math.min(v.shield, dmg); v.shield -= absorbed; dmg -= absorbed; }
   let real = Math.min(m.hp, dmg);
-  if (m.hp - dmg <= 0 && formOf(m).ability === 'undying' && !v.undyingUsed) {
+  if (m.hp - dmg <= 0 && hasAb(formOf(m), 'undying') && !v.undyingUsed) {
     v.undyingUsed = true; real = m.hp - 1;
   }
   m.hp -= real;
@@ -328,17 +330,17 @@ function dealDamage(s: BattleState, side: SideId, dmg: number, eff: number, crit
   if (crit) ev.push({ t: 'msg', text: '擊中要害！' });
   if (eff >= 2) ev.push({ t: 'msg', text: '效果絕佳！' });
   else if (eff > 0 && eff < 1) ev.push({ t: 'msg', text: '效果不太好……' });
-  if (m.hp === 1 && real < dmg && formOf(m).ability === 'undying') ev.push({ t: 'msg', text: `${nameOf(s, side)} 的不死骨撐住了！` });
+  if (m.hp === 1 && real < dmg && hasAb(formOf(m), 'undying')) ev.push({ t: 'msg', text: `${nameOf(s, side)} 的不死骨撐住了！` });
   return real;
 }
 
 function afterHitAbilities(s: BattleState, att: SideId, def: SideId, ev: BEvent[]) {
   const fa = formOf(active(s, att)), fd = formOf(active(s, def));
   if (active(s, att).hp <= 0) return;
-  if (fd.ability === 'static' && chance(s.rng, 0.3)) applyStatus(s, att, 'para', ev);
-  if (fd.ability === 'stinger' && chance(s.rng, 0.3)) applyStatus(s, att, 'poison', ev);
-  if (fa.ability === 'lure' && active(s, def).hp > 0 && chance(s.rng, 0.2)) applyStatus(s, def, 'para', ev);
-  if (fa.ability === 'stormking' && active(s, def).hp > 0 && chance(s.rng, 0.3)) applyStatus(s, def, 'para', ev);
+  if (hasAb(fd, 'static') && chance(s.rng, 0.3)) applyStatus(s, att, 'para', ev);
+  if (hasAb(fd, 'stinger') && chance(s.rng, 0.3)) applyStatus(s, att, 'poison', ev);
+  if (hasAb(fa, 'lure') && active(s, def).hp > 0 && chance(s.rng, 0.2)) applyStatus(s, def, 'para', ev);
+  if (hasAb(fa, 'stormking') && active(s, def).hp > 0 && chance(s.rng, 0.3)) applyStatus(s, def, 'para', ev);
 }
 
 function checkFaints(s: BattleState, ev: BEvent[]) {
@@ -383,12 +385,12 @@ function endOfTurn(s: BattleState, ev: BEvent[]) {
       checkFaints(s, ev);
       if (m.hp <= 0 || s.over) continue;
     }
-    if ((f.ability === 'moist' || f.ability === 'photosyn') && m.hp < mx && s.turn < VORTEX_TURN) {
+    if ((hasAb(f, 'moist') || hasAb(f, 'photosyn')) && m.hp < mx && s.turn < VORTEX_TURN) {
       const amt = Math.min(mx - m.hp, Math.max(1, Math.floor(mx / 16)));
       m.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: m.hp });
     }
     v.turnsIn++;
-    v.energy = Math.min(MAX_ENERGY, v.energy + 1 + (f.ability === 'tidegod' ? 1 : 0));
+    v.energy = Math.min(MAX_ENERGY, v.energy + 1 + (hasAb(f, 'tidegod') || hasAb(f, 'dragonpresence') ? 1 : 0));
     ev.push({ t: 'energy', side, value: v.energy });
   }
 }

@@ -6,7 +6,8 @@ export interface Stats { hp: number; atk: number; def: number; spd: number }
 
 export type AbilityId =
   | 'moist' | 'blazing' | 'photosyn' | 'hardshell' | 'firststrike' | 'undying'
-  | 'lure' | 'regen' | 'sturdy' | 'static' | 'stinger' | 'tidegod' | 'colossal' | 'stormking' | 'none';
+  | 'lure' | 'regen' | 'sturdy' | 'static' | 'stinger' | 'tidegod' | 'colossal' | 'stormking'
+  | 'oceanpower' | 'dragonpresence' | 'waterbarrier' | 'none';
 
 export const ABILITIES: Record<AbilityId, { name: string; desc: string }> = {
   moist: { name: '潤澤', desc: '每回合結束回復最大 HP 的 1/16。' },
@@ -22,6 +23,9 @@ export const ABILITIES: Record<AbilityId, { name: string; desc: string }> = {
   stinger: { name: '毒刺', desc: '受到攻擊時，30% 機率使攻擊者中毒。' },
   tidegod: { name: '潮神', desc: '水屬性技能威力 ×1.3，每回合多回復 1 點能量。' },
   colossal: { name: '巨軀', desc: 'HP 大幅提高，不會被冰凍。' },
+  oceanpower: { name: '海洋之力', desc: '水屬性技能威力 ×1.3。' },
+  dragonpresence: { name: '龍之氣勢', desc: '每回合多回復 1 點能量。' },
+  waterbarrier: { name: '水之結界', desc: '不會陷入任何異常狀態。' },
   stormking: { name: '雷霆之王', desc: '速度提高 20%，攻擊時 30% 使對手麻痺。' },
   none: { name: '—', desc: '' },
 };
@@ -40,11 +44,17 @@ export interface Form {
   pal: PalName;
   base: Stats;
   ability: AbilityId;
+  extra?: AbilityId[]; // 傳說級可以有多個特性
   learn: [number, string][]; // [等級, 技能]
   evolve?: { to: string; level: number }[];
   desc: string;
   scale?: number; // 戰鬥畫面中的放大倍率
+  height?: number; // 公尺
+  weight?: number; // 公斤
 }
+
+export const abilitiesOf = (f: Form): AbilityId[] => [f.ability, ...(f.extra ?? [])];
+export const hasAb = (f: Form, id: AbilityId) => f.ability === id || !!f.extra?.includes(id);
 
 const F: Form[] = [
   // ── 初始夥伴：水 ──
@@ -125,9 +135,9 @@ const F: Form[] = [
   { id: 'angler', name: '觸鬚燈怪', family: 'angler', stage: 3, rarity: 'S', category: '海怪', elems: ['elec', 'dark'], sprite: 'angler', pal: 'dark',
     base: { hp: 82, atk: 88, def: 70, spd: 58 }, ability: 'lure',
     learn: [[1, 'darkbite'], [1, 'luresnap'], [1, 'paralywave'], [8, 'abyssmaw']], desc: '從深海浮上來的海怪，頭上的燈會引誘獵物。' },
-  { id: 'dragon', name: '蒼鱗龍', family: 'dragon', stage: 3, rarity: 'SSR', category: '龍', elems: ['water', 'fly'], sprite: 'dragon', pal: 'dragon',
-    base: { hp: 92, atk: 100, def: 82, spd: 95 }, ability: 'tidegod',
-    learn: [[1, 'tidewave'], [1, 'gust'], [1, 'azuretide'], [1, 'surge']], desc: '傳說中守護淺灘的龍。一生只會現身一次。' },
+  { id: 'dragon', name: '蒼鱗龍', family: 'dragon', stage: 3, rarity: 'SSR', category: '龍', elems: ['water'], sprite: 'dragon', pal: 'dragon',
+    base: { hp: 92, atk: 100, def: 82, spd: 95 }, ability: 'oceanpower', extra: ['dragonpresence', 'waterbarrier'], height: 12.5, weight: 860,
+    learn: [[1, 'seagodbreath'], [1, 'waterspout'], [1, 'dragonpulse'], [1, 'aurorawing']], desc: '傳說中守護淺灘的龍。一生只會現身一次。' },
   { id: 'thunderfang', name: '霆牙', family: 'thunderfang', stage: 3, rarity: 'SSR', category: '巨獸', elems: ['elec', 'water'], sprite: 'thunderfang', pal: 'thunder',
     base: { hp: 90, atk: 108, def: 78, spd: 104 }, ability: 'stormking',
     learn: [[1, 'zap'], [1, 'tidewave'], [1, 'stormfang'], [1, 'roar']], desc: '雷雨夜踏浪而來的獸王。閃電角每閃一次，海面就會落下一道雷。' },

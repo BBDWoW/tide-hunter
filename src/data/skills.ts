@@ -73,6 +73,10 @@ const S: Skill[] = [
   { id: 'abyssmaw', name: '深淵巨口', elem: 'dark', power: 90, cost: 3, acc: 90, desc: '吞噬一切的大口。', anim: 'hit' },
   // 專屬
   { id: 'azuretide', name: '蒼龍潮嘯', elem: 'water', power: 110, cost: 3, acc: 95, desc: '傳說之龍的潮嘯，回復造成傷害的 30%。', fx: { drain: 0.3 }, anim: 'beam' },
+  { id: 'seagodbreath', name: '海神之息', elem: 'water', power: 90, cost: 2, acc: 100, desc: '吐出海神的氣息，回復造成傷害的 30%。', fx: { drain: 0.3 }, anim: 'beam' },
+  { id: 'waterspout', name: '水龍捲', elem: 'water', power: 30, cost: 2, acc: 95, desc: '捲起水龍捲連續攻擊 2–4 次。', fx: { multi: [2, 4] }, anim: 'splash' },
+  { id: 'dragonpulse', name: '龍之波動', elem: null, power: 90, cost: 2, acc: 95, desc: '龍的威壓化為衝擊波，20% 降低對手防禦。', fx: { stat: { key: 'def', delta: -1, self: false, chance: 0.2 } }, anim: 'beam' },
+  { id: 'aurorawing', name: '極光之翼', elem: null, power: 0, cost: 2, acc: 100, desc: '展開極光羽翼：獲得 20% 護盾並提高速度。', fx: { shield: 0.2, stat: { key: 'spd', delta: 1, self: true } }, anim: 'buff' },
   { id: 'stormfang', name: '霆牙爆', elem: 'elec', power: 110, cost: 3, acc: 90, desc: '帶著落雷的撕咬，30% 使對手麻痺。', fx: { status: { id: 'para', chance: 0.3 } }, anim: 'beam' },
   { id: 'crabcannon', name: '鉗砲', elem: 'water', power: 90, cost: 2, acc: 85, desc: '從巨鉗發射高壓水砲。', anim: 'beam' },
 ];

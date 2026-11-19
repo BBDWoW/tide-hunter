@@ -1,13 +1,13 @@
 // 戰後處理：收服入隊、經驗與升級、學習技能、進化
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { ABILITIES, FORMS } from '../data/creatures';
+import { FORMS } from '../data/creatures';
 import { SKILLS } from '../data/skills';
 import { RARITY, STAGE_NAME } from '../data/types';
 import { evolve, evolveTarget, formOf, gainXp, maxHp, skillSlots, xpReward, xpToNext, type Mon } from '../game/creature';
 import { markCaught, PARTY_MAX, type RunState } from '../game/run';
 import { EVO_W, playEvolution } from '../render/evo';
 import type { BattleResult } from './Battle';
-import { Bar, Elems, RarityTag, SkillLine, Sprite, StageTag } from './components';
+import { AbilityLines, Bar, Elems, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
 import { drawDeep, drawSea } from '../render/scene';
@@ -135,7 +135,7 @@ function CaughtCard({ mon }: { mon: Mon }) {
       <div class="grow">
         <div class="row-gap"><b class="big-name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={mon.form} /></div>
         <div class="row-gap"><Elems list={f.elems} /><span class="muted">{f.category} · Lv{mon.lv}</span></div>
-        <p class="small">特性「{ABILITIES[f.ability].name}」：{ABILITIES[f.ability].desc}</p>
+        <AbilityLines form={f.id} />
         <p class="small muted">{f.desc}</p>
         <div class="skills-col">{mon.skills.map((s) => <SkillLine id={s} key={s} />)}</div>
       </div>

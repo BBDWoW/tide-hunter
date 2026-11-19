@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { ABILITIES, FORMS, STARTERS } from '../data/creatures';
+import { FORMS, STARTERS } from '../data/creatures';
 import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/types';
 import { ITEMS, type ItemId } from '../game/battle';
 import { formOf, maxHp, xpToNext } from '../game/creature';
 import { healParty, loadDex, STATION_INFO, type RunState } from '../game/run';
 import { drawChart, drawDeep, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
-import { Bar, Elems, RarityTag, SkillLine, Sprite, StageTag } from './components';
+import { AbilityLines, Bar, Elems, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 
 export function MenuItem({ children, onClick, disabled, hot, sub, onHover }: { children: ComponentChildren; onClick: () => void; disabled?: boolean; hot?: boolean; sub?: ComponentChildren; onHover?: () => void }) {
@@ -64,7 +64,7 @@ export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (f: 
         <div class="dock-split">
           <Win class="info">
             <div class="row-gap"><b class="big-name">{f.name}</b><Elems list={f.elems} /><StageTag form={f.id} /></div>
-            <p class="small">特性「{ABILITIES[f.ability].name}」：{ABILITIES[f.ability].desc}</p>
+            <AbilityLines form={f.id} />
             <p class="small dim">{f.desc}</p>
           </Win>
           <Win class="cmd">
@@ -142,7 +142,7 @@ function PartyList({ run, onChange }: { run: RunState; onChange: () => void }) {
               <div class="row-gap"><Elems list={f.elems} /><span class="small dim">{f.category}</span></div>
               <div class="hp-row"><Bar value={m.hp} max={mx} /><span class="num">{Math.max(0, m.hp)}/{mx}</span></div>
               <Bar value={m.xp} max={xpToNext(m.lv)} kind="xp" />
-              <p class="small">「{ABILITIES[f.ability].name}」{ABILITIES[f.ability].desc}</p>
+              <AbilityLines form={f.id} label={false} />
               <div class="skills-col">{m.skills.map((s) => <SkillLine id={s} key={s} />)}</div>
               {i > 0 && <button class="chip-btn" onClick={() => { const [x] = run.party.splice(i, 1); run.party.unshift(x); onChange(); }}>設為先發</button>}
             </div>
@@ -178,8 +178,8 @@ export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
               <Sprite form={f.id} size={144} />
               <div class="grow">
                 <div class="row-gap"><b class="big-name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={f.id} /></div>
-                <div class="row-gap"><Elems list={f.elems} /><span class="dim">{f.category}</span></div>
-                <p class="small">「{ABILITIES[f.ability].name}」{ABILITIES[f.ability].desc}</p>
+                <div class="row-gap"><Elems list={f.elems} /><span class="dim">{f.category}</span>{f.height && <span class="dim small">身高 {f.height} m · 體重 {f.weight?.toFixed(1)} kg</span>}</div>
+                <AbilityLines form={f.id} label={false} />
                 <p class="small dim">{f.desc}</p>
               </div>
             </div>

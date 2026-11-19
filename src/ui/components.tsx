@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { FORMS } from '../data/creatures';
+import { ABILITIES, abilitiesOf, FORMS } from '../data/creatures';
 import { ELEM, RARITY, STAGE_NAME, type Elem, type Rarity } from '../data/types';
 import { drawSprite, PAL, spriteSize } from '../render/pixel';
 import { SKILLS } from '../data/skills';
@@ -71,4 +71,15 @@ export function SkillLine({ id }: { id: string }) {
 
 export function Panel({ children, class: cls = '' }: { children: ComponentChildren; class?: string }) {
   return <div class={`px ${cls}`}>{children}</div>;
+}
+
+// 特性（傳說級可能有多個）
+export function AbilityLines({ form, label = true }: { form: string; label?: boolean }) {
+  return (
+    <>
+      {abilitiesOf(FORMS[form]).map((a) => (
+        <p class="small" key={a}>{label ? '特性' : ''}「{ABILITIES[a].name}」{ABILITIES[a].desc}</p>
+      ))}
+    </>
+  );
 }

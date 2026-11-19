@@ -1,5 +1,5 @@
 // 生物實例：等級、經驗、HP、技能
-import { FORMS, type Form, type Stats } from '../data/creatures';
+import { FORMS, hasAb, type Form, type Stats } from '../data/creatures';
 import { RARITY, STAGE_SLOTS } from '../data/types';
 import { SKILLS, type StatusId } from '../data/skills';
 
@@ -27,7 +27,7 @@ export function statsOf(m: Mon): Stats {
   const mult = RARITY[f.rarity].mult * (m.wild && !m.boss ? WILD_MULT : 1);
   const s = (b: number) => Math.floor(((b * 2 * L) / 50 + 5) * mult);
   let hp = Math.floor(((f.base.hp * 2 * L) / 50 + L + 10) * mult);
-  if (f.ability === 'colossal') hp = Math.floor(hp * 1.6);
+  if (hasAb(f, 'colossal')) hp = Math.floor(hp * 1.6);
   return { hp, atk: s(f.base.atk), def: s(f.base.def), spd: s(f.base.spd) };
 }
 export const maxHp = (m: Mon) => statsOf(m).hp;
