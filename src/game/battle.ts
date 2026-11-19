@@ -93,6 +93,7 @@ function effSpeed(s: BattleState, side: SideId): number {
   if (m.status === 'para') spd *= 0.5;
   if (hasAb(f, 'firststrike') && v.turnsIn === 0) spd *= 2;
   if (hasAb(f, 'stormking')) spd *= 1.2;
+  if (hasAb(f, 'swiftswim')) spd *= 1.15;
   return spd;
 }
 
@@ -275,6 +276,15 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
 
   // 攻擊技
   if (sk.id !== 'luresnap' && !chance(s.rng, sk.acc / 100)) { ev.push({ t: 'miss', side }); ev.push({ t: 'msg', text: `${myName} 的攻擊沒有命中！` }); return; }
+  // 蓄水：水屬性攻擊改為回復
+  const tgt = active(s, foe);
+  if (sk.elem === 'water' && hasAb(formOf(tgt), 'waterabsorb')) {
+    const mx = maxHp(tgt), amt = Math.min(mx - tgt.hp, Math.floor(mx / 4));
+    tgt.hp += amt;
+    ev.push({ t: 'heal', side: foe, amount: amt, hp: tgt.hp });
+    ev.push({ t: 'msg', text: `${nameOf(s, foe)} 的蓄水吸收了攻擊${amt > 0 ? `，回復 ${amt} HP！` : '！'}` });
+    return;
+  }
   const hits = fx.multi ? int(s.rng, fx.multi[0], fx.multi[1]) : 1;
   let total = 0, landed = 0;
   for (let h = 0; h < hits; h++) {

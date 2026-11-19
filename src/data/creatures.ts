@@ -7,7 +7,7 @@ export interface Stats { hp: number; atk: number; def: number; spd: number }
 export type AbilityId =
   | 'moist' | 'blazing' | 'photosyn' | 'hardshell' | 'firststrike' | 'undying'
   | 'lure' | 'regen' | 'sturdy' | 'static' | 'stinger' | 'tidegod' | 'colossal' | 'stormking'
-  | 'oceanpower' | 'dragonpresence' | 'waterbarrier' | 'none';
+  | 'oceanpower' | 'dragonpresence' | 'waterbarrier' | 'swiftswim' | 'waterabsorb' | 'none';
 
 export const ABILITIES: Record<AbilityId, { name: string; desc: string }> = {
   moist: { name: '潤澤', desc: '每回合結束回復最大 HP 的 1/16。' },
@@ -23,6 +23,8 @@ export const ABILITIES: Record<AbilityId, { name: string; desc: string }> = {
   stinger: { name: '毒刺', desc: '受到攻擊時，30% 機率使攻擊者中毒。' },
   tidegod: { name: '潮神', desc: '水屬性技能威力 ×1.3，每回合多回復 1 點能量。' },
   colossal: { name: '巨軀', desc: 'HP 大幅提高，不會被冰凍。' },
+  swiftswim: { name: '悠游自如', desc: '速度提高 15%。' },
+  waterabsorb: { name: '蓄水', desc: '受到水屬性攻擊時不會受傷，改為回復最大 HP 的 25%。' },
   oceanpower: { name: '海洋之力', desc: '水屬性技能威力 ×1.3。' },
   dragonpresence: { name: '龍之氣勢', desc: '每回合多回復 1 點能量。' },
   waterbarrier: { name: '水之結界', desc: '不會陷入任何異常狀態。' },
@@ -49,6 +51,7 @@ export interface Form {
   evolve?: { to: string; level: number }[];
   desc: string;
   scale?: number; // 戰鬥畫面中的放大倍率
+  no?: number; // 圖鑑編號
   height?: number; // 公尺
   weight?: number; // 公斤
 }
@@ -58,9 +61,9 @@ export const hasAb = (f: Form, id: AbilityId) => f.ability === id || !!f.extra?.
 
 const F: Form[] = [
   // ── 初始夥伴：水 ──
-  { id: 'water1', name: '潮仔', family: 'water', stage: 1, rarity: 'N', category: '魚類', elems: ['water'], sprite: 'water1', pal: 'water',
-    base: { hp: 48, atk: 46, def: 48, spd: 50 }, ability: 'moist',
-    learn: [[1, 'watergun'], [1, 'tackle'], [6, 'bubbleguard'], [9, 'tidewave']], evolve: [{ to: 'water2', level: 9 }],
+  { id: 'water1', name: '潮仔', family: 'water', stage: 1, rarity: 'N', category: '魚類', elems: ['water'], sprite: 'water1', pal: 'tide',
+    base: { hp: 48, atk: 46, def: 48, spd: 50 }, ability: 'swiftswim', extra: ['waterabsorb'], no: 2, height: 0.3, weight: 0.5,
+    learn: [[1, 'watergun'], [1, 'bubble'], [6, 'waterpulse'], [9, 'tidewave']], evolve: [{ to: 'water2', level: 9 }],
     desc: '在淺灘出生的小魚，喜歡跟在船邊游泳。' },
   { id: 'water2', name: '浪鰭', family: 'water', stage: 2, rarity: 'N', category: '魚類', elems: ['water'], sprite: 'water2', pal: 'water',
     base: { hp: 62, atk: 60, def: 60, spd: 64 }, ability: 'moist',
@@ -136,7 +139,7 @@ const F: Form[] = [
     base: { hp: 82, atk: 88, def: 70, spd: 58 }, ability: 'lure',
     learn: [[1, 'darkbite'], [1, 'luresnap'], [1, 'paralywave'], [8, 'abyssmaw']], desc: '從深海浮上來的海怪，頭上的燈會引誘獵物。' },
   { id: 'dragon', name: '蒼鱗龍', family: 'dragon', stage: 3, rarity: 'SSR', category: '龍', elems: ['water'], sprite: 'dragon', pal: 'dragon',
-    base: { hp: 92, atk: 100, def: 82, spd: 95 }, ability: 'oceanpower', extra: ['dragonpresence', 'waterbarrier'], height: 12.5, weight: 860,
+    base: { hp: 92, atk: 100, def: 82, spd: 95 }, ability: 'oceanpower', extra: ['dragonpresence', 'waterbarrier'], no: 1001, height: 12.5, weight: 860,
     learn: [[1, 'seagodbreath'], [1, 'waterspout'], [1, 'dragonpulse'], [1, 'aurorawing']], desc: '傳說中守護淺灘的龍。一生只會現身一次。' },
   { id: 'thunderfang', name: '霆牙', family: 'thunderfang', stage: 3, rarity: 'SSR', category: '巨獸', elems: ['elec', 'water'], sprite: 'thunderfang', pal: 'thunder',
     base: { hp: 90, atk: 108, def: 78, spd: 104 }, ability: 'stormking',

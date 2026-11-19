@@ -19,6 +19,7 @@ export const PAL = {
   star: { o: '#2a1a08', d: '#b06a2a', m: '#e8a050', l: '#ffd28a', b: '#fff0d0', a: '#ff6b5a', a2: '#ffe0a0', w: '#ffffff', k: '#2a1a08', h: '#ff9bb8', k2: '#6a4a2a', tr: '#7a4a24' },
   jelly: { o: '#1a0e30', d: '#7a5ad0', m: '#b8a0ff', l: '#e8deff', b: '#ffffff', a: '#ff8ad8', a2: '#5ff1e0', w: '#ffffff', k: '#1a0e30', h: '#ff8ad8', k2: '#4a3a8a', tr: '#7a4a24' },
   dragon: { o: '#0a1638', d: '#1d4fa8', m: '#3a82dc', l: '#b4e0ff', b: '#f2f8ff', a: '#f0c868', a2: '#7fe8ff', w: '#ffffff', k: '#0a1638', h: '#ff9bb8', k2: '#163d86', tr: '#f0c868' },
+  tide: { o: '#0c1f4a', d: '#245fc0', m: '#4a9ae8', l: '#a8dcff', b: '#f4f9ff', a: '#f8dc8a', a2: '#2f6fd0', w: '#ffffff', k: '#0c1f4a', h: '#e8707e', k2: '#16408a', tr: '#7a4a24' },
   thunder: { o: '#120e2a', d: '#25358a', m: '#4762d0', l: '#a8c0ff', b: '#f4f6ff', a: '#ffe14a', a2: '#5ff1ff', w: '#ffffff', k: '#120e2a', h: '#ffe14a', k2: '#252a4a', tr: '#ffe14a' },
   whale: { o: '#060e22', d: '#1a2f6a', m: '#2f5aa8', l: '#6f9ee0', b: '#cfe2ff', a: '#5ff1e0', a2: '#ffcf4a', w: '#ffffff', k: '#060e22', h: '#ff9bb8', k2: '#14244a', tr: '#7a4a24' },
 } satisfies Record<string, Palette>;

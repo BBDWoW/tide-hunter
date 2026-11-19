@@ -35,7 +35,9 @@ const S: Skill[] = [
   { id: 'focus', name: '凝神', elem: null, power: 0, cost: 0, acc: 100, desc: '額外獲得 2 點能量。', fx: { energy: 2 }, anim: 'buff' },
   { id: 'bubbleguard', name: '泡沫護盾', elem: null, power: 0, cost: 1, acc: 100, desc: '產生最大 HP 25% 的護盾。', fx: { shield: 0.25 }, anim: 'buff' },
   // 水
-  { id: 'watergun', name: '水彈', elem: 'water', power: 40, cost: 0, acc: 100, desc: '射出水彈攻擊。', anim: 'splash' },
+  { id: 'watergun', name: '水槍', elem: 'water', power: 40, cost: 0, acc: 100, desc: '射出水彈攻擊。', anim: 'splash' },
+  { id: 'bubble', name: '泡沫', elem: 'water', power: 40, cost: 1, acc: 100, desc: '吐出大量泡沫，30% 降低對手速度。', fx: { stat: { key: 'spd', delta: -1, self: false, chance: 0.3 } }, anim: 'splash' },
+  { id: 'waterpulse', name: '水之波動', elem: 'water', power: 60, cost: 2, acc: 100, desc: '用水的波動攻擊，20% 降低對手攻擊。', fx: { stat: { key: 'atk', delta: -1, self: false, chance: 0.2 } }, anim: 'beam' },
   { id: 'tidewave', name: '浪擊', elem: 'water', power: 75, cost: 2, acc: 95, desc: '掀起海浪衝擊對手。', anim: 'splash' },
   { id: 'surge', name: '潮湧', elem: 'water', power: 0, cost: 2, acc: 100, desc: '回復最大 HP 的 35%。', fx: { heal: 0.35 }, anim: 'heal' },
   { id: 'bubblebarrage', name: '泡泡連射', elem: 'water', power: 22, cost: 1, acc: 95, desc: '連續攻擊 2–4 次。', fx: { multi: [2, 4] }, anim: 'splash' },

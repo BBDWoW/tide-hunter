@@ -177,7 +177,7 @@ export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
             <div class="dex-detail">
               <Sprite form={f.id} size={144} />
               <div class="grow">
-                <div class="row-gap"><b class="big-name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={f.id} /></div>
+                <div class="row-gap">{f.no && <span class="num dim">No.{String(f.no).padStart(4, '0')}</span>}<b class="big-name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={f.id} /></div>
                 <div class="row-gap"><Elems list={f.elems} /><span class="dim">{f.category}</span>{f.height && <span class="dim small">身高 {f.height} m · 體重 {f.weight?.toFixed(1)} kg</span>}</div>
                 <AbilityLines form={f.id} label={false} />
                 <p class="small dim">{f.desc}</p>
