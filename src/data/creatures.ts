@@ -35,7 +35,7 @@ export const ABILITIES: Record<AbilityId, { name: string; desc: string }> = {
   none: { name: '—', desc: '' },
 };
 
-export type Category = '魚類' | '甲殼' | '水鳥' | '海怪' | '礦物' | '水母' | '抽象' | '骷髏' | '龍' | '巨獸';
+export type Category = '魚類' | '甲殼' | '水鳥' | '海怪' | '礦物' | '水母' | '抽象' | '骷髏' | '龍' | '巨獸' | '神獸';
 
 export interface Form {
   id: string;
@@ -155,6 +155,48 @@ const F: Form[] = [
     base: { hp: 140, atk: 115, def: 120, spd: 35 }, ability: 'thickfat', extra: ['poisonbody'], no: 302,
     learn: [[12, 'bodyslam'], [12, 'deepsleep'], [14, 'bigquake'], [16, 'stunslam'], [18, 'megatoxin']],
     desc: '體型變得異常巨大，只要一跺腳就能引發地震，是整片海灘的霸主。' },
+  // ── 冰封峽灣 ──
+  { id: 'iceshrimp', name: '冰晶蝦', family: 'iceshrimp', stage: 1, rarity: 'N', category: '甲殼', elems: ['ice'], sprite: 'iceshrimp', pal: 'ice',
+    base: { hp: 46, atk: 52, def: 56, spd: 50 }, ability: 'hardshell',
+    learn: [[1, 'icepebble'], [1, 'hail'], [14, 'frostfang']], evolve: [{ to: 'iceshrimp2', level: 18 }], desc: '殼像冰晶一樣透明，在冰縫裡成群生活。' },
+  { id: 'iceshrimp2', name: '冰甲蝦', family: 'iceshrimp', stage: 2, rarity: 'N', category: '甲殼', elems: ['ice', 'rock'], sprite: 'iceshrimp2', pal: 'ice',
+    base: { hp: 64, atk: 74, def: 82, spd: 56 }, ability: 'hardshell', learn: [[18, 'rockslide'], [20, 'icebeam']], desc: '冰晶殼長成了厚重的鎧甲，雙鉗能夾碎冰山。' },
+  { id: 'snowgull', name: '雪羽鷗', family: 'snowgull', stage: 2, rarity: 'B', category: '水鳥', elems: ['ice', 'fly'], sprite: 'snowgull', pal: 'snow',
+    base: { hp: 60, atk: 70, def: 54, spd: 86 }, ability: 'firststrike',
+    learn: [[1, 'peck'], [1, 'icepebble'], [12, 'gust'], [16, 'divebomb'], [20, 'frostfang']], desc: '羽毛像新雪一樣白，暴風雪中也能精準捕魚。' },
+  { id: 'icegolem', name: '冰核石偶', family: 'icegolem', stage: 2, rarity: 'A', category: '礦物', elems: ['ice', 'rock'], sprite: 'icegolem', pal: 'glacier',
+    base: { hp: 72, atk: 78, def: 96, spd: 30 }, ability: 'sturdy',
+    learn: [[1, 'pebble'], [1, 'icepebble'], [12, 'harden'], [16, 'rockslide'], [20, 'icebeam']], desc: '萬年冰核外包著岩石的生命。不會進化，但聽說會在某天「覺醒」。' },
+  { id: 'walrus', name: '霜牙海象', family: 'walrus', stage: 3, rarity: 'S', category: '巨獸', elems: ['ice', 'water'], sprite: 'walrus', pal: 'walrus',
+    base: { hp: 96, atk: 98, def: 84, spd: 48 }, ability: 'thickfat',
+    learn: [[1, 'frostfang'], [1, 'tidewave'], [1, 'roar'], [16, 'icebeam']], desc: '冰海的戰士，一對冰牙能鑿穿冰層。' },
+  { id: 'aurorawhale', name: '極光鯨', family: 'aurorawhale', stage: 3, rarity: 'SSR', category: '神獸', elems: ['ice', 'fly'], sprite: 'aurorawhale', pal: 'aurora',
+    base: { hp: 110, atk: 92, def: 88, spd: 82 }, ability: 'waterbarrier', extra: ['dragonpresence'],
+    learn: [[1, 'aurorabeam'], [1, 'icebeam'], [1, 'gust'], [1, 'surge']], desc: '只在極光之夜浮出海面的神鯨，身上流動著七彩的光。' },
+  { id: 'frostking', name: '冰冠海獅王', family: 'frostking', stage: 3, rarity: 'A', category: '巨獸', elems: ['ice', 'water'], sprite: 'frostking', pal: 'glacier',
+    base: { hp: 115, atk: 92, def: 90, spd: 60 }, ability: 'colossal',
+    learn: [[1, 'icebeam'], [1, 'frostfang'], [1, 'tidewave'], [1, 'hail']], desc: '冰封峽灣的霸主，頭頂萬年不化的冰冠。' },
+  // ── 熔岩裂谷 ──
+  { id: 'lavasnail', name: '火山蝸', family: 'lavasnail', stage: 1, rarity: 'N', category: '礦物', elems: ['fire', 'rock'], sprite: 'lavasnail', pal: 'magma',
+    base: { hp: 52, atk: 46, def: 66, spd: 30 }, ability: 'sturdy',
+    learn: [[1, 'ember'], [1, 'pebble'], [14, 'lavaflow']], evolve: [{ to: 'lavasnail2', level: 18 }], desc: '背著一座小火山慢慢爬，殼裡的岩漿永遠不會冷卻。' },
+  { id: 'lavasnail2', name: '熔岩蝸', family: 'lavasnail', stage: 2, rarity: 'N', category: '礦物', elems: ['fire', 'rock'], sprite: 'lavasnail2', pal: 'magma',
+    base: { hp: 72, atk: 70, def: 92, spd: 34 }, ability: 'sturdy', learn: [[18, 'rockslide'], [21, 'eruption']], desc: '殼上的火山會定時噴發，附近的海水都在沸騰。' },
+  { id: 'magmaeel', name: '熔岩鰻', family: 'magmaeel', stage: 2, rarity: 'B', category: '魚類', elems: ['fire'], sprite: 'magmaeel', pal: 'fire',
+    base: { hp: 60, atk: 80, def: 54, spd: 82 }, ability: 'blazing',
+    learn: [[1, 'ember'], [1, 'flamebite'], [14, 'lavaflow'], [18, 'heatup']], desc: '在岩漿縫隙間穿梭的鰻魚，身上的紋路像流動的熔岩。' },
+  { id: 'obsidiancrab', name: '黑曜石蟹', family: 'obsidiancrab', stage: 2, rarity: 'A', category: '甲殼', elems: ['rock', 'fire'], sprite: 'obsidiancrab', pal: 'obsidian',
+    base: { hp: 66, atk: 92, def: 98, spd: 44 }, ability: 'hardshell',
+    learn: [[1, 'pebble'], [1, 'ember'], [12, 'obsidianedge'], [16, 'harden'], [20, 'lavaflow']], desc: '冷卻的岩漿凝成了黑曜石外殼，鉗子鋒利得像玻璃刀。' },
+  { id: 'cinderbone', name: '焦骨鰻', family: 'cinderbone', stage: 3, rarity: 'S', category: '骷髏', elems: ['fire', 'dark'], sprite: 'cinderbone', pal: 'cinder',
+    base: { hp: 80, atk: 102, def: 70, spd: 76 }, ability: 'undying',
+    learn: [[1, 'flamebite'], [1, 'soulsip'], [1, 'bonecurse'], [16, 'eruption']], desc: '被熔岩燒成骨頭也不肯死去的鰻魚，眼窩裡燃著鬼火。' },
+  { id: 'magmacore', name: '熔核巨獸', family: 'magmacore', stage: 3, rarity: 'SSR', category: '巨獸', elems: ['fire', 'rock'], sprite: 'magmacore', pal: 'magma',
+    base: { hp: 112, atk: 112, def: 104, spd: 50 }, ability: 'colossal', extra: ['blazing'],
+    learn: [[1, 'eruption'], [1, 'obsidianedge'], [1, 'lavaflow'], [1, 'roar']], desc: '心臟是一顆熔岩核心的巨獸，傳說裂谷就是牠翻身時撕開的。' },
+  { id: 'lavadragon', name: '熔岩海龍王', family: 'lavadragon', stage: 3, rarity: 'A', category: '龍', elems: ['fire', 'water'], sprite: 'lavadragon', pal: 'magma',
+    base: { hp: 112, atk: 98, def: 84, spd: 66 }, ability: 'colossal',
+    learn: [[1, 'eruption'], [1, 'lavaflow'], [1, 'tidewave'], [1, 'heatup']], desc: '熔岩裂谷的霸主，在岩漿與海水的交界處沉睡。' },
   // ── 霸主 ──
   { id: 'whale', name: '鯨嘯', family: 'whale', stage: 3, rarity: 'A', category: '巨獸', elems: ['water'], sprite: 'whale', pal: 'whale',
     base: { hp: 110, atk: 74, def: 70, spd: 46 }, ability: 'colossal',
@@ -165,5 +207,7 @@ export const FORMS: Record<string, Form> = Object.fromEntries(F.map((f) => [f.id
 export const STARTERS = ['water1', 'fire1', 'grass1'];
 
 // 淺灘出現的野生生物（以家族的第一個形態表示）
+export const ICE_POOL = ['iceshrimp', 'snowgull', 'icegolem', 'walrus', 'aurorawhale', 'jelly1', 'zaploach', 'starsand', 'thunderfang', 'chubby1'];
+export const LAVA_POOL = ['lavasnail', 'magmaeel', 'obsidiancrab', 'cinderbone', 'magmacore', 'bonebream', 'starsand', 'bubcrab', 'dragon', 'chubby1'];
 export const ZONE1_POOL = ['bubcrab', 'starsand', 'zaploach', 'jelly1', 'gull1', 'coral', 'bonebream', 'angler', 'dragon', 'thunderfang', 'chubby1'];
 export const ZONE1_BOSS = 'whale';

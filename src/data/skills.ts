@@ -89,6 +89,13 @@ const S: Skill[] = [
   { id: 'bigquake', name: '大地震', elem: 'rock', power: 100, cost: 3, acc: 100, desc: '一跺腳引發大地震。', anim: 'hit' },
   { id: 'stunslam', name: '猛烈擊暈', elem: 'rock', power: 70, cost: 2, acc: 95, desc: '狠狠一撞，30% 使對手麻痺。', fx: { status: { id: 'para', chance: 0.3 } }, anim: 'hit' },
   { id: 'megatoxin', name: '巨量毒素', elem: null, power: 0, cost: 2, acc: 95, desc: '使對手中毒並降低攻擊。', fx: { status: { id: 'poison', chance: 1 }, stat: { key: 'atk', delta: -1, self: false } }, anim: 'splash' },
+  { id: 'hail', name: '冰雹', elem: 'ice', power: 25, cost: 1, acc: 95, desc: '降下冰雹，連續攻擊 2–3 次。', fx: { multi: [2, 3] }, anim: 'splash' },
+  { id: 'frostfang', name: '霜牙', elem: 'ice', power: 65, cost: 2, acc: 95, desc: '用冰牙咬住，20% 使對手冰凍。', fx: { status: { id: 'freeze', chance: 0.2 } }, anim: 'hit' },
+  { id: 'icebeam', name: '冰凍光線', elem: 'ice', power: 90, cost: 3, acc: 100, desc: '射出極寒光線，10% 使對手冰凍。', fx: { status: { id: 'freeze', chance: 0.1 } }, anim: 'beam' },
+  { id: 'aurorabeam', name: '極光彈', elem: 'ice', power: 80, cost: 2, acc: 100, desc: '七彩極光的衝擊，30% 降低對手攻擊。', fx: { stat: { key: 'atk', delta: -1, self: false, chance: 0.3 } }, anim: 'beam' },
+  { id: 'lavaflow', name: '熔岩流', elem: 'fire', power: 80, cost: 2, acc: 95, desc: '傾瀉熔岩，30% 使對手灼傷。', fx: { status: { id: 'burn', chance: 0.3 } }, anim: 'splash' },
+  { id: 'eruption', name: '噴發', elem: 'fire', power: 110, cost: 3, acc: 90, desc: '火山般的猛烈噴發。', anim: 'beam' },
+  { id: 'obsidianedge', name: '黑曜刃', elem: 'rock', power: 75, cost: 2, acc: 95, desc: '用黑曜石刃斬擊，30% 降低對手防禦。', fx: { stat: { key: 'def', delta: -1, self: false, chance: 0.3 } }, anim: 'hit' },
   { id: 'stormfang', name: '霆牙爆', elem: 'elec', power: 110, cost: 3, acc: 90, desc: '帶著落雷的撕咬，30% 使對手麻痺。', fx: { status: { id: 'para', chance: 0.3 } }, anim: 'beam' },
   { id: 'crabcannon', name: '鉗砲', elem: 'water', power: 90, cost: 2, acc: 85, desc: '從巨鉗發射高壓水砲。', anim: 'beam' },
 ];
