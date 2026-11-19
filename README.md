@@ -13,6 +13,11 @@ npm run build    # 型別檢查＋打包到 dist/
 npm run preview  # 預覽打包結果
 ```
 
+## 部署
+
+推到 `main` 分支時，GitHub Actions 會自動打包並部署到 GitHub Pages（設定在 `.github/workflows/deploy.yml`）。
+第一次使用前，要在儲存庫的 **Settings → Pages → Build and deployment → Source** 選 **GitHub Actions**。
+
 ## 技術架構
 
 | 部分 | 技術 |
