@@ -274,3 +274,12 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .hearts { color: #ff6a8a; letter-spacing: -0.05em; }
 .panel-layer:has(.port) { justify-items: end; }
 .big-panel.port { width: min(100%, calc(var(--u) * 132)); }
+
+/* ── M2 收尾：事件、選擇海域 ── */
+.big-panel.event { width: min(100%, calc(var(--u) * 150)); }
+.zone-row { display: grid; grid-template-columns: 1fr 1fr; gap: calc(var(--u) * 3); }
+.portrait .zone-row { grid-template-columns: 1fr; }
+.zone-card { display: grid; gap: calc(var(--u) * 1.5); text-align: left; padding: calc(var(--u) * 3); cursor: pointer; border: calc(var(--u) * 0.6) solid transparent; }
+.zone-card:hover, .zone-card:focus-visible { border-color: var(--amber); outline: none; transform: translateY(calc(var(--u) * -1)); }
+.zone-ice { background: linear-gradient(180deg, rgba(160, 220, 255, 0.25), rgba(60, 120, 200, 0.15)); }
+.zone-lava { background: linear-gradient(180deg, rgba(255, 120, 50, 0.25), rgba(120, 30, 20, 0.2)); }

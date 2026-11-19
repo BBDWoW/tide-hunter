@@ -1,5 +1,5 @@
 // 一局冒險的狀態：隊伍、道具、航程站點、存檔
-import { FORMS, ZONE1_BOSS, ZONE1_POOL } from '../data/creatures';
+import { FORMS, ICE_POOL, LAVA_POOL, ZONE1_POOL } from '../data/creatures';
 import { effectiveness, RARITY_ORDER, type Rarity } from '../data/types';
 import { makeMon, maxHp, type Mon } from './creature';
 import { int, makeRng, newSeed, next, weighted, type Rng } from './rng';
@@ -8,14 +8,15 @@ import { BOON_LIST, BOON_TIER, BOONS, type LureId } from '../data/boons';
 import { gainXp, xpToNext } from './creature';
 import { upLv, type Meta, type UpgradeId } from './meta';
 
-export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'boss';
+export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'event' | 'boss';
 export const NODE_INFO: Record<NodeKind, { name: string; desc: string }> = {
   fish: { name: '釣點', desc: '普通的釣點，水面下有東西在游動。' },
   elite: { name: '精英釣點', desc: '強大的潮靈盤據在這裡。更難打，但戰後的能力卡更好。' },
   treasure: { name: '寶藏點', desc: '海面閃閃發光，這裡只會釣到寶箱。' },
   camp: { name: '營地', desc: '可以紮營休息的小島。' },
   shop: { name: '漂流商店', desc: '一艘賣漁具的小船，可以用貝殼幣買東西。' },
-  boss: { name: '霸主', desc: '淺灘的霸主就在前方。' },
+  event: { name: '神秘事件', desc: '海面上好像發生了什麼事……' },
+  boss: { name: '霸主', desc: '這片海域的霸主就在前方。' },
 };
 export interface RouteNode { kind: NodeKind; spot: SpotKind }
 export const ROUTE_LEN = 10;
@@ -27,15 +28,52 @@ export const SPOT_INFO: Record<SpotKind, { name: string; desc: string }> = {
   wreck: { name: '沉船', desc: '海底躺著一艘舊船，寶箱和骷髏魚出沒。' },
   deep: { name: '深水區', desc: '看不見底的深藍，有發光的生物在游動。' },
 };
-const SPOT_BIAS: Record<SpotKind, Record<string, number>> = {
-  shallow: { gull1: 3, bubcrab: 2, starsand: 2 },
-  reef: { coral: 3, starsand: 3, bubcrab: 2 },
-  wreck: { bonebream: 4, jelly1: 2 },
-  deep: { angler: 3, jelly1: 3, zaploach: 2 },
+// ── 海域 ──
+export type ZoneId = 'shallows' | 'ice' | 'lava';
+export interface ZoneInfo {
+  name: string; desc: string; theme: 'day' | 'ice' | 'lava';
+  pool: string[]; boss: string; bossLv: number; lvBase: number;
+  spots: Record<SpotKind, { name: string; desc: string }>;
+  bias: Record<SpotKind, Record<string, number>>;
+}
+export const ZONES: Record<ZoneId, ZoneInfo> = {
+  shallows: {
+    name: '碧藍淺灘', desc: '旅程的起點，溫暖明亮的淺海。', theme: 'day',
+    pool: ZONE1_POOL, boss: 'whale', bossLv: 12, lvBase: 3, spots: SPOT_INFO,
+    bias: { shallow: { gull1: 3, bubcrab: 2, starsand: 2 }, reef: { coral: 3, starsand: 3, bubcrab: 2 }, wreck: { bonebream: 4, jelly1: 2 }, deep: { angler: 3, jelly1: 3, zaploach: 2 } },
+  },
+  ice: {
+    name: '冰封峽灣', desc: '冰與永恆的海。浮冰之間住著耐寒的潮靈，霸主是頭戴冰冠的巨型海豹。', theme: 'ice',
+    pool: ICE_POOL, boss: 'frostking', bossLv: 21, lvBase: 13,
+    spots: {
+      shallow: { name: '浮冰區', desc: '大大小小的浮冰漂在海面上。' },
+      reef: { name: '冰洞', desc: '海浪鑿出的冰洞，裡面閃著藍光。' },
+      wreck: { name: '冰封沉船', desc: '被冰凍住的舊船，船艙裡好像有東西。' },
+      deep: { name: '冰淵', desc: '冰層下的深淵，冷得連光都會結冰。' },
+    },
+    bias: { shallow: { snowgull: 3, iceshrimp: 3 }, reef: { icegolem: 3, iceshrimp: 2, starsand: 2 }, wreck: { jelly1: 3, iceshrimp: 2 }, deep: { walrus: 3, zaploach: 2 } },
+  },
+  lava: {
+    name: '熔岩裂谷', desc: '火與海交匯的灼熱之境。海底裂縫湧出岩漿，霸主是在交界處沉睡的海龍。', theme: 'lava',
+    pool: LAVA_POOL, boss: 'lavadragon', bossLv: 21, lvBase: 13,
+    spots: {
+      shallow: { name: '黑沙灘', desc: '火山灰堆成的黑色沙灘，沙子是溫的。' },
+      reef: { name: '熔岩礁', desc: '冷卻的熔岩形成礁岩，縫隙還在發紅。' },
+      wreck: { name: '焦黑沉船', desc: '被火山燒過的沉船，鬼火在船骨間飄蕩。' },
+      deep: { name: '熔岩深淵', desc: '海底裂縫湧出岩漿，海水在沸騰。' },
+    },
+    bias: { shallow: { lavasnail: 3, bubcrab: 2 }, reef: { obsidiancrab: 3, lavasnail: 2, starsand: 2 }, wreck: { cinderbone: 3, bonebream: 3 }, deep: { magmaeel: 3, magmacore: 1 } },
+  },
 };
+export const zoneOf = (run: RunState) => ZONES[run.zone ?? 'shallows'];
+export const spotName = (run: RunState, spot: SpotKind) => zoneOf(run).spots[spot];
+const firstStop = (run: RunState) => run.zoneNo === 0 && run.station === 0;
 
 export interface RunState {
-  version: 3;
+  version: 4;
+  zone: ZoneId;
+  zoneNo: number; // 第幾片海域（0 起算）
+  pendingZone?: boolean; // 已打倒霸主、還沒選下一片海域
   catchBait: number;
   lures: Record<'star' | 'legend', number>;
   boons: Record<string, number>;
@@ -59,7 +97,7 @@ export function newRun(first: Mon, meta?: Meta): RunState {
   const seed = newSeed(), rng = makeRng(seed);
   const up = (id: UpgradeId) => (meta ? upLv(meta, id) : 0);
   return {
-    version: 3, seed, rng,
+    version: 4, seed, rng, zone: 'shallows', zoneNo: 0,
     party: [first],
     items: { potion: 3 + up('supply'), superpotion: 0, revive: 1, ether: 1 },
     catchBait: 1 + up('bait'), lures: { star: up('star'), legend: 0 }, boons: {},
@@ -76,7 +114,7 @@ function generateRoute(rng: Rng): RouteNode[][] {
   const route: RouteNode[][] = [[{ kind: 'fish', spot: 'shallow' }]];
   for (let i = 1; i < ROUTE_LEN - 1; i++) {
     const n = next(rng) < 0.45 ? 3 : 2, opts: RouteNode[] = [];
-    const weights: [NodeKind, number][] = [['fish', 46], ['treasure', 12]];
+    const weights: [NodeKind, number][] = [['fish', 42], ['treasure', 10], ['event', 16]];
     if (i >= 3) weights.push(['elite', 16], ['camp', 12]);
     if (i >= 2) weights.push(['shop', 12]);
     for (let k = 0; k < n; k++) {
@@ -99,6 +137,14 @@ function generateRoute(rng: Rng): RouteNode[][] {
   return route;
 }
 
+// 打倒霸主後前往下一片海域：重新產生航線，全隊回復一半（倒下的也會醒來）
+export function enterZone(run: RunState, zone: ZoneId) {
+  run.zone = zone; run.zoneNo++; run.pendingZone = false;
+  run.route = generateRoute(run.rng); run.station = 0; run.picked = null; run.path = [];
+  healParty(run, 0.5, true);
+}
+export const totalStation = (run: RunState) => run.zoneNo * ROUTE_LEN + run.station + 1;
+
 export const nodeOf = (run: RunState): RouteNode => run.route[run.station][run.picked ?? 0];
 export const isBoss = (run: RunState) => run.route[run.station]?.[0].kind === 'boss';
 
@@ -111,13 +157,13 @@ export interface Shadow { size: 1 | 2 | 3; kind: ShadowKind; rarity: Rarity; x: 
 export function rollShadows(run: RunState, lure: LureId): Shadow[] {
   const r = run.rng, luck = boon(run, 'lucky');
   const node = nodeOf(run);
-  if (node.kind === 'boss') return [{ size: 3, kind: 'fish', rarity: FORMS[ZONE1_BOSS].rarity, x: 170 }];
+  if (node.kind === 'boss') return [{ size: 3, kind: 'fish', rarity: FORMS[zoneOf(run).boss].rarity, x: 170 }];
   if (node.kind === 'treasure') return [118, 168, 218].map((x, i) => ({ size: (i === 1 ? 3 : 2) as 2 | 3, kind: 'treasure' as const, rarity: 'N' as Rarity, x }));
   const sizes: (1 | 2 | 3)[] = [];
   const n = 3;
   for (let i = 0; i < n; i++) sizes.push(weighted(r, [[1, 45 - luck * 8], [2, 40], [3, 15 + luck * 8]] as [1 | 2 | 3, number][]));
   if (lure !== 'normal' && !sizes.includes(3)) sizes[Math.floor(next(r) * n)] = 3;
-  if (run.station === 0) sizes.fill(1).splice(0, 1, 2);
+  if (firstStop(run)) sizes.fill(1).splice(0, 1, 2);
   const xs = [118, 168, 218].sort(() => next(r) - 0.5);
   return sizes.map((size, i) => {
     let kind: ShadowKind = 'fish', rarity: Rarity = 'N';
@@ -132,7 +178,7 @@ export function rollShadows(run: RunState, lure: LureId): Shadow[] {
         : lure === 'star' ? weighted(r, [['S', 55], ['A', 45]] as [Rarity, number][])
           : weighted(r, [['A', 60], ['B', 40]] as [Rarity, number][]);
     }
-    if (run.station === 0) { kind = 'fish'; rarity = 'N'; }
+    if (firstStop(run)) { kind = 'fish'; rarity = 'N'; }
     if (node.kind === 'elite') { kind = 'fish'; if (rarity === 'N' || rarity === 'B') rarity = 'A'; }
     return { size, kind, rarity, x: xs[i] };
   });
@@ -142,26 +188,26 @@ const chanceOf = (r: Rng, p: number) => next(r) < p;
 // 拋竿品質 q（0–1）：完美拋竿可以把稀有度往上推一級（但推不到 S／SSR）
 export function rollEncounter(run: RunState, q: number, shadow: Shadow): Encounter {
   if (isBoss(run)) {
-    const mon = makeMon(ZONE1_BOSS, 12, true, true);
-    return { mon, rarity: FORMS[ZONE1_BOSS].rarity };
+    const z = zoneOf(run), mon = makeMon(z.boss, z.bossLv, true, true);
+    return { mon, rarity: FORMS[z.boss].rarity };
   }
   let rarity = shadow.rarity;
   if (q >= perfectAt(run) && (rarity === 'N' || rarity === 'B')) rarity = RARITY_ORDER[RARITY_ORDER.indexOf(rarity) + 1];
   let pool: string[] = [];
   for (let i = RARITY_ORDER.indexOf(rarity); i >= 0 && !pool.length; i--) {
     rarity = RARITY_ORDER[i];
-    pool = ZONE1_POOL.filter((id) => FORMS[id].rarity === rarity);
+    pool = zoneOf(run).pool.filter((id) => FORMS[id].rarity === rarity);
   }
-  if (run.station === 0) {
+  if (firstStop(run)) {
     // 第一站避開剋制初始夥伴的屬性
     const mine = FORMS[run.party[0].form].elems;
     const safe = pool.filter((id) => FORMS[id].elems.every((e) => effectiveness(e, mine) <= 1));
     if (safe.length) pool = safe;
   }
-  const bias = SPOT_BIAS[nodeOf(run).spot];
+  const bias = zoneOf(run).bias[nodeOf(run).spot];
   let formId = weighted(run.rng, pool.map((id) => [id, bias[id] ?? 1] as [string, number]));
   const elite = nodeOf(run).kind === 'elite' ? 2 : 0;
-  const lv = run.station === 0 ? 3 : Math.max(2, Math.round(3 + run.station * 0.8 + int(run.rng, 0, 2)) - ({ N: 0, B: 0, A: 1, S: 2, SSR: 2 } as const)[rarity] + elite);
+  const lv = firstStop(run) ? 3 : Math.max(2, Math.round(zoneOf(run).lvBase + run.station * 0.8 + int(run.rng, 0, 2)) - ({ N: 0, B: 0, A: 1, S: 2, SSR: 2 } as const)[rarity] + elite);
   const ev = FORMS[formId].evolve?.find((e) => lv >= e.level);
   if (ev) formId = ev.to;
   return { mon: makeMon(formId, lv, false, true), rarity };
@@ -229,7 +275,7 @@ export function healParty(run: RunState, ratio: number, revive = false) {
 }
 
 // ── 存檔 ──
-const SAVE_KEY = 'tidehunter.run.v3';
+const SAVE_KEY = 'tidehunter.run.v4';
 const DEX_KEY = 'tidehunter.dex.v1';
 
 export function saveRun(run: RunState | null) {
@@ -240,7 +286,7 @@ export function loadRun(): RunState | null {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const r = JSON.parse(raw) as RunState;
-    if (r.version !== 3 || !r.party?.every((m) => FORMS[m.form])) return null;
+    if (r.version !== 4 || !r.party?.every((m) => FORMS[m.form])) return null;
     return r;
   } catch { return null; }
 }

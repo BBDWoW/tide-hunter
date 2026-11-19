@@ -41,10 +41,12 @@ function pxEllipse(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: nu
 }
 
 // ── 海景主題 ──
-export type ThemeId = 'day' | 'sunset';
+export type ThemeId = 'day' | 'sunset' | 'ice' | 'lava';
 interface Theme { sky: string[]; sea: string[]; far: string; near: string; sun: string; glow: string; cloud: [string, string]; foam: string; glint: string; horizon: number; sunX: number; sunY: number; sunR: number }
 const THEMES: Record<ThemeId, Theme> = {
   day: { sky: ['#2f7fd8', '#5fb0f0', '#c8f0ff'], sea: ['#7fd8f0', '#2fa4d6', '#0d5f9e', '#073a6e'], far: '#8cc4dc', near: '#5f9fc0', sun: '#fffbe0', glow: '#fff1a8', cloud: ['#ffffff', '#cfe4fa'], foam: '#f2fdff', glint: '#ffffff', horizon: 46, sunX: 206, sunY: 14, sunR: 7 },
+  ice: { sky: ['#7aa8d8', '#b8daf4', '#eef8ff'], sea: ['#c8eef8', '#7ac0e0', '#2a72a8', '#103e6a'], far: '#e4f2fc', near: '#c4dcf0', sun: '#ffffff', glow: '#eaf6ff', cloud: ['#ffffff', '#d4e6f6'], foam: '#ffffff', glint: '#ffffff', horizon: 48, sunX: 62, sunY: 16, sunR: 6 },
+  lava: { sky: ['#160606', '#4a1410', '#a8341a', '#ff8a3a'], sea: ['#b8502a', '#5e2016', '#2a0e10', '#120608'], far: '#3a1612', near: '#1e0a0a', sun: '#ffd08a', glow: '#ff6a2a', cloud: ['#5a2a24', '#341612'], foam: '#ffb070', glint: '#ffd08a', horizon: 54, sunX: 204, sunY: 30, sunR: 9 },
   sunset: { sky: ['#1d1d5c', '#6a2f7a', '#e0607a', '#ffb070'], sea: ['#f0a07a', '#a84e78', '#3a2a6a', '#141640'], far: '#8a4a7a', near: '#5a2f62', sun: '#fff0b0', glow: '#ffb070', cloud: ['#ffc4a8', '#c8708a'], foam: '#ffe0c8', glint: '#fff6c8', horizon: 74, sunX: 128, sunY: 70, sunR: 14 },
 };
 
@@ -93,6 +95,20 @@ function backdrop(id: ThemeId) {
     islands(x, hz, th.far, 9, 5, 150, 256);
     islands(x, hz, th.near, 4, 11, 168, 246);
     islands(x, hz, th.near, 7, 6, 18, 70);
+    if (id === 'ice') {
+      // 冰山
+      for (const [cx, w, h] of [[30, 16, 18], [120, 22, 26], [176, 12, 12], [236, 18, 20]] as const) {
+        for (let yy = 0; yy < h; yy++) { const hw = Math.round((w * (yy + 1)) / h / 2); x.fillStyle = yy < h * 0.3 ? '#ffffff' : '#d8ecf8'; x.fillRect(cx - hw, hz - h + yy, hw * 2, 1); x.fillStyle = '#a8c8e4'; x.fillRect(cx, hz - h + yy, hw, 1); }
+      }
+    }
+    if (id === 'lava') {
+      // 火山與熔岩
+      const vx = 128;
+      for (let yy = 0; yy < 30; yy++) { const hw = 6 + yy * 1.6; x.fillStyle = '#2a0e0c'; x.fillRect(Math.round(vx - hw), hz - 30 + yy, Math.round(hw * 2), 1); }
+      x.fillStyle = '#ff6a1a'; x.fillRect(vx - 6, hz - 30, 12, 2); x.fillStyle = '#ffd04a'; x.fillRect(vx - 3, hz - 31, 6, 1);
+      for (let yy = 0; yy < 24; yy++) { x.fillStyle = yy % 3 ? '#ff6a1a' : '#ffb04a'; x.fillRect(vx - 2 + Math.round(Math.sin(yy * 0.6) * 2), hz - 28 + yy, 2, 1); }
+      x.fillStyle = 'rgba(255,120,40,0.25)'; for (let r = 4; r < 22; r += 3) pxCircle(x, vx, hz - 32, r, 'rgba(255,120,40,0.06)', hz - 28);
+    }
     // 地平線亮線
     x.fillStyle = th.foam; x.globalAlpha = 0.6; x.fillRect(0, hz, W, 1); x.globalAlpha = 1;
   });
@@ -145,6 +161,17 @@ export function drawSea(ctx: CanvasRenderingContext2D, t: number, id: ThemeId = 
     ctx.fillRect(Math.round(x - 1 - i * 0.15), Math.round(y), 2 + Math.round(i * 0.25), 1);
   }
   ctx.globalAlpha = 1;
+  if (id === 'ice') {
+    // 雪花
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    for (let i = 0; i < 40; i++) { const x = (i * 47 + Math.sin(t + i) * 6 + t * 6) % W, y = (i * 29 + t * (10 + (i % 4) * 3)) % H; ctx.fillRect(Math.round(x), Math.round(y), i % 5 ? 1 : 2, i % 5 ? 1 : 2); }
+    return;
+  }
+  if (id === 'lava') {
+    // 往上飄的火星
+    for (let i = 0; i < 30; i++) { const x = (i * 53 + Math.sin(t * 1.5 + i) * 4) % W, y = H - ((i * 31 + t * (8 + (i % 5) * 3)) % H); ctx.fillStyle = i % 3 ? 'rgba(255,140,40,0.8)' : 'rgba(255,220,120,0.9)'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }
+    return;
+  }
   // 遠方海鳥
   const bx = ((t * 9) % (W + 40)) - 20, by = 18 + Math.sin(t * 0.7) * 3;
   ctx.fillStyle = id === 'sunset' ? '#2a1a40' : '#33506e';
@@ -157,31 +184,39 @@ export function drawSea(ctx: CanvasRenderingContext2D, t: number, id: ThemeId = 
 // ── 戰鬥地形 ──
 export const BATTLE = { player: { x: 66, y: 100 }, enemy: { x: 190, y: 66 } };
 
-function shoal() {
-  return cached('shoal', 120, 30, (x) => {
+const PLAT: Record<string, { rim: [string, string]; top: [string, string]; side: [string, string]; mid: [string, string]; deco: string[]; grass: string | null; rtop: [string, string]; rtop2: [string, string]; rbot: [string, string]; rmid: [string, string] }> = {
+  day: { rim: ['#8fd8e8', '#bfeff6'], top: ['#fff4d0', '#f6e2a8'], side: ['#b8915a', '#c9a468'], mid: ['#e0c080', '#ecd394'], deco: ['#fffaf0', '#ff9a8a'], grass: '#5fae5a', rtop: ['#7ab86a', '#5fa25a'], rtop2: ['#a6d48a', '#8cc474'], rbot: ['#5a6878', '#6a7888'], rmid: ['#a8b0b8', '#8c96a2'] },
+  ice: { rim: ['#ffffff', '#c8f0fa'], top: ['#ffffff', '#eef8ff'], side: ['#8ac0e0', '#a8d4ee'], mid: ['#d8eefa', '#e8f6ff'], deco: ['#ffffff', '#9ad8ff'], grass: null, rtop: ['#ffffff', '#e4f2fc'], rtop2: ['#ffffff', '#eef8ff'], rbot: ['#4a6a8a', '#5a7a9a'], rmid: ['#8aa8c4', '#7a98b4'] },
+  lava: { rim: ['#ff8a3a', '#ffb070'], top: ['#5a4a4a', '#4a3a3a'], side: ['#2a1a1a', '#1a1010'], mid: ['#3a2a2a', '#443232'], deco: ['#ff7a1a', '#ffd04a'], grass: null, rtop: ['#ff6a1a', '#c84a1a'], rtop2: ['#3a2a2a', '#4a3434'], rbot: ['#1a0e0e', '#24140e'], rmid: ['#3a2a2a', '#2e2020'] },
+};
+function shoal(th = 'day') {
+  const P = PLAT[th] ?? PLAT.day;
+  return cached('shoal-' + th, 120, 30, (x) => {
     pxEllipse(x, 60, 15, 58, 13, (px, py, nx, ny) => {
-      const d = nx * nx + ny * ny;
-      if (d > 0.82) return (px + py) % 2 ? '#8fd8e8' : '#bfeff6';
-      if (ny < -0.45) return BAYER[py & 3][px & 3] > 9 ? '#fff4d0' : '#f6e2a8';
-      if (d > 0.6 && ny > 0) return BAYER[py & 3][px & 3] > 6 ? '#b8915a' : '#c9a468';
-      return BAYER[py & 3][px & 3] > 12 ? '#e0c080' : '#ecd394';
+      const d = nx * nx + ny * ny, b = BAYER[py & 3][px & 3];
+      if (d > 0.82) return (px + py) % 2 ? P.rim[0] : P.rim[1];
+      if (ny < -0.45) return b > 9 ? P.top[0] : P.top[1];
+      if (d > 0.6 && ny > 0) return b > 6 ? P.side[0] : P.side[1];
+      return b > 12 ? P.mid[0] : P.mid[1];
     });
     const r = seeded(21);
-    for (let i = 0; i < 9; i++) { const sx = 18 + r() * 84, sy = 8 + r() * 10; x.fillStyle = i % 3 ? '#fffaf0' : '#ff9a8a'; x.fillRect(Math.round(sx), Math.round(sy), 1, 1); }
-    for (const gx of [16, 22, 96, 101]) { x.fillStyle = '#5fae5a'; x.fillRect(gx, 6, 1, 4); x.fillRect(gx + 1, 4, 1, 6); x.fillRect(gx + 2, 7, 1, 3); }
+    for (let i = 0; i < 9; i++) { const sx = 18 + r() * 84, sy = 8 + r() * 10; x.fillStyle = i % 3 ? P.deco[0] : P.deco[1]; x.fillRect(Math.round(sx), Math.round(sy), th === 'lava' ? 2 : 1, 1); }
+    if (P.grass) for (const gx of [16, 22, 96, 101]) { x.fillStyle = P.grass; x.fillRect(gx, 6, 1, 4); x.fillRect(gx + 1, 4, 1, 6); x.fillRect(gx + 2, 7, 1, 3); }
   });
 }
-function reef() {
-  return cached('reef', 80, 26, (x) => {
+function reef(th = 'day') {
+  const P = PLAT[th] ?? PLAT.day;
+  return cached('reef-' + th, 80, 26, (x) => {
     pxEllipse(x, 40, 14, 36, 10, (px, py, nx, ny) => {
       const d = nx * nx + ny * ny, b = BAYER[py & 3][px & 3];
-      if (d > 0.8) return (px + py) % 2 ? '#a8e8f4' : '#e0faff';
-      if (ny < -0.15) return d > 0.55 ? (b > 8 ? '#7ab86a' : '#5fa25a') : b > 10 ? '#a6d48a' : '#8cc474';
-      if (ny > 0.4) return b > 7 ? '#5a6878' : '#6a7888';
-      return b > 11 ? '#a8b0b8' : '#8c96a2';
+      if (d > 0.8) return (px + py) % 2 ? P.rim[0] : P.rim[1];
+      if (ny < -0.15) return d > 0.55 ? (b > 8 ? P.rtop[0] : P.rtop[1]) : b > 10 ? P.rtop2[0] : P.rtop2[1];
+      if (ny > 0.4) return b > 7 ? P.rbot[0] : P.rbot[1];
+      return b > 11 ? P.rmid[0] : P.rmid[1];
     });
     const r = seeded(33);
-    for (let i = 0; i < 7; i++) { const cx = 12 + r() * 56; x.fillStyle = ['#ff6b8a', '#ffb05a', '#c87ae0', '#fffbe8'][i % 4]; x.fillRect(Math.round(cx), 8 + Math.round(r() * 4), 2, 1); x.fillRect(Math.round(cx), 7, 1, 1); }
+    const deco = th === 'day' ? ['#ff6b8a', '#ffb05a', '#c87ae0', '#fffbe8'] : th === 'ice' ? ['#ffffff', '#9ad8ff', '#c8f4ff', '#ffffff'] : ['#ff7a1a', '#ffd04a', '#ff4a1a', '#ffb04a'];
+    for (let i = 0; i < 7; i++) { const cx = 12 + r() * 56; x.fillStyle = deco[i % 4]; x.fillRect(Math.round(cx), 8 + Math.round(r() * 4), 2, 1); x.fillRect(Math.round(cx), 7, 1, 1); }
   });
 }
 function foamRing(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, t: number, col: string) {
@@ -205,13 +240,13 @@ export function monSlot(side: 0 | 1, form: string) {
   return { x: base.x - size / 2, y: base.y - size + 3, scale: sc, cx: base.x, cy: base.y - size / 2 + 2 };
 }
 
-export function drawBattleBg(ctx: CanvasRenderingContext2D, t: number) {
-  drawSea(ctx, t, 'day');
+export function drawBattleBg(ctx: CanvasRenderingContext2D, t: number, theme: ThemeId = 'day') {
+  drawSea(ctx, t, theme);
   const e = BATTLE.enemy, p = BATTLE.player;
   foamRing(ctx, e.x, e.y + 1, 38, 9, t, '#f2fdff');
-  ctx.drawImage(reef(), e.x - 40, e.y - 13);
+  ctx.drawImage(reef(theme), e.x - 40, e.y - 13);
   foamRing(ctx, p.x, p.y + 2, 60, 13, t + 1, '#f2fdff');
-  ctx.drawImage(shoal(), p.x - 60, p.y - 13);
+  ctx.drawImage(shoal(theme), p.x - 60, p.y - 13);
 }
 
 function shadow(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: number) {
@@ -219,8 +254,8 @@ function shadow(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: number
   for (let y = -2; y <= 2; y++) { const hw = Math.round(w * Math.sqrt(1 - (y * y) / 6.5)); ctx.fillRect(cx - hw, cy + y, hw * 2, 1); }
 }
 
-export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number, mons: (MonView | null)[], parts: Particle[], beams: Beam[]) {
-  drawBattleBg(ctx, t);
+export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number, mons: (MonView | null)[], parts: Particle[], beams: Beam[], theme: ThemeId = 'day') {
+  drawBattleBg(ctx, t, theme);
   for (const [i, m] of mons.entries()) {
     if (!m || m.alpha <= 0) continue;
     const base = i === 0 ? BATTLE.player : BATTLE.enemy;
@@ -276,7 +311,7 @@ export function burst(parts: Particle[], x: number, y: number, kind: 'hit' | 'sp
 // ── 釣魚 ──
 export type FishPhase = 'choose' | 'cast' | 'flying' | 'wait' | 'nibble' | 'bite' | 'hooked';
 export interface ShadowView { x: number; size: 1 | 2 | 3 }
-export interface FishView { phase: FishPhase; power: number; castT: number; bobX: number; shadows: ShadowView[]; sel: number; spot: string }
+export interface FishView { phase: FishPhase; power: number; castT: number; bobX: number; shadows: ShadowView[]; sel: number; spot: string; theme?: ThemeId }
 const BOAT = { x: 46, y: 92 };
 function boat(ctx: CanvasRenderingContext2D, bob: number) {
   const x = BOAT.x, y = BOAT.y + bob;
@@ -304,6 +339,7 @@ function fishShadow(ctx: CanvasRenderingContext2D, x: number, y: number, size: 1
   ctx.fillRect(Math.min(tx, tx + 4 * dir), Math.round(y - h / 2), 4, h);
 }
 function spotDecor(ctx: CanvasRenderingContext2D, spot: string, t: number) {
+  if (spot === 'none') return;
   if (spot === 'deep') { ctx.fillStyle = 'rgba(4,16,48,0.28)'; ctx.fillRect(0, 47, W, H - 47); }
   if (spot === 'reef') {
     for (const [x, w] of [[150, 14], [232, 18]] as const) { ctx.fillStyle = '#6c5f50'; ctx.fillRect(x, 58, w, 4); ctx.fillStyle = '#8cc474'; ctx.fillRect(x + 2, 57, w - 4, 2); ctx.fillStyle = '#ff6b8a'; ctx.fillRect(x + 4, 55, 2, 2); ctx.fillStyle = '#ffb05a'; ctx.fillRect(x + w - 6, 55, 2, 2); }
@@ -318,7 +354,7 @@ function spotDecor(ctx: CanvasRenderingContext2D, spot: string, t: number) {
 }
 
 export function drawFishing(ctx: CanvasRenderingContext2D, t: number, _dt: number, v: FishView) {
-  drawSea(ctx, t, 'day');
+  drawSea(ctx, t, v.theme ?? 'day');
   spotDecor(ctx, v.spot, t);
   const bob = Math.round(Math.sin(t * 1.5));
   // 魚影
@@ -438,14 +474,20 @@ export function drawPort(ctx: CanvasRenderingContext2D, t: number, bay: string[]
 }
 
 // ── 海圖：俯視的航線 ──
-export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'boss';
+export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'event' | 'boss';
 export interface ChartNode { kind: NodeKind }
 export function chartPos(step: number, idx: number, n: number): [number, number] {
   const x = 16 + step * 25, ys = n === 1 ? [60] : n === 2 ? [42, 80] : [30, 60, 90];
   return [x, ys[idx] + (step % 2 ? 4 : -2)];
 }
-function chartBase(route: ChartNode[][], seed: number) {
-  return cached('chart-' + seed, W, H, (x) => {
+const CHART_COL: Record<string, { sea: string[]; land: [string, string]; sand: string; foam: string }> = {
+  day: { sea: ['#0a3f7a', '#1676b8', '#3fb6d8', '#8fe4ee'], land: ['#5fae5a', '#4c9a4c'], sand: '#f2dc9c', foam: '#e8fbff' },
+  ice: { sea: ['#1a4a7a', '#3a7ab0', '#8ac4e4', '#d8f0fa'], land: ['#ffffff', '#e4f0fa'], sand: '#a8d0ec', foam: '#ffffff' },
+  lava: { sea: ['#140606', '#3a1210', '#7a2a18', '#c8501e'], land: ['#2a1a1a', '#3a2424'], sand: '#ff7a1a', foam: '#ffb070' },
+};
+function chartBase(route: ChartNode[][], seed: number, theme = 'day') {
+  const C = CHART_COL[theme] ?? CHART_COL.day;
+  return cached('chart-' + seed + theme, W, H, (x) => {
     const img = x.createImageData(W, H), r = seeded(seed % 9973);
     const isl: { cx: number; cy: number; rr: number }[] = [];
     route.forEach((opts, i) => opts.forEach((_, j) => { const [cx, cy] = chartPos(i, j, opts.length); isl.push({ cx, cy, rr: i === route.length - 1 ? 11 : 6 + r() * 2 }); }));
@@ -454,9 +496,9 @@ function chartBase(route: ChartNode[][], seed: number) {
       for (const s2 of isl) dmin = Math.min(dmin, Math.hypot(xx - s2.cx, (y - s2.cy) * 1.3) - s2.rr);
       const shallow = Math.max(0, Math.min(1, 1 - dmin / 22));
       const deep = 0.5 + 0.5 * Math.sin(xx * 0.03 + y * 0.05) * Math.cos(y * 0.04 - xx * 0.01);
-      let c = ditherGrad(['#0a3f7a', '#1676b8', '#3fb6d8', '#8fe4ee'], Math.min(1, shallow * 0.85 + deep * 0.2), xx, y, 10);
-      if (dmin < 0) c = dmin < -3 ? (BAYER[y & 3][xx & 3] > 7 ? hex('#5fae5a') : hex('#4c9a4c')) : hex('#f2dc9c');
-      else if (dmin < 1.2) c = hex('#e8fbff');
+      let c = ditherGrad(C.sea, Math.min(1, shallow * 0.85 + deep * 0.2), xx, y, 10);
+      if (dmin < 0) c = dmin < -3 ? (BAYER[y & 3][xx & 3] > 7 ? hex(C.land[0]) : hex(C.land[1])) : hex(C.sand);
+      else if (dmin < 1.2) c = hex(C.foam);
       const i = (y * W + xx) * 4; img.data[i] = c[0]; img.data[i + 1] = c[1]; img.data[i + 2] = c[2]; img.data[i + 3] = 255;
     }
     x.putImageData(img, 0, 0);
@@ -466,7 +508,7 @@ function chartBase(route: ChartNode[][], seed: number) {
     x.fillStyle = '#ff5a6e'; for (let i = 0; i < 6; i++) x.fillRect(cx, cy - 7 + i, 1, 1);
   });
 }
-const NODE_COL: Record<NodeKind, string> = { fish: '#f4f8ff', elite: '#c58cff', treasure: '#ffcf4a', camp: '#ff9a3a', shop: '#7ee3c8', boss: '#e8304a' };
+const NODE_COL: Record<NodeKind, string> = { fish: '#f4f8ff', elite: '#c58cff', treasure: '#ffcf4a', camp: '#ff9a3a', shop: '#7ee3c8', event: '#9ad8ff', boss: '#e8304a' };
 function nodeIcon(ctx: CanvasRenderingContext2D, k: NodeKind, x: number, y: number) {
   ctx.fillStyle = '#141a33'; ctx.fillRect(x - 6, y - 14, 13, 11);
   ctx.fillStyle = NODE_COL[k]; ctx.fillRect(x - 5, y - 13, 11, 9);
@@ -475,11 +517,12 @@ function nodeIcon(ctx: CanvasRenderingContext2D, k: NodeKind, x: number, y: numb
   if (k === 'elite') { ctx.fillStyle = '#ffcf4a'; ctx.fillRect(x - 4, y - 12, 1, 1); ctx.fillRect(x + 4, y - 12, 1, 1); }
   if (k === 'camp') { ctx.fillRect(x, y - 12, 1, 1); ctx.fillRect(x - 1, y - 11, 3, 1); ctx.fillRect(x - 2, y - 10, 5, 1); ctx.fillRect(x - 3, y - 9, 7, 2); }
   if (k === 'treasure') { ctx.fillRect(x - 3, y - 11, 7, 6); ctx.fillStyle = '#ffcf4a'; ctx.fillRect(x - 2, y - 10, 5, 2); ctx.fillRect(x, y - 8, 1, 2); }
+  if (k === 'event') { ctx.fillRect(x - 2, y - 12, 5, 1); ctx.fillRect(x + 2, y - 11, 1, 2); ctx.fillRect(x, y - 9, 2, 1); ctx.fillRect(x, y - 8, 1, 1); ctx.fillRect(x, y - 6, 1, 1); }
   if (k === 'shop') { ctx.fillRect(x - 3, y - 11, 7, 1); ctx.fillRect(x - 2, y - 10, 1, 4); ctx.fillRect(x + 2, y - 10, 1, 4); ctx.fillRect(x - 3, y - 7, 7, 1); }
   if (k === 'boss') { ctx.fillRect(x - 3, y - 11, 7, 4); ctx.fillStyle = '#e8304a'; ctx.fillRect(x - 2, y - 10, 2, 2); ctx.fillRect(x + 1, y - 10, 2, 2); ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 2, y - 7, 1, 2); ctx.fillRect(x, y - 7, 1, 2); ctx.fillRect(x + 2, y - 7, 1, 2); }
 }
-function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number) {
-  const fog = hex('#e4edf8'), fog2 = hex('#c6d4e8');
+function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number, theme = 'day') {
+  const fog = hex(theme === 'lava' ? '#3a2622' : '#e4edf8'), fog2 = hex(theme === 'lava' ? '#2a1a18' : '#c6d4e8');
   for (let y = 0; y < H; y++) {
     const wave = Math.sin(y * 0.18 + t * 0.6) * 3 + Math.sin(y * 0.05 - t * 0.3) * 4;
     const x0 = Math.round(fx + wave);
@@ -494,12 +537,12 @@ function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number) {
   // 霧上的雲團
   for (let k = 0; k < 6; k++) {
     const cx = fx + 14 + ((k * 37 + t * 3) % Math.max(20, W - fx)), cy = 14 + k * 22;
-    ctx.drawImage(cloudSprite('day', k % 5), Math.round(cx - 30), cy);
+    ctx.drawImage(cloudSprite(theme === 'lava' ? 'lava' : 'day', k % 5), Math.round(cx - 30), cy);
   }
 }
 
-export function drawChart(ctx: CanvasRenderingContext2D, t: number, route: ChartNode[][], station: number, picked: number | null, path: number[], seed: number) {
-  ctx.drawImage(chartBase(route, seed), 0, 0);
+export function drawChart(ctx: CanvasRenderingContext2D, t: number, route: ChartNode[][], station: number, picked: number | null, path: number[], seed: number, theme = 'day') {
+  ctx.drawImage(chartBase(route, seed, theme), 0, 0);
   ctx.fillStyle = 'rgba(232,251,255,0.35)';
   for (let i = 0; i < 26; i++) { const x = ((i * 53 + t * 5) % (W + 10)) - 5, y = (i * 29) % H; ctx.fillRect(Math.round(x), y, 3, 1); ctx.fillRect(Math.round(x) + 3, y - 1, 2, 1); }
   // 已走過的航線（金色）
@@ -534,7 +577,7 @@ export function drawChart(ctx: CanvasRenderingContext2D, t: number, route: Chart
     }
   }));
   // 迷霧：下一站之後的海域都被雲霧遮住
-  if (station < route.length - 1) drawFog(ctx, t, chartPos(station + 1, 0, 1)[0] - 13);
+  if (station < route.length - 1) drawFog(ctx, t, chartPos(station + 1, 0, 1)[0] - 13, theme);
   // 小船：在目前所在的位置
   const at = picked !== null ? chartPos(station, picked, route[station].length) : from ?? chartPos(0, 0, 1);
   const [bx, by] = at, bob = Math.round(Math.sin(t * 3));

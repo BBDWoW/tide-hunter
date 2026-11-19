@@ -10,7 +10,7 @@ import {
 import { formOf, maxHp, type Mon } from '../game/creature';
 import { makeRng, next } from '../game/rng';
 import { catchChance, rollShakes } from '../game/capture';
-import { battleMods, boon } from '../game/run';
+import { battleMods, boon, zoneOf } from '../game/run';
 import type { Encounter, RunState } from '../game/run';
 import { auraColor, burst, drawBattle, drawNet, H, monSlot, W, type Beam, type MonView, type Particle } from '../render/scene';
 import { Bar, ElemChip, Elems, Energy, RarityTag, Sprite } from './components';
@@ -83,7 +83,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       v.shake = a.shakeT[side] > 0 ? 1 : 0;
       v.alpha = e * a.fade[side];
     }
-    drawBattle(ctx, t, dt, a.mons, a.parts, a.beams);
+    drawBattle(ctx, t, dt, a.mons, a.parts, a.beams, zoneOf(run).theme);
     if (net.current) { const c = monSlot(1, a.mons[1].form); const n = net.current; n.glow = Math.max(0, n.glow - dt); drawNet(ctx, c.cx, c.cy + 6, n.wob, n.glow); }
   };
 

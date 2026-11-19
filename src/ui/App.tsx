@@ -1,9 +1,10 @@
 import { useState } from 'preact/hooks';
-import { boon, healParty, isBoss, loadRun, markCaught, markSeen, newRun, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
+import { boon, enterZone, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
 import { AfterBattle } from './AfterBattle';
 import { Battle, type BattleResult } from './Battle';
 import { Fishing } from './Fishing';
-import { Dex, End, Help, Port, StarterPick, Title, Voyage } from './Screens';
+import { Dex, End, EventScreen, Help, Port, StarterPick, Title, Voyage, ZonePick } from './Screens';
+import { pickEvent, type GameEvent } from '../game/events';
 import { loadMeta, pearlsFor, returnFromRun, saveMeta } from '../game/meta';
 import { useViewport } from './layout';
 import { makeMon } from '../game/creature';
@@ -20,7 +21,8 @@ function devEncounter(): Encounter | null {
 type Screen =
   | { k: 'title' } | { k: 'starter' } | { k: 'voyage' } | { k: 'fishing' }
   | { k: 'battle'; enc: Encounter } | { k: 'after'; result: BattleResult }
-  | { k: 'end'; win: boolean; pearls: number } | { k: 'dex' } | { k: 'help' } | { k: 'port' };
+  | { k: 'end'; win: boolean; pearls: number } | { k: 'dex' } | { k: 'help' } | { k: 'port' }
+  | { k: 'event'; ev: GameEvent } | { k: 'zonepick' };
 
 export function App() {
   const vp = useViewport();
@@ -34,11 +36,11 @@ export function App() {
   const finishRun = (win: boolean) => {
     const r = run!;
     const meta = loadMeta();
-    const pearls = pearlsFor({ station: r.station + 1, battlesWon: r.battlesWon, caught: r.caught, win });
+    const pearls = pearlsFor({ station: totalStation(r), battlesWon: r.battlesWon, caught: r.caught, win });
     meta.pearls += pearls; meta.totalPearls += pearls; meta.runs++;
     saveMeta(meta);
     returnFromRun(meta, r.party);
-    updateDex((d) => { d.bestStation = Math.max(d.bestStation, r.station + 1); if (win) d.clears++; });
+    updateDex((d) => { d.bestStation = Math.max(d.bestStation, totalStation(r)); if (win) d.clears++; });
     saveRun(null);
     go({ k: 'end', win, pearls });
   };
@@ -56,14 +58,14 @@ export function App() {
   switch (screen.k) {
     case 'title':
       body = <Title vp={vp} hasSave={!!loadRun()} onNew={() => go({ k: 'starter' })}
-        onContinue={() => { const r = loadRun(); if (r) { setRun(r); go({ k: 'voyage' }); } }}
+        onContinue={() => { const r = loadRun(); if (r) { setRun(r); go(r.pendingZone ? { k: 'zonepick' } : { k: 'voyage' }); } }}
         onDex={() => go({ k: 'dex' })} onHelp={() => go({ k: 'help' })} onPort={() => go({ k: 'port' })} />;
       break;
     case 'starter':
       body = <StarterPick vp={vp} onBack={() => go({ k: 'title' })} onPick={(m) => { const r = newRun(m, loadMeta()); markCaught(m.form); saveRun(r); setRun(r); go({ k: 'voyage' }); }} />;
       break;
     case 'voyage':
-      body = <Voyage vp={vp} run={run!} onGo={() => go({ k: 'fishing' })} onNext={advance} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
+      body = <Voyage vp={vp} run={run!} onGo={() => (nodeOf(run!).kind === 'event' ? go({ k: 'event', ev: pickEvent(run!) }) : go({ k: 'fishing' }))} onNext={advance} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
       break;
     case 'fishing':
       body = <Fishing vp={vp} run={run!} boss={boss} onDone={advance} onHook={(q, sh) => { const enc = devEncounter() ?? rollEncounter(run!, q, sh); markSeen(enc.mon.form); go({ k: 'battle', enc }); }} />;
@@ -76,7 +78,10 @@ export function App() {
       break;
     case 'after':
       body = <AfterBattle vp={vp} run={run!} result={screen.result} onDone={() => {
-        if (boss && screen.result.outcome === 'win') { finishRun(true); return; }
+        if (boss && screen.result.outcome === 'win') {
+          if (run!.zoneNo === 0) { run!.pendingZone = true; saveRun(run); go({ k: 'zonepick' }); } else finishRun(true);
+          return;
+        }
         healParty(run!, 0.15 + boon(run!, 'breeze') * 0.15);
         advance();
       }} />;
@@ -86,6 +91,12 @@ export function App() {
       break;
     case 'dex':
       body = <Dex vp={vp} onBack={() => go({ k: 'title' })} />;
+      break;
+    case 'event':
+      body = <EventScreen vp={vp} run={run!} ev={screen.ev} onDone={() => { if (run!.party.every((m) => m.hp <= 0)) finishRun(false); else advance(); }} />;
+      break;
+    case 'zonepick':
+      body = <ZonePick vp={vp} run={run!} onPick={(z) => { enterZone(run!, z); saveRun(run); go({ k: 'voyage' }); }} />;
       break;
     case 'port':
       body = <Port vp={vp} onBack={() => go({ k: 'title' })} />;

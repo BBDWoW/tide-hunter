@@ -6,9 +6,10 @@ import { ITEMS, type ItemId } from '../game/battle';
 import { ancestryOf, formOf, makeMon, maxHp, xpToNext, type Mon } from '../game/creature';
 import { bayCap, bayStartLevel, bringBack, buyRecruit, buyUpgrade, loadMeta, monFromBay, RECRUITS, saveMeta, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
 import { SKILLS } from '../data/skills';
-import { healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, SPOT_INFO, type RunState } from '../game/run';
+import { healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
+import type { GameEvent } from '../game/events';
 import { BOONS, LURES } from '../data/boons';
-import { chartPos, drawChart, drawDeep, drawPort, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
+import { chartPos, drawChart, drawDeep, drawPort, drawSea, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
 import { AbilityLines, Bar, Elems, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 
@@ -180,11 +181,12 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
   const node = run.picked !== null ? opts[run.picked] : null;
   let action: { text: string; btn: string; fn: () => void } | null = null;
   if (node) {
-    const spot = SPOT_INFO[node.spot];
+    const spot = spotName(run, node.spot);
     if (node.kind === 'fish') action = { text: `${spot.name}的釣點。${spot.desc}`, btn: '拋竿出擊', fn: onGo };
     else if (node.kind === 'elite') action = { text: `精英釣點（${spot.name}）。強大的潮靈盤據在這裡，打贏能挑更好的能力卡。`, btn: '挑戰精英', fn: onGo };
     else if (node.kind === 'treasure') action = { text: '寶藏點！海面閃閃發光，這裡只會釣到寶箱。', btn: '拋竿撈寶', fn: onGo };
-    else if (node.kind === 'boss') action = { text: '海面暗了下來……淺灘的霸主就在前方。先整理好隊伍吧。', btn: '挑戰霸主', fn: onGo };
+    else if (node.kind === 'boss') action = { text: `海面暗了下來……${zoneOf(run).name}的霸主就在前方。先整理好隊伍吧。`, btn: '挑戰霸主', fn: onGo };
+    else if (node.kind === 'event') action = { text: '海面上好像發生了什麼事……要過去看看嗎？', btn: '前往查看', fn: onGo };
     else if (node.kind === 'shop') action = { text: `漂流商店的老闆揮著手。你有 ${run.shells} 枚貝殼幣。`, btn: '逛商店', fn: () => setPanel('shop') };
     else action = rested
       ? { text: '夥伴們休息好了，準備出發。', btn: '繼續航行', fn: onNext }
@@ -194,9 +196,9 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
 
   return (
     <GameScreen vp={vp}
-      scene={<SceneCanvas draw={(c, t) => drawChart(c, t, run.route, run.station, run.picked, run.path, run.seed)} label="海圖與航線" />}
+      scene={<SceneCanvas draw={(c, t) => drawChart(c, t, run.route, run.station, run.picked, run.path, run.seed, zoneOf(run).theme)} label="海圖與航線" />}
       overlay={<>
-        <Win class="banner left"><span class="eyebrow">海域 1 · 碧藍淺灘</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b></Win>
+        <Win class="banner left"><span class="eyebrow">海域 {run.zoneNo + 1} · {zoneOf(run).name}</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b></Win>
         <Win class="banner right"><span class="res">🐚 {run.shells}</span><span class="res">捕捉餌 {run.catchBait}</span></Win>
         {run.picked === null && opts.map((o, j) => {
           const [x, y] = chartPos(run.station, j, opts.length);
@@ -215,7 +217,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
       dock={
         <div class="dock-split">
           <Win class="msg">
-            {node && action ? <p>{action.text}</p> : <p><b>選擇航線：</b>{NODE_INFO[hv.kind].name}{hv.kind === 'fish' || hv.kind === 'elite' ? `（${SPOT_INFO[hv.spot].name}）` : ''}——{NODE_INFO[hv.kind].desc}</p>}
+            {node && action ? <p>{action.text}</p> : <p><b>選擇航線：</b>{NODE_INFO[hv.kind].name}{hv.kind === 'fish' || hv.kind === 'elite' ? `（${spotName(run, hv.spot).name}）` : ''}——{NODE_INFO[hv.kind].desc}</p>}
             <div class="party-strip">
               {run.party.map((m) => (
                 <div class={`slot ${m.hp <= 0 ? 'ko' : ''}`} key={m.uid} title={formOf(m).name}>
@@ -229,7 +231,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
           <Win class="cmd">
             <div class="cmd-grid">
               {node && action ? <MenuItem onClick={action.fn} hot>{action.btn}</MenuItem>
-                : opts.map((o, j) => <MenuItem key={j} hot={j === hover} onHover={() => setHover(j)} onClick={() => choose(j)}>{NODE_INFO[o.kind].name}{o.kind === 'fish' || o.kind === 'elite' ? `・${SPOT_INFO[o.spot].name}` : ''}</MenuItem>)}
+                : opts.map((o, j) => <MenuItem key={j} hot={j === hover} onHover={() => setHover(j)} onClick={() => choose(j)}>{NODE_INFO[o.kind].name}{o.kind === 'fish' || o.kind === 'elite' ? `・${spotName(run, o.spot).name}` : ''}</MenuItem>)}
               <MenuItem onClick={() => setPanel(panel === 'party' ? null : 'party')}>隊伍</MenuItem>
               <MenuItem onClick={() => setPanel(panel === 'items' ? null : 'items')}>道具</MenuItem>
               <MenuItem onClick={onQuit}>存檔離開</MenuItem>
@@ -387,10 +389,10 @@ export function End({ vp, run, win, pearls, onTitle }: { vp: Viewport; run: RunS
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={win ? drawTitle : drawDeep} />}
       panel={
-        <Win class="big-panel end" title={win ? '淺灘霸主已被擊敗！' : '航程結束'}>
+        <Win class="big-panel end" title={win ? `${zoneOf(run).name}的霸主已被擊敗！` : '航程結束'}>
           <p>{win ? '恭喜通關！帶著收穫回到港口吧。' : '隊伍全部倒下了。回港口整頓一下，再出海一次吧。'}</p>
           <div class="end-stats">
-            <span>抵達</span><b class="num">第 {run.station + 1} 站</b>
+            <span>抵達</span><b class="num">{zoneOf(run).name} 第 {run.station + 1} 站（共 {totalStation(run)} 站）</b>
             <span>勝利</span><b class="num">{run.battlesWon} 場</b>
             <span>收服</span><b class="num">{run.caught} 隻</b>
             <span>獲得珍珠</span><b class="num accent">◆ {pearls}（共 {meta.pearls}）</b>
@@ -422,6 +424,50 @@ export function End({ vp, run, win, pearls, onTitle }: { vp: Viewport; run: RunS
           </>}
           {run.party.some((m) => m.bayId) && <p class="small dim">從棲息灣帶出來的夥伴，羈絆 +1，已經自動回港。</p>}
           <MenuItem onClick={onTitle} hot>回到港口</MenuItem>
+        </Win>
+      } />
+  );
+}
+
+// ── 隨機事件 ──
+export function EventScreen({ vp, run, ev, onDone }: { vp: Viewport; run: RunState; ev: GameEvent; onDone: () => void }) {
+  const [result, setResult] = useState<string | null>(null);
+  return (
+    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawSea(c, t, zoneOf(run).theme)} label="海面" />}
+      panel={
+        <Win class="big-panel event" title={`❓ ${ev.title}`}>
+          <p>{ev.text}</p>
+          {result ? <>
+            <p class="accent">{result}</p>
+            <MenuItem onClick={onDone} hot>繼續航行</MenuItem>
+          </> : ev.options.map((o, i) => {
+            const ok = o.can ? o.can(run) : true;
+            return <MenuItem key={i} disabled={!ok} onClick={() => { setResult(o.act(run)); saveRun(run); }} sub={o.hint}>{o.label}</MenuItem>;
+          })}
+          <div class="party-strip">{run.party.map((m) => <div class={`slot ${m.hp <= 0 ? 'ko' : ''}`} key={m.uid}><Sprite form={m.form} size={48} /><Bar value={m.hp} max={maxHp(m)} /><span class="slot-lv">Lv{m.lv}</span></div>)}</div>
+        </Win>
+      } />
+  );
+}
+
+// ── 選擇下一片海域 ──
+export function ZonePick({ vp, run, onPick }: { vp: Viewport; run: RunState; onPick: (z: ZoneId) => void }) {
+  const opts: ZoneId[] = ['ice', 'lava'];
+  const show: Record<ZoneId, string[]> = { shallows: [], ice: ['iceshrimp', 'walrus', 'frostking'], lava: ['lavasnail', 'cinderbone', 'lavadragon'] };
+  return (
+    <GameScreen vp={vp} scene={<SceneCanvas draw={drawTitle} label="夕陽下的海面" />}
+      panel={
+        <Win class="big-panel" title={`${zoneOf(run).name}的霸主被擊敗了！要往哪裡前進？`}>
+          <p class="small dim">全隊會在出發前回復一半 HP，倒下的夥伴也會醒來。</p>
+          <div class="zone-row">
+            {opts.map((z) => (
+              <button class={`zone-card zone-${z}`} key={z} onClick={() => onPick(z)}>
+                <b class="big-name">{ZONES[z].name}</b>
+                <div class="row-gap">{show[z].map((f) => <Sprite form={f} size={48} key={f} still />)}</div>
+                <span class="small">{ZONES[z].desc}</span>
+              </button>
+            ))}
+          </div>
         </Win>
       } />
   );

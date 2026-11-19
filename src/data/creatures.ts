@@ -174,7 +174,7 @@ const F: Form[] = [
     base: { hp: 110, atk: 92, def: 88, spd: 82 }, ability: 'waterbarrier', extra: ['dragonpresence'],
     learn: [[1, 'aurorabeam'], [1, 'icebeam'], [1, 'gust'], [1, 'surge']], desc: '只在極光之夜浮出海面的神鯨，身上流動著七彩的光。' },
   { id: 'frostking', name: '冰冠海豹王', family: 'frostking', stage: 3, rarity: 'A', category: '巨獸', elems: ['ice', 'water'], sprite: 'frostking', pal: 'seal',
-    base: { hp: 115, atk: 92, def: 90, spd: 60 }, ability: 'colossal',
+    base: { hp: 112, atk: 90, def: 86, spd: 58 }, ability: 'colossal',
     learn: [[1, 'icebeam'], [1, 'frostfang'], [1, 'tidewave'], [1, 'hail']], desc: '冰封峽灣的霸主，頭戴萬年不化的冰冠的巨型海豹。' },
   // ── 熔岩裂谷 ──
   { id: 'lavasnail', name: '火山蝸', family: 'lavasnail', stage: 1, rarity: 'N', category: '礦物', elems: ['fire', 'rock'], sprite: 'lavasnail', pal: 'magma',
@@ -195,7 +195,7 @@ const F: Form[] = [
     base: { hp: 112, atk: 112, def: 104, spd: 50 }, ability: 'colossal', extra: ['blazing'],
     learn: [[1, 'eruption'], [1, 'obsidianedge'], [1, 'lavaflow'], [1, 'roar']], desc: '心臟是一顆熔岩核心的巨獸，傳說裂谷就是牠翻身時撕開的。' },
   { id: 'lavadragon', name: '熔岩海龍王', family: 'lavadragon', stage: 3, rarity: 'A', category: '龍', elems: ['fire', 'water'], sprite: 'lavadragon', pal: 'lavaeel',
-    base: { hp: 112, atk: 98, def: 84, spd: 66 }, ability: 'colossal',
+    base: { hp: 100, atk: 82, def: 78, spd: 58 }, ability: 'colossal',
     learn: [[1, 'eruption'], [1, 'lavaflow'], [1, 'tidewave'], [1, 'heatup']], desc: '熔岩裂谷的霸主，在岩漿與海水的交界處沉睡。' },
   // ── 霸主 ──
   { id: 'whale', name: '鯨嘯', family: 'whale', stage: 3, rarity: 'A', category: '巨獸', elems: ['water'], sprite: 'whale', pal: 'whale',

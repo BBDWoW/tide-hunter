@@ -1,7 +1,7 @@
 // 釣魚：選魚餌 → 選魚影 → 拋竿（力量條）→ 等待（小心假咬鉤）→ 真的咬鉤時點擊 → 上鉤
 import { useRef, useState } from 'preact/hooks';
 import { LURES, type LureId } from '../data/boons';
-import { nodeOf, perfectAt, rollShadows, rollTreasure, SPOT_INFO, type Loot, type RunState, type Shadow } from '../game/run';
+import { nodeOf, perfectAt, rollShadows, rollTreasure, spotName, zoneOf, type Loot, type RunState, type Shadow } from '../game/run';
 import { drawFishing, type FishPhase, type FishView } from '../render/scene';
 import { useTap } from './input';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
@@ -17,9 +17,9 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
   const [phase, setPhase] = useState<FishPhase | 'lure' | 'loot'>(boss || !hasLures ? 'choose' : 'lure');
   const [sel, setSel] = useState(boss ? 0 : 1);
   const [loot, setLoot] = useState<Loot | null>(null);
-  const [msg, setMsg] = useState(boss ? '海面異常平靜……霸主就在這片水域。' : `${SPOT_INFO[spot].name}：${SPOT_INFO[spot].desc}`);
+  const [msg, setMsg] = useState(boss ? '海面異常平靜……霸主就在這片水域。' : `${spotName(run, spot).name}：${spotName(run, spot).desc}`);
   const st = useRef({
-    view: { phase: 'choose', power: 0, castT: 0, bobX: 170, shadows: [], sel: 1, spot } as FishView,
+    view: { phase: 'choose', power: 0, castT: 0, bobX: 170, shadows: [], sel: 1, spot: zoneOf(run).theme === 'day' ? spot : 'none', theme: zoneOf(run).theme } as FishView,
     t: 0, wait: 0, nibbles: 0, nib: 0, bite: 0, q: 0, done: false,
   });
   st.current.view.shadows = shadows;
