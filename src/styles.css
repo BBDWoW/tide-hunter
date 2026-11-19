@@ -182,7 +182,7 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .hud .energy i.on { background: #ff9d1f; box-shadow: none; }
 .hpnum { font-family: var(--f-num); font-size: 0.55em; font-variant-numeric: tabular-nums; }
 .st { font-size: 0.65em; padding: 0 0.35em; color: #fff; }
-.st-burn { background: #e2512a; } .st-para { background: #c9a10f; } .st-poison { background: #9b4fd0; } .st-freeze { background: #4fa8d0; } .st-glitch { background: #1fae9a; } .st-shield { background: #5f7ad8; }
+.st-burn { background: #e2512a; } .st-para { background: #c9a10f; } .st-poison { background: #9b4fd0; } .st-freeze { background: #4fa8d0; } .st-glitch { background: #1fae9a; } .st-sleep { background: #6a6ab8; } .st-shield { background: #5f7ad8; }
 @media (max-width: 480px) { .portrait .hud-sub { display: none; } }
 .pop { position: absolute; z-index: 3; transform: translate(-50%, 0); font-family: var(--f-num); font-size: max(11px, calc(var(--u) * 4.4)); color: #fff; text-shadow: calc(var(--u) * 0.5) calc(var(--u) * 0.5) 0 #121a36; pointer-events: none; animation: rise 1s ease-out forwards; }
 .pop.super { color: var(--amber); font-size: max(13px, calc(var(--u) * 5.4)); } .pop.crit { color: #ff8a5a; font-size: max(13px, calc(var(--u) * 5.6)); } .pop.weak { color: #c8d2e8; } .pop.heal { color: var(--good); }

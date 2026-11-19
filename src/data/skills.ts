@@ -1,7 +1,7 @@
 // 技能資料。cost = 能量消耗（每回合 +1，上限 5，戰鬥開始時有 2 點）
 import type { Elem } from './types';
 
-export type StatusId = 'burn' | 'para' | 'poison' | 'freeze' | 'glitch';
+export type StatusId = 'burn' | 'para' | 'poison' | 'freeze' | 'glitch' | 'sleep';
 export type StatKey = 'atk' | 'def' | 'spd';
 
 export interface SkillEffect {
@@ -13,6 +13,7 @@ export interface SkillEffect {
   priority?: number;
   multi?: [number, number]; // 連擊次數範圍
   energy?: number; // 額外獲得能量
+  selfSleep?: number; // 使用後自己睡著幾回合（睡著時防禦 +1）
 }
 
 export interface Skill {
@@ -84,7 +85,7 @@ const S: Skill[] = [
   { id: 'rollout', name: '翻滾', elem: 'rock', power: 25, cost: 1, acc: 90, desc: '縮成球滾過去，連續攻擊 2–3 次。', fx: { multi: [2, 3] }, anim: 'hit' },
   { id: 'microtoxin', name: '微型毒素', elem: null, power: 0, cost: 1, acc: 90, desc: '使對手中毒。', fx: { status: { id: 'poison', chance: 1 } }, anim: 'splash' },
   { id: 'bodyslam', name: '泰山壓頂', elem: null, power: 85, cost: 2, acc: 100, desc: '用巨大的身體壓上去，30% 使對手麻痺。', fx: { status: { id: 'para', chance: 0.3 } }, anim: 'hit' },
-  { id: 'deepsleep', name: '超睡死', elem: null, power: 0, cost: 2, acc: 100, desc: '呼呼大睡，回復最大 HP 的 50%。', fx: { heal: 0.5 }, anim: 'heal' },
+  { id: 'deepsleep', name: '超睡死', elem: null, power: 0, cost: 2, acc: 100, desc: '回復全部 HP 並治癒異常狀態，然後睡兩回合。睡著時防禦 +1。', fx: { heal: 1, selfSleep: 2 }, anim: 'heal' },
   { id: 'bigquake', name: '大地震', elem: 'rock', power: 100, cost: 3, acc: 100, desc: '一跺腳引發大地震。', anim: 'hit' },
   { id: 'stunslam', name: '猛烈擊暈', elem: 'rock', power: 70, cost: 2, acc: 95, desc: '狠狠一撞，30% 使對手麻痺。', fx: { status: { id: 'para', chance: 0.3 } }, anim: 'hit' },
   { id: 'megatoxin', name: '巨量毒素', elem: null, power: 0, cost: 2, acc: 95, desc: '使對手中毒並降低攻擊。', fx: { status: { id: 'poison', chance: 1 }, stat: { key: 'atk', delta: -1, self: false } }, anim: 'splash' },

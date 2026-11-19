@@ -15,6 +15,7 @@ export interface Volatile {
   stages: Record<StatKey, number>;
   turnsIn: number;
   freezeTurns: number;
+  sleepTurns: number;
   undyingUsed: boolean;
   healUses: number;
 }
@@ -70,13 +71,13 @@ export type BEvent =
 
 export const STRUGGLE: Skill = { id: 'struggle', name: '掙扎', elem: null, power: 35, cost: 0, acc: 100, desc: '能量不足時使用。', anim: 'hit' };
 export const MAX_ENERGY = 5;
-const STATUS_NAME: Record<StatusId, string> = { burn: '灼傷', para: '麻痺', poison: '中毒', freeze: '冰凍', glitch: '資料錯亂' };
+const STATUS_NAME: Record<StatusId, string> = { burn: '灼傷', para: '麻痺', poison: '中毒', freeze: '冰凍', glitch: '資料錯亂', sleep: '睡眠' };
 
 export const active = (s: BattleState, side: SideId) => s.sides[side].team[s.sides[side].active];
 export const volOf = (s: BattleState, side: SideId) => s.sides[side].vol[active(s, side).uid];
 
 function freshVol(): Volatile {
-  return { energy: 2, shield: 0, stages: { atk: 0, def: 0, spd: 0 }, turnsIn: 0, freezeTurns: 0, undyingUsed: false, healUses: 0 };
+  return { energy: 2, shield: 0, stages: { atk: 0, def: 0, spd: 0 }, turnsIn: 0, freezeTurns: 0, sleepTurns: 0, undyingUsed: false, healUses: 0 };
 }
 
 type SideInit = { team: Mon[]; name: string; mods?: SideMods };
@@ -172,6 +173,7 @@ export function switchIn(s: BattleState, side: SideId, to: number, ev: BEvent[])
   }
   const v = sd.vol[out.uid];
   v.stages = { atk: 0, def: 0, spd: 0 }; v.shield = 0; v.turnsIn = 0;
+  if (out.status === 'sleep') { out.status = null; v.sleepTurns = 0; }
   sd.active = to;
   s.needSwitch[side] = false;
   const inc = sd.team[to];
@@ -233,6 +235,16 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
   const myName = nameOf(s, side);
 
   // 行動前的異常狀態判定
+  if (me.status === 'sleep') {
+    if (v.sleepTurns > 0) {
+      v.sleepTurns--;
+      ev.push({ t: 'msg', text: `${myName} 正在呼呼大睡……` });
+      return;
+    }
+    me.status = null; ev.push({ t: 'status', side, status: null });
+    ev.push({ t: 'msg', text: `${myName} 醒過來了！` });
+    if (v.stages.def > 0) { v.stages.def--; ev.push({ t: 'stat', side, key: 'def', delta: -1 }); }
+  }
   if (me.status === 'freeze') {
     v.freezeTurns++;
     if (v.freezeTurns >= 3 || chance(s.rng, 0.3)) {
@@ -263,6 +275,12 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
       v.healUses++;
       me.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: me.hp });
       ev.push({ t: 'msg', text: amt > 0 ? `${myName} 回復了 ${amt} HP！` : `${myName} 的 HP 已經是滿的。` });
+    }
+    if (fx.selfSleep) {
+      me.status = 'sleep'; v.sleepTurns = fx.selfSleep;
+      ev.push({ t: 'status', side, status: 'sleep' });
+      ev.push({ t: 'msg', text: `${myName} 睡著了！（${fx.selfSleep} 回合）` });
+      changeStat(s, side, 'def', 1, ev);
     }
     if (fx.shield) {
       v.shield = Math.floor(maxHp(me) * fx.shield); ev.push({ t: 'shield', side, amount: v.shield });
