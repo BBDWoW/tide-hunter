@@ -209,7 +209,7 @@ function applyStatus(s: BattleState, side: SideId, st: StatusId, ev: BEvent[]): 
   if (m.status || m.hp <= 0) return false;
   if (hasAb(formOf(m), 'waterbarrier')) { ev.push({ t: 'msg', text: `${nameOf(s, side)} 的水之結界擋下了異常狀態！` }); return false; }
   if (st === 'freeze' && (hasAb(formOf(m), 'colossal') || formOf(m).elems.includes('ice'))) return false;
-  if (st === 'burn' && formOf(m).elems.includes('fire')) return false;
+  if (st === 'burn' && (formOf(m).elems.includes('fire') || hasAb(formOf(m), 'waterveil'))) return false;
   if (st === 'para' && formOf(m).elems.includes('elec')) return false;
   m.status = st;
   if (st === 'freeze') volOf(s, side).freezeTurns = 0;
@@ -329,6 +329,7 @@ export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill)
   if (hasAb(fm, 'blazing') && sk.elem === 'fire' && me.hp < maxHp(me) / 3) mod *= 1.5;
   if ((hasAb(fm, 'tidegod') || hasAb(fm, 'oceanpower')) && sk.elem === 'water') mod *= 1.3;
   if (hasAb(ft, 'hardshell')) mod *= 0.85;
+  if (hasAb(ft, 'thickfat') && (sk.elem === 'fire' || sk.elem === 'ice')) mod *= 0.5;
   return { dmg: Math.max(1, Math.floor(base * mod)), eff, crit };
 }
 
@@ -354,7 +355,7 @@ function afterHitAbilities(s: BattleState, att: SideId, def: SideId, ev: BEvent[
   const fa = formOf(active(s, att)), fd = formOf(active(s, def));
   if (active(s, att).hp <= 0) return;
   if (hasAb(fd, 'static') && chance(s.rng, 0.3)) applyStatus(s, att, 'para', ev);
-  if (hasAb(fd, 'stinger') && chance(s.rng, 0.3)) applyStatus(s, att, 'poison', ev);
+  if ((hasAb(fd, 'stinger') || hasAb(fd, 'poisonbody')) && chance(s.rng, 0.3)) applyStatus(s, att, 'poison', ev);
   if (hasAb(fa, 'lure') && active(s, def).hp > 0 && chance(s.rng, 0.2)) applyStatus(s, def, 'para', ev);
   if (hasAb(fa, 'stormking') && active(s, def).hp > 0 && chance(s.rng, 0.3)) applyStatus(s, def, 'para', ev);
 }
@@ -401,7 +402,7 @@ function endOfTurn(s: BattleState, ev: BEvent[]) {
       checkFaints(s, ev);
       if (m.hp <= 0 || s.over) continue;
     }
-    if ((hasAb(f, 'moist') || hasAb(f, 'photosyn')) && m.hp < mx && s.turn < VORTEX_TURN) {
+    if ((hasAb(f, 'moist') || hasAb(f, 'photosyn') || hasAb(f, 'waterveil')) && m.hp < mx && s.turn < VORTEX_TURN) {
       const amt = Math.min(mx - m.hp, Math.max(1, Math.floor(mx / 16)));
       m.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: m.hp });
     }

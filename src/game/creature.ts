@@ -13,6 +13,9 @@ export interface Mon {
   status: StatusId | null;
   boss?: boolean;
   wild?: boolean; // 野生個體能力值較低；被收服後就會恢復正常
+  bayId?: string; // 從棲息灣帶出來的夥伴
+  bond?: number; // 羈絆值（經驗加成）
+  evoBonus?: number; // 進化記憶：提早幾級進化
 }
 
 let uidCounter = 0;
@@ -33,7 +36,7 @@ export function statsOf(m: Mon): Stats {
 export const maxHp = (m: Mon) => statsOf(m).hp;
 
 // 往回找祖先形態，取得完整的技能學習表
-function ancestry(formId: string): Form[] {
+export function ancestryOf(formId: string): Form[] {
   const chain: Form[] = [FORMS[formId]];
   let cur = formId;
   for (let guard = 0; guard < 5; guard++) {
@@ -48,7 +51,7 @@ function ancestry(formId: string): Form[] {
 export function makeMon(formId: string, lv: number, boss = false, wild = false): Mon {
   const f = FORMS[formId];
   const known: string[] = [];
-  for (const anc of ancestry(formId)) for (const [l, sk] of anc.learn) if (l <= lv && !known.includes(sk)) known.push(sk);
+  for (const anc of ancestryOf(formId)) for (const [l, sk] of anc.learn) if (l <= lv && !known.includes(sk)) known.push(sk);
   const slots = STAGE_SLOTS[f.stage];
   const picked = known.slice(-slots);
   // 確保至少有一招不耗能量的攻擊，優先選本系
@@ -87,7 +90,7 @@ export function gainXp(m: Mon, amount: number): LevelResult {
 }
 
 export function evolveTarget(m: Mon): string | null {
-  const ev = formOf(m).evolve?.find((e) => m.lv >= e.level);
+  const ev = formOf(m).evolve?.find((e) => m.lv >= e.level - (m.evoBonus ?? 0));
   return ev ? ev.to : null;
 }
 

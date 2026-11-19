@@ -7,7 +7,7 @@ export interface Stats { hp: number; atk: number; def: number; spd: number }
 export type AbilityId =
   | 'moist' | 'blazing' | 'photosyn' | 'hardshell' | 'firststrike' | 'undying'
   | 'lure' | 'regen' | 'sturdy' | 'static' | 'stinger' | 'tidegod' | 'colossal' | 'stormking'
-  | 'oceanpower' | 'dragonpresence' | 'waterbarrier' | 'swiftswim' | 'waterabsorb' | 'none';
+  | 'oceanpower' | 'dragonpresence' | 'waterbarrier' | 'swiftswim' | 'waterabsorb' | 'thickfat' | 'waterveil' | 'poisonbody' | 'none';
 
 export const ABILITIES: Record<AbilityId, { name: string; desc: string }> = {
   moist: { name: '潤澤', desc: '每回合結束回復最大 HP 的 1/16。' },
@@ -23,6 +23,9 @@ export const ABILITIES: Record<AbilityId, { name: string; desc: string }> = {
   stinger: { name: '毒刺', desc: '受到攻擊時，30% 機率使攻擊者中毒。' },
   tidegod: { name: '潮神', desc: '水屬性技能威力 ×1.3，每回合多回復 1 點能量。' },
   colossal: { name: '巨軀', desc: 'HP 大幅提高，不會被冰凍。' },
+  thickfat: { name: '厚脂', desc: '受到火屬性和冰屬性的傷害減半。' },
+  waterveil: { name: '水之護體', desc: '不會被灼傷，每回合回復最大 HP 的 1/16。' },
+  poisonbody: { name: '毒之體質', desc: '受到攻擊時，30% 機率使攻擊者中毒。' },
   swiftswim: { name: '悠游自如', desc: '速度提高 15%。' },
   waterabsorb: { name: '蓄水', desc: '受到水屬性攻擊時不會受傷，改為回復最大 HP 的 25%。' },
   oceanpower: { name: '海洋之力', desc: '水屬性技能威力 ×1.3。' },
@@ -144,6 +147,14 @@ const F: Form[] = [
   { id: 'thunderfang', name: '霆牙', family: 'thunderfang', stage: 3, rarity: 'SSR', category: '巨獸', elems: ['elec', 'water'], sprite: 'thunderfang', pal: 'thunder',
     base: { hp: 90, atk: 108, def: 78, spd: 104 }, ability: 'stormking',
     learn: [[1, 'zap'], [1, 'tidewave'], [1, 'stormfang'], [1, 'roar']], desc: '雷雨夜踏浪而來的獸王。閃電角每閃一次，海面就會落下一道雷。' },
+  { id: 'chubby1', name: '小肥源', family: 'chubby', stage: 1, rarity: 'SSR', category: '巨獸', elems: ['water', 'rock'], sprite: 'chubby1', pal: 'capy',
+    base: { hp: 95, atk: 80, def: 90, spd: 30 }, ability: 'thickfat', extra: ['waterveil'], no: 301, height: 0.4, weight: 6.5,
+    learn: [[1, 'microquake'], [1, 'wobble'], [1, 'rollout'], [1, 'tackle'], [4, 'microtoxin']], evolve: [{ to: 'chubby2', level: 12 }],
+    desc: '雖然體型很小，卻擁有驚人的破壞力。一個抖動就能讓地面顫動。' },
+  { id: 'chubby2', name: '巨肥源', family: 'chubby', stage: 3, rarity: 'SSR', category: '巨獸', elems: ['water', 'rock'], sprite: 'chubby2', pal: 'capy',
+    base: { hp: 140, atk: 115, def: 120, spd: 35 }, ability: 'thickfat', extra: ['poisonbody'], no: 302,
+    learn: [[12, 'bodyslam'], [12, 'deepsleep'], [14, 'bigquake'], [16, 'stunslam'], [18, 'megatoxin']],
+    desc: '體型變得異常巨大，只要一跺腳就能引發地震，是整片海灘的霸主。' },
   // ── 霸主 ──
   { id: 'whale', name: '鯨嘯', family: 'whale', stage: 3, rarity: 'A', category: '巨獸', elems: ['water'], sprite: 'whale', pal: 'whale',
     base: { hp: 110, atk: 74, def: 70, spd: 46 }, ability: 'colossal',
@@ -154,5 +165,5 @@ export const FORMS: Record<string, Form> = Object.fromEntries(F.map((f) => [f.id
 export const STARTERS = ['water1', 'fire1', 'grass1'];
 
 // 淺灘出現的野生生物（以家族的第一個形態表示）
-export const ZONE1_POOL = ['bubcrab', 'starsand', 'zaploach', 'jelly1', 'gull1', 'coral', 'bonebream', 'angler', 'dragon', 'thunderfang'];
+export const ZONE1_POOL = ['bubcrab', 'starsand', 'zaploach', 'jelly1', 'gull1', 'coral', 'bonebream', 'angler', 'dragon', 'thunderfang', 'chubby1'];
 export const ZONE1_BOSS = 'whale';

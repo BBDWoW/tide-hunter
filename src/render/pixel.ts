@@ -30,6 +30,7 @@ export const PAL = {
   volteel: { o: '#0a0e24', d: '#121c40', m: '#24366e', l: '#4a64aa', b: '#f2c43a', a: '#ffe14a', a2: '#5ff1ff', w: '#ffffff', k: '#0a0e24', h: '#ff8a8a', k2: '#0e1430', tr: '#ffe14a' },
   jellyblue: { o: '#0c2448', d: '#3a86d0', m: '#7cc4f4', l: '#d0f0ff', b: '#ffffff', a: '#a8e4ff', a2: '#5ab4f0', w: '#ffffff', k: '#0c2448', h: '#ff9bb8', k2: '#2a6ab0', tr: '#7a4a24' },
   abyss: { o: '#0a0618', d: '#24184a', m: '#4a3486', l: '#8a70d0', b: '#e8e0ff', a: '#ffe46a', a2: '#b07aff', w: '#ffffff', k: '#0a0618', h: '#ff6a8a', k2: '#150e2a', tr: '#ffe46a' },
+  capy: { o: '#2a1a10', d: '#b07a4a', m: '#d9a66c', l: '#f2cc94', b: '#fbf0dc', a: '#3a86d8', a2: '#ffffff', w: '#ffffff', k: '#1a1008', h: '#ff9bb8', k2: '#6a4632', tr: '#8a7a6a' },
   whale: { o: '#060e26', d: '#1a3a8a', m: '#3068c8', l: '#7aaaf0', b: '#dceaff', a: '#ffffff', a2: '#9ad4ff', w: '#ffffff', k: '#060e26', h: '#e8708e', k2: '#7a1e3e', tr: '#7a4a24' },
 } satisfies Record<string, Palette>;
 export type PalName = keyof typeof PAL;

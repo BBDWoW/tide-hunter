@@ -241,7 +241,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const meAffordAny = me.skills.some((_, i) => canAfford(bs, 0, i));
   const toggleFast = () => { const v = !fast; setFast(v); try { localStorage.setItem(SPEED_KEY, v ? 'fast' : 'normal'); } catch { /* 略過 */ } };
 
-  const reel = <Reel rarity={FORMS[foe.form].rarity} hpRatio={foe.hp / maxHp(foe)} hasStatus={!!foe.status} name={FORMS[foe.form].name} zoneBonus={boon(run, 'reelzone') * 0.15} onDone={onReel} />;
+  const reel = <Reel rarity={FORMS[foe.form].rarity} hpRatio={foe.hp / maxHp(foe)} hasStatus={!!foe.status} name={FORMS[foe.form].name} zoneBonus={boon(run, 'reelzone') * 0.15 + (run.perks?.reel ?? 0)} onDone={onReel} />;
   const startReel = () => { if (run.catchBait <= 0) return; run.catchBait--; setMode('reel'); };
   const picking = mode === 'switch' || mode === 'force' || mode === 'itemTarget';
   const hs = mode === 'skills' ? SKILLS[me.skills[hover]] : null;

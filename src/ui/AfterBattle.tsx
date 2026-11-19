@@ -51,7 +51,8 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
       out.push({ uid: '_coins', text: `獲得 ${coins} 枚貝殼幣（共 ${run.shells}）` });
       for (const m of run.party) {
         if (m.hp <= 0 || m === enemy) continue;
-        const share = result.participants.includes(m.uid) ? reward : Math.floor(reward / 2);
+        const bondMul = 1 + Math.min(10, m.bond ?? 0) * 0.05; // 羈絆經驗加成
+        const share = Math.floor((result.participants.includes(m.uid) ? reward : reward / 2) * bondMul);
         const r = gainXp(m, share);
         out.push({ uid: m.uid, text: `${formOf(m).name} 獲得 ${share} 經驗值${r.levels ? `，升到了 Lv${m.lv}！` : ''}` });
         // 先進化（技能上限會增加），再處理新技能

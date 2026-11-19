@@ -1,9 +1,10 @@
 import { useState } from 'preact/hooks';
-import { boon, healParty, isBoss, loadRun, markSeen, newRun, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
+import { boon, healParty, isBoss, loadRun, markCaught, markSeen, newRun, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
 import { AfterBattle } from './AfterBattle';
 import { Battle, type BattleResult } from './Battle';
 import { Fishing } from './Fishing';
-import { Dex, End, Help, StarterPick, Title, Voyage } from './Screens';
+import { Dex, End, Help, Port, StarterPick, Title, Voyage } from './Screens';
+import { loadMeta, pearlsFor, returnFromRun, saveMeta } from '../game/meta';
 import { useViewport } from './layout';
 import { makeMon } from '../game/creature';
 import { FORMS } from '../data/creatures';
@@ -19,7 +20,7 @@ function devEncounter(): Encounter | null {
 type Screen =
   | { k: 'title' } | { k: 'starter' } | { k: 'voyage' } | { k: 'fishing' }
   | { k: 'battle'; enc: Encounter } | { k: 'after'; result: BattleResult }
-  | { k: 'end'; win: boolean } | { k: 'dex' } | { k: 'help' };
+  | { k: 'end'; win: boolean; pearls: number } | { k: 'dex' } | { k: 'help' } | { k: 'port' };
 
 export function App() {
   const vp = useViewport();
@@ -28,6 +29,19 @@ export function App() {
   const [n, setN] = useState(0); // 換畫面時強制重新掛載
   const go = (s: Screen) => { setScreen(s); setN((x) => x + 1); };
   const boss = !!run && isBoss(run);
+
+  // 冒險結束：結算珍珠、讓棲息灣的夥伴回港
+  const finishRun = (win: boolean) => {
+    const r = run!;
+    const meta = loadMeta();
+    const pearls = pearlsFor({ station: r.station + 1, battlesWon: r.battlesWon, caught: r.caught, win });
+    meta.pearls += pearls; meta.totalPearls += pearls; meta.runs++;
+    saveMeta(meta);
+    returnFromRun(meta, r.party);
+    updateDex((d) => { d.bestStation = Math.max(d.bestStation, r.station + 1); if (win) d.clears++; });
+    saveRun(null);
+    go({ k: 'end', win, pearls });
+  };
 
   const advance = () => {
     if (!run) return;
@@ -43,10 +57,10 @@ export function App() {
     case 'title':
       body = <Title vp={vp} hasSave={!!loadRun()} onNew={() => go({ k: 'starter' })}
         onContinue={() => { const r = loadRun(); if (r) { setRun(r); go({ k: 'voyage' }); } }}
-        onDex={() => go({ k: 'dex' })} onHelp={() => go({ k: 'help' })} />;
+        onDex={() => go({ k: 'dex' })} onHelp={() => go({ k: 'help' })} onPort={() => go({ k: 'port' })} />;
       break;
     case 'starter':
-      body = <StarterPick vp={vp} onBack={() => go({ k: 'title' })} onPick={(f) => { const r = newRun(f); markSeen(f); updateDex((d) => { if (!d.caught.includes(f)) d.caught.push(f); }); saveRun(r); setRun(r); go({ k: 'voyage' }); }} />;
+      body = <StarterPick vp={vp} onBack={() => go({ k: 'title' })} onPick={(m) => { const r = newRun(m, loadMeta()); markCaught(m.form); saveRun(r); setRun(r); go({ k: 'voyage' }); }} />;
       break;
     case 'voyage':
       body = <Voyage vp={vp} run={run!} onGo={() => go({ k: 'fishing' })} onNext={advance} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
@@ -56,30 +70,25 @@ export function App() {
       break;
     case 'battle':
       body = <Battle vp={vp} run={run!} enc={screen.enc} boss={boss} onEnd={(result) => {
-        if (result.outcome === 'lose') {
-          updateDex((d) => { d.bestStation = Math.max(d.bestStation, run!.station + 1); });
-          saveRun(null);
-          go({ k: 'end', win: false });
-        } else go({ k: 'after', result });
+        if (result.outcome === 'lose') finishRun(false);
+        else go({ k: 'after', result });
       }} />;
       break;
     case 'after':
       body = <AfterBattle vp={vp} run={run!} result={screen.result} onDone={() => {
-        if (boss && screen.result.outcome === 'win') {
-          updateDex((d) => { d.clears++; d.bestStation = Math.max(d.bestStation, run!.station + 1); });
-          saveRun(null);
-          go({ k: 'end', win: true });
-          return;
-        }
+        if (boss && screen.result.outcome === 'win') { finishRun(true); return; }
         healParty(run!, 0.15 + boon(run!, 'breeze') * 0.15);
         advance();
       }} />;
       break;
     case 'end':
-      body = <End vp={vp} run={run!} win={screen.win} onTitle={() => { setRun(null); go({ k: 'title' }); }} />;
+      body = <End vp={vp} run={run!} win={screen.win} pearls={screen.pearls} onTitle={() => { setRun(null); go({ k: 'port' }); }} />;
       break;
     case 'dex':
       body = <Dex vp={vp} onBack={() => go({ k: 'title' })} />;
+      break;
+    case 'port':
+      body = <Port vp={vp} onBack={() => go({ k: 'title' })} />;
       break;
     case 'help':
       body = <Help vp={vp} onBack={() => go({ k: 'title' })} />;

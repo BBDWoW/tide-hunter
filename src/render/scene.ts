@@ -393,20 +393,47 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
 
 // ── 選初始夥伴：三座礁石台 ──
 export const PEDESTALS = [{ x: 56, y: 104 }, { x: 128, y: 98 }, { x: 200, y: 104 }];
-export function drawStarterScene(ctx: CanvasRenderingContext2D, t: number, forms: string[], sel: number) {
+export function drawStarterScene(ctx: CanvasRenderingContext2D, t: number, forms: (string | null)[], sel: number) {
   drawSea(ctx, t, 'day');
   PEDESTALS.forEach((p, i) => {
     foamRing(ctx, p.x, p.y + 1, 38, 9, t + i, '#f2fdff');
     ctx.drawImage(reef(), p.x - 40, p.y - 13);
+    const id = forms[i];
+    if (!id) return;
     if (i === sel) {
       ctx.fillStyle = '#ffcf4a';
       const r = 26 + Math.sin(t * 4) * 1.5;
       for (let a = 0; a < 60; a++) { if (a % 3 === 0) continue; const an = (a / 60) * Math.PI * 2; ctx.fillRect(Math.round(p.x + Math.cos(an) * r), Math.round(p.y + Math.sin(an) * 6), 1, 1); }
     }
-    const f = FORMS[forms[i]];
+    const f = FORMS[id], n = spriteSize(f.sprite);
     const jump = i === sel ? Math.round(Math.abs(Math.sin(t * 3)) * -4) : 0;
     shadow(ctx, p.x, p.y, 13);
-    drawSprite(ctx, f.sprite, PAL[f.pal], p.x - 24, p.y - 45 + jump, { f: Math.floor(t * 3 + i) % 2, alpha: i === sel ? 1 : 0.85 });
+    drawSprite(ctx, f.sprite, PAL[f.pal], p.x - n / 2, p.y - n + 3 + jump, { f: Math.floor(t * 3 + i) % 2, alpha: i === sel ? 1 : 0.85 });
+  });
+}
+
+// ── 港口：棧橋、燈塔、棲息灣裡游動的夥伴 ──
+export function drawPort(ctx: CanvasRenderingContext2D, t: number, bay: string[]) {
+  drawSea(ctx, t, 'day');
+  // 燈塔
+  const lx = 30;
+  ctx.fillStyle = '#5a6a7a'; ctx.fillRect(lx - 9, 52, 18, 8);
+  for (let y = 14; y < 52; y++) { const w = Math.round(5 + (y - 14) * 0.12); ctx.fillStyle = Math.floor(y / 6) % 2 ? '#e8304a' : '#f4f8ff'; ctx.fillRect(lx - w, y, w * 2, 1); }
+  ctx.fillStyle = '#2a3a4a'; ctx.fillRect(lx - 6, 8, 12, 6); ctx.fillStyle = '#ffe48a'; ctx.fillRect(lx - 4, 9, 8, 4);
+  if (Math.sin(t * 2) > 0) { ctx.fillStyle = 'rgba(255,240,170,0.35)'; for (let i = 0; i < 26; i++) ctx.fillRect(lx + 6 + i, 10 - Math.round(i * 0.15), 1, 3 + Math.round(i * 0.3)); }
+  // 棧橋
+  ctx.fillStyle = '#6a4024'; ctx.fillRect(0, 118, 140, 4);
+  for (let x = 4; x < 140; x += 12) { ctx.fillStyle = '#4a2a14'; ctx.fillRect(x, 122, 3, 22); }
+  ctx.fillStyle = '#8a5530'; for (let x = 0; x < 140; x += 6) ctx.fillRect(x, 116, 5, 2);
+  // 倉庫
+  ctx.fillStyle = '#8a5a3a'; ctx.fillRect(4, 96, 40, 20); ctx.fillStyle = '#c84a3a'; for (let i = 0; i < 9; i++) ctx.fillRect(0 + i * 2, 96 - i, 48 - i * 4, 1);
+  ctx.fillStyle = '#3a2418'; ctx.fillRect(19, 104, 9, 12); ctx.fillStyle = '#ffe48a'; ctx.fillRect(8, 102, 6, 5); ctx.fillRect(33, 102, 6, 5);
+  // 棲息灣的夥伴
+  bay.forEach((id, i) => {
+    const f = FORMS[id]; if (!f) return;
+    const n = spriteSize(f.sprite), sp = 0, x = 40 + i * 34 + Math.sin(t * 0.5 + i * 1.7) * 8, y = 62 + (i % 2) * 18 + Math.sin(t * 1.3 + i) * 2;
+    const flip = Math.cos(t * 0.5 + i * 1.7) < 0;
+    drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(x - n / 2), Math.round(y - n / 2 + sp * 0), { f: Math.floor(t * 3 + i) % 2, flip });
   });
 }
 

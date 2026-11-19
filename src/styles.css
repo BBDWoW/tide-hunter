@@ -264,3 +264,13 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .boon-card:hover, .boon-card:focus-visible { transform: translateY(calc(var(--u) * -1.2)); outline: none; background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04)); }
 .boon-tier { font-size: 0.7em; color: var(--tier); letter-spacing: 0.1em; }
 .boon-name { font-size: 1.15em; font-weight: 400; color: #fff; }
+
+/* ── 第二階段：港口、棲息灣 ── */
+.tabs { display: flex; gap: calc(var(--u) * 1.5); flex-wrap: wrap; }
+.tab { background: rgba(255, 255, 255, 0.06); border: calc(var(--u) * 0.5) solid transparent; padding: calc(var(--u) * 1) calc(var(--u) * 3); cursor: pointer; font-size: 0.9em; }
+.tab.on { border-color: var(--amber); color: var(--amber); }
+.tab:hover { background: rgba(255, 255, 255, 0.12); }
+.bay-tag { font-size: 0.65em; background: #2fb5a0; color: #04161a; padding: 0 0.4em; }
+.hearts { color: #ff6a8a; letter-spacing: -0.05em; }
+.panel-layer:has(.port) { justify-items: end; }
+.big-panel.port { width: min(100%, calc(var(--u) * 132)); }

@@ -3,10 +3,12 @@ import type { ComponentChildren } from 'preact';
 import { FORMS, STARTERS } from '../data/creatures';
 import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/types';
 import { ITEMS, type ItemId } from '../game/battle';
-import { formOf, maxHp, xpToNext } from '../game/creature';
-import { healParty, loadDex, NODE_INFO, saveRun, SHOP, SPOT_INFO, type RunState } from '../game/run';
+import { ancestryOf, formOf, makeMon, maxHp, xpToNext, type Mon } from '../game/creature';
+import { bayCap, bayStartLevel, bringBack, buyRecruit, buyUpgrade, loadMeta, monFromBay, RECRUITS, saveMeta, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
+import { SKILLS } from '../data/skills';
+import { healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, SPOT_INFO, type RunState } from '../game/run';
 import { BOONS, LURES } from '../data/boons';
-import { chartPos, drawChart, drawDeep, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
+import { chartPos, drawChart, drawDeep, drawPort, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
 import { AbilityLines, Bar, Elems, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 
@@ -19,8 +21,8 @@ export function MenuItem({ children, onClick, disabled, hot, sub, onHover }: { c
 }
 
 // ── 標題 ──
-export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp }: { vp: Viewport; hasSave: boolean; onNew: () => void; onContinue: () => void; onDex: () => void; onHelp: () => void }) {
-  const dex = loadDex();
+export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp, onPort }: { vp: Viewport; hasSave: boolean; onNew: () => void; onContinue: () => void; onDex: () => void; onHelp: () => void; onPort: () => void }) {
+  const dex = loadDex(), meta = loadMeta();
   return (
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={drawTitle} label="夕陽下的海面，潮靈躍出水面" />}
@@ -30,6 +32,7 @@ export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp }: { vp: V
           <Win class="title-menu">
             {hasSave && <MenuItem onClick={onContinue} hot>繼續冒險</MenuItem>}
             <MenuItem onClick={onNew} hot={!hasSave}>新的冒險</MenuItem>
+            <MenuItem onClick={onPort} sub={`◆ ${meta.pearls}`}>港口</MenuItem>
             <MenuItem onClick={onDex} sub={`${dex.caught.length}/${Object.keys(FORMS).length}`}>圖鑑</MenuItem>
             <MenuItem onClick={onHelp}>玩法說明</MenuItem>
           </Win>
@@ -38,42 +41,128 @@ export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp }: { vp: V
   );
 }
 
-// ── 選初始 ──
-export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (f: string) => void; onBack: () => void }) {
+// ── 選初始：預設三隻＋已招募＋棲息灣 ──
+type StartOpt = { kind: 'base'; form: string } | { kind: 'bay'; bay: BayMon };
+export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (m: Mon) => void; onBack: () => void }) {
+  const meta = loadMeta();
+  const opts: StartOpt[] = [
+    ...STARTERS.map((form) => ({ kind: 'base', form }) as StartOpt),
+    ...meta.recruits.map((form) => ({ kind: 'base', form }) as StartOpt),
+    ...meta.bay.map((bay) => ({ kind: 'bay', bay }) as StartOpt),
+  ];
   const [sel, setSel] = useState(1);
-  const f = FORMS[STARTERS[sel]];
+  const cur = opts[sel];
+  const formOfOpt = (o: StartOpt) => (o.kind === 'base' ? o.form : o.bay.root);
+  const f = FORMS[formOfOpt(cur)];
+  const pick = () => onPick(cur.kind === 'base' ? makeMon(cur.form, 5) : monFromBay(cur.bay));
+  const move = (d: number) => setSel((s0) => (s0 + d + opts.length) % opts.length);
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') setSel((s) => (s + 2) % 3);
-      if (e.key === 'ArrowRight') setSel((s) => (s + 1) % 3);
-      if (e.key === 'Enter') onPick(STARTERS[sel]);
+      if (e.key === 'ArrowLeft') move(-1);
+      if (e.key === 'ArrowRight') move(1);
+      if (e.key === 'Enter') pick();
     };
     window.addEventListener('keydown', on);
     return () => window.removeEventListener('keydown', on);
   });
+  // 三座礁石台顯示「上一個、目前、下一個」
+  const win = [-1, 0, 1].map((d) => (opts.length < 2 && d ? null : opts[(sel + d + opts.length) % opts.length]));
   return (
     <GameScreen vp={vp}
-      scene={<SceneCanvas draw={(c, t) => drawStarterScene(c, t, STARTERS, sel)} label="三隻初始夥伴站在礁石上" />}
+      scene={<SceneCanvas draw={(c, t) => drawStarterScene(c, t, win.map((o) => (o ? formOfOpt(o) : null)), 1)} label="可以選的夥伴站在礁石上" />}
       overlay={<>
-        <Win class="banner">選擇你的第一位夥伴</Win>
+        <Win class="banner">選擇這次出海的夥伴　{sel + 1} / {opts.length}</Win>
         {PEDESTALS.map((p, i) => (
-          <button class="hit" key={i} aria-label={FORMS[STARTERS[i]].name} onClick={() => setSel(i)}
+          <button class="hit" key={i} aria-label={i === 0 ? '上一隻' : i === 2 ? '下一隻' : f.name} onClick={() => i !== 1 && move(i - 1)}
             style={{ left: `${((p.x - 26) / 256) * 100}%`, top: `${((p.y - 50) / 144) * 100}%`, width: `${(52 / 256) * 100}%`, height: `${(56 / 144) * 100}%` }} />
         ))}
       </>}
       dock={
         <div class="dock-split">
           <Win class="info">
-            <div class="row-gap"><b class="big-name">{f.name}</b><Elems list={f.elems} /><StageTag form={f.id} /></div>
-            <AbilityLines form={f.id} />
-            <p class="small dim">{f.desc}</p>
+            <div class="row-gap"><b class="big-name">{f.name}</b><Elems list={f.elems} /><StageTag form={f.id} />{cur.kind === 'bay' && <span class="bay-tag">棲息灣</span>}</div>
+            {cur.kind === 'bay' ? <>
+              <p class="small">羈絆 <span class="hearts">{'❤'.repeat(Math.min(10, cur.bay.bond))}</span>（{cur.bay.bond}）· 起始等級 Lv{bayStartLevel(cur.bay)} · 經驗 +{Math.min(10, cur.bay.bond) * 5}%</p>
+              <p class="small">{cur.bay.legacy ? `傳承技能：${SKILLS[cur.bay.legacy]?.name}` : '還沒有傳承技能'}{cur.bay.evoMemory.length ? '　· 進化記憶：提早 2 級進化' : ''}</p>
+              <p class="small dim">上次的樣子：{FORMS[cur.bay.form]?.name}</p>
+            </> : <>
+              <AbilityLines form={f.id} />
+              <p class="small dim">{f.desc}</p>
+            </>}
           </Win>
           <Win class="cmd">
-            <MenuItem onClick={() => onPick(f.id)} hot>就決定是你了！</MenuItem>
-            <MenuItem onClick={() => setSel((sel + 1) % 3)}>看下一隻</MenuItem>
+            <MenuItem onClick={pick} hot>就決定是你了！</MenuItem>
+            <div class="cmd-grid">
+              <MenuItem onClick={() => move(-1)}>◀ 上一隻</MenuItem>
+              <MenuItem onClick={() => move(1)}>下一隻 ▶</MenuItem>
+            </div>
             <MenuItem onClick={onBack}>返回</MenuItem>
           </Win>
         </div>
+      } />
+  );
+}
+
+// ── 港口 ──
+export function Port({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
+  const [meta, setMeta] = useState(loadMeta);
+  const [tab, setTab] = useState<'up' | 'recruit' | 'bay'>('up');
+  const [, force] = useState(0);
+  const refresh = () => { setMeta(loadMeta()); force((n) => n + 1); };
+  return (
+    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawPort(c, t, meta.bay.map((b) => b.form))} label="港口與棲息灣" />}
+      panel={
+        <Win class="big-panel port" title={`港口　珍珠 ◆ ${meta.pearls}`}>
+          <div class="tabs">
+            {([['up', '設施升級'], ['recruit', '招募夥伴'], ['bay', `棲息灣 ${meta.bay.length}/${bayCap(meta)}`]] as const).map(([k, label]) => (
+              <button key={k} class={`tab ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}>{label}</button>
+            ))}
+          </div>
+          {tab === 'up' && (
+            <div class="item-list">
+              {(Object.keys(UPGRADES) as UpgradeId[]).map((id) => {
+                const u = UPGRADES[id], lv = upLv(meta, id), cost = u.costs[lv];
+                return (
+                  <button class="pick shop-row" key={id} disabled={cost === undefined || meta.pearls < cost} onClick={() => { buyUpgrade(meta, id); refresh(); }}>
+                    <span class="grow"><b>{u.name} <span class="num dim">Lv{lv}/{u.costs.length}</span></b>
+                      <span class="small dim">{lv ? `目前：${u.desc(lv)}` : '尚未建造'}{cost !== undefined ? `　→ 下一級：${u.desc(lv + 1)}` : '　（已滿級）'}</span></span>
+                    <span class="num">{cost !== undefined ? `◆ ${cost}` : 'MAX'}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {tab === 'recruit' && (
+            <div class="pick-grid">
+              {RECRUITS.map((r) => {
+                const owned = meta.recruits.includes(r.form), f = FORMS[r.form];
+                return (
+                  <button class="pick" key={r.form} disabled={owned || meta.pearls < r.cost} onClick={() => { buyRecruit(meta, r.form); refresh(); }}>
+                    <Sprite form={r.form} size={48} />
+                    <span class="grow"><span class="row-gap"><b>{f.name}</b><RarityTag r={f.rarity} /></span><Elems list={f.elems} />
+                      <span class="small dim">{owned ? '已招募，可以選為初始夥伴' : `◆ ${r.cost}`}</span></span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {tab === 'bay' && (meta.bay.length ? (
+            <div class="pick-grid">
+              {meta.bay.map((b) => (
+                <div class="pick" key={b.id}>
+                  <Sprite form={b.form} size={48} />
+                  <span class="grow">
+                    <b>{FORMS[b.form].name}</b>
+                    <span class="small">羈絆 <span class="hearts">{'❤'.repeat(Math.min(10, b.bond))}</span> {b.bond}</span>
+                    <span class="small dim">出海時：{FORMS[b.root].name} Lv{bayStartLevel(b)}{b.legacy ? `・傳承「${SKILLS[b.legacy]?.name}」` : ''}</span>
+                    <button class="chip-btn" onClick={() => { meta.bay = meta.bay.filter((x) => x.id !== b.id); saveMeta(meta); refresh(); }}>放生</button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : <p class="small dim">棲息灣還是空的。冒險結束時，可以帶一隻夥伴回來住。</p>)}
+          <MenuItem onClick={onBack} hot>返回標題</MenuItem>
+        </Win>
       } />
   );
 }
@@ -155,9 +244,9 @@ function ShopList({ run, onChange }: { run: RunState; onChange: () => void }) {
   return (
     <div class="item-list">
       {SHOP.map((it) => (
-        <button class="pick shop-row" key={it.id} disabled={run.shells < it.price} onClick={() => { run.shells -= it.price; it.buy(run); onChange(); }}>
+        <button class="pick shop-row" key={it.id} disabled={run.shells < priceOf(run, it)} onClick={() => { run.shells -= priceOf(run, it); it.buy(run); onChange(); }}>
           <span class="grow"><b>{it.name}</b><span class="small dim">{it.desc}</span></span>
-          <span class="num">🐚 {it.price}</span>
+          <span class="num">🐚 {priceOf(run, it)}</span>
         </button>
       ))}
     </div>
@@ -287,21 +376,52 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
   );
 }
 
-// ── 結算 ──
-export function End({ vp, run, win, onTitle }: { vp: Viewport; run: RunState; win: boolean; onTitle: () => void }) {
+// ── 結算：珍珠＋帶夥伴回棲息灣 ──
+export function End({ vp, run, win, pearls, onTitle }: { vp: Viewport; run: RunState; win: boolean; pearls: number; onTitle: () => void }) {
+  const [meta, setMeta] = useState(loadMeta);
+  const [picked, setPicked] = useState<Mon | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const candidates = run.party.filter((m) => !m.bayId);
+  const full = meta.bay.length >= bayCap(meta);
+  const keep = (m: Mon, replaceId?: string) => { bringBack(meta, m, replaceId); setMeta(loadMeta()); setDone(`${formOf(m).name} 住進了棲息灣！下次出海可以帶牠一起走。`); setPicked(null); };
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={win ? drawTitle : drawDeep} />}
       panel={
         <Win class="big-panel end" title={win ? '淺灘霸主已被擊敗！' : '航程結束'}>
-          <p>{win ? 'M1 的內容到這裡結束。之後會開放冰封峽灣、熔岩裂谷與電子海域。' : '隊伍全部倒下了。整理好心情，再出海一次吧。'}</p>
+          <p>{win ? '恭喜通關！帶著收穫回到港口吧。' : '隊伍全部倒下了。回港口整頓一下，再出海一次吧。'}</p>
           <div class="end-stats">
             <span>抵達</span><b class="num">第 {run.station + 1} 站</b>
-            <span>貝殼幣</span><b class="num">{run.shells}</b>
             <span>勝利</span><b class="num">{run.battlesWon} 場</b>
             <span>收服</span><b class="num">{run.caught} 隻</b>
+            <span>獲得珍珠</span><b class="num accent">◆ {pearls}（共 {meta.pearls}）</b>
           </div>
-          <div class="party-strip">{run.party.map((m) => <div class="slot" key={m.uid}><Sprite form={m.form} size={48} /><span class="slot-lv">Lv{m.lv}</span></div>)}</div>
-          <MenuItem onClick={onTitle} hot>回到標題</MenuItem>
+          {done ? <p class="accent">{done}</p> : candidates.length > 0 && <>
+            <h3 class="sub-h">要帶哪一隻回棲息灣？（{meta.bay.length}/{bayCap(meta)}）</h3>
+            {!picked ? (
+              <div class="pick-grid">
+                {candidates.map((m) => (
+                  <button class="pick" key={m.uid} onClick={() => (full ? setPicked(m) : keep(m))}>
+                    <Sprite form={m.form} size={48} />
+                    <span class="grow"><b>{formOf(m).name}</b><span class="small dim">Lv{m.lv}・回港後以 {FORMS[ancestryOf(m.form)[0].id].name} 的樣子重新出發</span></span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <>
+                <p class="small">棲息灣滿了，要讓誰離開，換 {formOf(picked).name} 住進來？</p>
+                <div class="pick-grid">
+                  {meta.bay.map((b) => (
+                    <button class="pick" key={b.id} onClick={() => keep(picked, b.id)}>
+                      <Sprite form={b.form} size={48} /><span class="grow"><b>{FORMS[b.form].name}</b><span class="small">羈絆 {b.bond}</span></span>
+                    </button>
+                  ))}
+                </div>
+                <MenuItem onClick={() => setPicked(null)}>算了</MenuItem>
+              </>
+            )}
+          </>}
+          {run.party.some((m) => m.bayId) && <p class="small dim">從棲息灣帶出來的夥伴，羈絆 +1，已經自動回港。</p>}
+          <MenuItem onClick={onTitle} hot>回到港口</MenuItem>
         </Win>
       } />
   );

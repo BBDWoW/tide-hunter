@@ -6,6 +6,7 @@ import { int, makeRng, newSeed, next, weighted, type Rng } from './rng';
 import type { ItemId } from './battle';
 import { BOON_LIST, BOON_TIER, BOONS, type LureId } from '../data/boons';
 import { gainXp, xpToNext } from './creature';
+import { upLv, type Meta, type UpgradeId } from './meta';
 
 export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'boss';
 export const NODE_INFO: Record<NodeKind, { name: string; desc: string }> = {
@@ -38,6 +39,7 @@ export interface RunState {
   catchBait: number;
   lures: Record<'star' | 'legend', number>;
   boons: Record<string, number>;
+  perks: { reel: number; discount: number }; // 港口設施帶來的永久加成
   route: RouteNode[][]; // 每一站有 1–3 個岔路可選
   picked: number | null; // 這一站選了哪一條
   path: number[]; // 走過的路線
@@ -53,15 +55,17 @@ export interface RunState {
 
 export const PARTY_MAX = 6;
 
-export function newRun(starter: string): RunState {
+export function newRun(first: Mon, meta?: Meta): RunState {
   const seed = newSeed(), rng = makeRng(seed);
+  const up = (id: UpgradeId) => (meta ? upLv(meta, id) : 0);
   return {
     version: 3, seed, rng,
-    party: [makeMon(starter, 5)],
-    items: { potion: 3, superpotion: 0, revive: 1, ether: 1 },
-    catchBait: 1, lures: { star: 0, legend: 0 }, boons: {},
+    party: [first],
+    items: { potion: 3 + up('supply'), superpotion: 0, revive: 1, ether: 1 },
+    catchBait: 1 + up('bait'), lures: { star: up('star'), legend: 0 }, boons: {},
+    perks: { reel: up('rod') * 0.08, discount: up('discount') * 0.1 },
     route: generateRoute(rng), picked: null, path: [],
-    station: 0, shells: 0, caught: 0, battlesWon: 0,
+    station: 0, shells: up('supply') * 20, caught: 0, battlesWon: 0,
   };
 }
 
@@ -262,6 +266,7 @@ export const markCaught = (form: string) => updateDex((d) => {
 
 // ── 商店 ──
 export interface ShopItem { id: string; name: string; desc: string; price: number; buy: (run: RunState) => void }
+export const priceOf = (run: RunState, it: ShopItem) => Math.round(it.price * (1 - (run.perks?.discount ?? 0)));
 export const SHOP: ShopItem[] = [
   { id: 'bait', name: '捕捉餌', desc: '收服夥伴時消耗 1 個。', price: 30, buy: (r) => { r.catchBait++; } },
   { id: 'star', name: '星光餌', desc: '大魚影有機會是 S 級。', price: 90, buy: (r) => { r.lures.star++; } },
