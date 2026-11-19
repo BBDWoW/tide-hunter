@@ -2,6 +2,7 @@
 import { FORMS } from '../data/creatures';
 import { ELEM, type Elem } from '../data/types';
 import { drawSprite, PAL, spriteSize } from './pixel';
+import { sceneArt } from './art';
 
 export const W = 256, H = 144;
 
@@ -68,7 +69,14 @@ function islands(x: CanvasRenderingContext2D, hz: number, col: string, seed: num
   }
 }
 
+function fromArt(name: string, w: number, h: number) {
+  const img = sceneArt(name);
+  if (!img) return null;
+  return cached('art-' + name, w, h, (x) => { x.imageSmoothingEnabled = false; x.drawImage(img, 0, 0, w, h); });
+}
 function backdrop(id: ThemeId) {
+  const art = fromArt('bg-' + id, W, H);
+  if (art) return art;
   const th = THEMES[id];
   return cached('bg-' + id, W, H, (x) => {
     const img = x.createImageData(W, H), hz = th.horizon;
@@ -190,6 +198,8 @@ const PLAT: Record<string, { rim: [string, string]; top: [string, string]; side:
   lava: { rim: ['#ff8a3a', '#ffb070'], top: ['#5a4a4a', '#4a3a3a'], side: ['#2a1a1a', '#1a1010'], mid: ['#3a2a2a', '#443232'], deco: ['#ff7a1a', '#ffd04a'], grass: null, rtop: ['#ff6a1a', '#c84a1a'], rtop2: ['#3a2a2a', '#4a3434'], rbot: ['#1a0e0e', '#24140e'], rmid: ['#3a2a2a', '#2e2020'] },
 };
 function shoal(th = 'day') {
+  const art = fromArt('shoal-' + th, 120, 30);
+  if (art) return art;
   const P = PLAT[th] ?? PLAT.day;
   return cached('shoal-' + th, 120, 30, (x) => {
     pxEllipse(x, 60, 15, 58, 13, (px, py, nx, ny) => {
@@ -205,6 +215,8 @@ function shoal(th = 'day') {
   });
 }
 function reef(th = 'day') {
+  const art = fromArt('reef-' + th, 80, 26);
+  if (art) return art;
   const P = PLAT[th] ?? PLAT.day;
   return cached('reef-' + th, 80, 26, (x) => {
     pxEllipse(x, 40, 14, 36, 10, (px, py, nx, ny) => {
@@ -623,3 +635,10 @@ export function auraColor(form: string, boss = false): string | undefined {
   if (boss) return '#ff5a6e';
   return r === 'SSR' ? '#ffd84a' : r === 'S' ? '#c58cff' : undefined;
 }
+
+// 給美術匯出工具用：取得各場景的靜態圖層
+export const sceneLayers = {
+  backdrop: (id: ThemeId) => backdrop(id),
+  shoal: (th: string) => shoal(th),
+  reef: (th: string) => reef(th),
+};

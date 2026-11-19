@@ -43,6 +43,12 @@ src/
 - **生物繪製**：五階明暗與棋盤格過渡、朝光側彩色外框、背光側邊緣光。一般生物 48×48，傳說級 64×64。
 - **光環**：S、SSR 與霸主在戰鬥中有脈動的發光外框與上升的能量粒子。
 
+## 美術
+
+- **美術包**：`tide-hunter-美術包.zip`（也就是 `art-pack/` 資料夾）有所有角色與場景圖層的 PNG、規格說明、角色總覽與清單
+- **換圖**：把 PNG 放進 `src/art/sprites/<角色代號>.png` 或 `src/art/scenes/<名稱>.png`，就會取代程式畫的版本（細節見 `art-pack/README.md`）
+- **重新匯出**：`npm run dev` 後打開 `/dev/export.html`，可以把目前的美術重新輸出
+
 ## 開發小工具
 
 - `dev/sheet.html`：所有生物的圖鑑預覽（`npm run dev` 後打開 `/dev/sheet.html`，可加 `?only=dragon,whale`）。

@@ -1,3 +1,4 @@
+import { spriteArt } from './art';
 // 48×48 像素生物繪製器：用幾何圖元畫出色塊，再自動加上明暗與外框。
 
 export const SIZE = 48;
@@ -200,7 +201,7 @@ export function scaledPainter(s: Painter, k: number): Painter {
 const SIZES: Record<string, number> = {};
 // size：畫布邊長（一般 48，傳說級 64）
 export function registerSprites(defs: Record<string, SpriteDef>, size = SIZE) { Object.assign(DEFS, defs); for (const k of Object.keys(defs)) SIZES[k] = size; }
-export const spriteSize = (id: string) => SIZES[id] ?? SIZE;
+export const spriteSize = (id: string) => spriteArt(id)?.size ?? SIZES[id] ?? SIZE;
 
 const cellCache = new Map<string, Cell[]>();
 export function spriteCells(id: string, f = 0): Cell[] {
@@ -225,7 +226,9 @@ function baked(id: string, f: number, pal: Palette, tint?: string): HTMLCanvasEl
     const n = spriteSize(id);
     cv = document.createElement('canvas'); cv.width = n; cv.height = n;
     const x = cv.getContext('2d')!;
-    x.putImageData(bake(spriteCells(id, f), pal, n), 0, 0);
+    const art = spriteArt(id);
+    if (art) { x.imageSmoothingEnabled = false; x.drawImage(art.img, (f % art.frames) * art.size, 0, art.size, art.size, 0, 0, n, n); }
+    else x.putImageData(bake(spriteCells(id, f), pal, n), 0, 0);
     if (tint) { x.globalCompositeOperation = 'source-in'; x.fillStyle = tint; x.fillRect(0, 0, n, n); }
     m.set(key, cv);
   }
