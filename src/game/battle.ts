@@ -1,0 +1,436 @@
+// 回合制戰鬥引擎（純邏輯，不碰畫面）。
+// 兩邊都是「Side」，由誰操作（玩家、AI、之後的連線玩家）由外部決定。
+// 所有隨機都走 state.rng，所以同樣的初始狀態＋同樣的行動序列一定得到同樣結果。
+import { SKILLS, type Skill, type StatKey, type StatusId } from '../data/skills';
+import { effectiveness, ELEM } from '../data/types';
+import { formOf, maxHp, statsOf, type Mon } from './creature';
+import { chance, int, next, range, type Rng } from './rng';
+
+export type SideId = 0 | 1;
+
+export interface Volatile {
+  energy: number;
+  shield: number;
+  stages: Record<StatKey, number>;
+  turnsIn: number;
+  freezeTurns: number;
+  undyingUsed: boolean;
+  healUses: number;
+}
+
+export interface Side {
+  team: Mon[];
+  active: number;
+  vol: Record<string, Volatile>; // 依 uid
+  name: string;
+}
+
+export interface BattleState {
+  rng: Rng;
+  turn: number;
+  sides: [Side, Side];
+  wild: boolean;
+  over: null | { winner: SideId; fled?: boolean };
+  needSwitch: [boolean, boolean];
+}
+
+export type Action =
+  | { type: 'skill'; slot: number } // slot = -1 → 掙扎
+  | { type: 'switch'; to: number }
+  | { type: 'item'; item: ItemId; target: number }
+  | { type: 'run' }
+  | { type: 'pass'; reason?: string };
+
+export type ItemId = 'potion' | 'superpotion' | 'revive' | 'ether';
+export const ITEMS: Record<ItemId, { name: string; desc: string; revive?: boolean }> = {
+  potion: { name: '海藻藥膏', desc: '回復 50% HP。' },
+  superpotion: { name: '珍珠精華', desc: '回復全部 HP 並治癒異常狀態。' },
+  revive: { name: '復甦貝', desc: '使倒下的夥伴以 50% HP 復活。', revive: true },
+  ether: { name: '能量海膽', desc: '出場中的夥伴獲得 3 點能量。' },
+};
+
+export type BEvent =
+  | { t: 'msg'; text: string }
+  | { t: 'use'; side: SideId; skill: string }
+  | { t: 'miss'; side: SideId }
+  | { t: 'dmg'; side: SideId; amount: number; hp: number; eff: number; crit: boolean; shield: number }
+  | { t: 'heal'; side: SideId; amount: number; hp: number }
+  | { t: 'shield'; side: SideId; amount: number }
+  | { t: 'status'; side: SideId; status: StatusId | null }
+  | { t: 'stat'; side: SideId; key: StatKey; delta: number }
+  | { t: 'energy'; side: SideId; value: number }
+  | { t: 'faint'; side: SideId }
+  | { t: 'switch'; side: SideId; index: number; form: string; hp: number; energy: number; status: StatusId | null }
+  | { t: 'end'; winner: SideId };
+
+export const STRUGGLE: Skill = { id: 'struggle', name: '掙扎', elem: null, power: 35, cost: 0, acc: 100, desc: '能量不足時使用。', anim: 'hit' };
+export const MAX_ENERGY = 5;
+const STATUS_NAME: Record<StatusId, string> = { burn: '灼傷', para: '麻痺', poison: '中毒', freeze: '冰凍', glitch: '資料錯亂' };
+
+export const active = (s: BattleState, side: SideId) => s.sides[side].team[s.sides[side].active];
+export const volOf = (s: BattleState, side: SideId) => s.sides[side].vol[active(s, side).uid];
+
+function freshVol(): Volatile {
+  return { energy: 2, shield: 0, stages: { atk: 0, def: 0, spd: 0 }, turnsIn: 0, freezeTurns: 0, undyingUsed: false, healUses: 0 };
+}
+
+export function createBattle(rng: Rng, a: { team: Mon[]; name: string }, b: { team: Mon[]; name: string }, wild: boolean): BattleState {
+  const mk = (x: { team: Mon[]; name: string }): Side => {
+    const vol: Record<string, Volatile> = {};
+    x.team.forEach((m) => (vol[m.uid] = freshVol()));
+    return { team: x.team, active: Math.max(0, x.team.findIndex((m) => m.hp > 0)), vol, name: x.name };
+  };
+  return { rng, turn: 1, sides: [mk(a), mk(b)], wild, over: null, needSwitch: [false, false] };
+}
+
+const stageMult = (s: number) => (s >= 0 ? (2 + s) / 2 : 2 / (2 - s));
+const nameOf = (s: BattleState, side: SideId) => (side === 1 && s.wild ? '野生的 ' : side === 1 ? '對手的 ' : '') + formOf(active(s, side)).name;
+
+function effSpeed(s: BattleState, side: SideId): number {
+  const m = active(s, side), v = volOf(s, side), f = formOf(m);
+  let spd = statsOf(m).spd * stageMult(v.stages.spd);
+  if (m.status === 'para') spd *= 0.5;
+  if (f.ability === 'firststrike' && v.turnsIn === 0) spd *= 2;
+  if (f.ability === 'stormking') spd *= 1.2;
+  return spd;
+}
+
+export function skillFor(m: Mon, slot: number): Skill {
+  return slot < 0 ? STRUGGLE : SKILLS[m.skills[slot]] ?? STRUGGLE;
+}
+
+export function canAfford(s: BattleState, side: SideId, slot: number): boolean {
+  if (slot < 0) return true;
+  return volOf(s, side).energy >= skillFor(active(s, side), slot).cost;
+}
+
+// ── 主流程：雙方各一個行動，結算一回合 ──
+export function resolveTurn(s: BattleState, actions: [Action, Action]): BEvent[] {
+  const ev: BEvent[] = [];
+  if (s.over) return ev;
+  const prio = (side: SideId): number => {
+    const a = actions[side];
+    if (a.type === 'switch' || a.type === 'item' || a.type === 'run') return 10;
+    if (a.type === 'pass') return 9;
+    return skillFor(active(s, side), a.slot).fx?.priority ?? 0;
+  };
+  const order: SideId[] = [0, 1];
+  order.sort((x, y) => {
+    const d = prio(y) - prio(x);
+    if (d) return d;
+    const sp = effSpeed(s, y) - effSpeed(s, x);
+    return sp || (next(s.rng) < 0.5 ? -1 : 1);
+  });
+
+  const startActive = [active(s, 0).uid, active(s, 1).uid];
+  for (const side of order) {
+    if (s.over) break;
+    const me = active(s, side);
+    const foeSide: SideId = side === 0 ? 1 : 0;
+    if (me.hp <= 0) continue;
+    if (actions[side].type === 'skill' && (me.uid !== startActive[side] || active(s, foeSide).hp <= 0)) continue;
+    doAction(s, side, actions[side], ev);
+    checkFaints(s, ev);
+  }
+  if (!s.over) endOfTurn(s, ev);
+  s.turn++;
+  return ev;
+}
+
+function doAction(s: BattleState, side: SideId, a: Action, ev: BEvent[]) {
+  if (a.type === 'pass') return;
+  if (a.type === 'run') {
+    const foe: SideId = side === 0 ? 1 : 0;
+    const p = Math.min(0.95, 0.55 + 0.3 * (effSpeed(s, side) / Math.max(1, effSpeed(s, foe))));
+    if (chance(s.rng, p)) {
+      ev.push({ t: 'msg', text: '剪斷釣線，順利逃走了！' });
+      s.over = { winner: side, fled: true };
+      ev.push({ t: 'end', winner: side });
+    } else ev.push({ t: 'msg', text: '沒能逃走！' });
+    return;
+  }
+  if (a.type === 'switch') { switchIn(s, side, a.to, ev); return; }
+  if (a.type === 'item') { useItem(s, side, a.item, a.target, ev); return; }
+  useSkill(s, side, a.slot, ev);
+}
+
+export function switchIn(s: BattleState, side: SideId, to: number, ev: BEvent[]) {
+  const sd = s.sides[side], out = active(s, side);
+  if (out.hp > 0) {
+    if (formOf(out).ability === 'regen') {
+      const amt = Math.min(maxHp(out) - out.hp, Math.floor(maxHp(out) / 4));
+      out.hp += amt;
+    }
+    ev.push({ t: 'msg', text: `${formOf(out).name}，回來吧！` });
+  }
+  const v = sd.vol[out.uid];
+  v.stages = { atk: 0, def: 0, spd: 0 }; v.shield = 0; v.turnsIn = 0;
+  sd.active = to;
+  s.needSwitch[side] = false;
+  const inc = sd.team[to];
+  ev.push({ t: 'switch', side, index: to, form: inc.form, hp: inc.hp, energy: sd.vol[inc.uid].energy, status: inc.status });
+  ev.push({ t: 'msg', text: side === 0 ? `上吧，${formOf(sd.team[to]).name}！` : `${sd.name}派出了 ${formOf(sd.team[to]).name}！` });
+}
+
+function useItem(s: BattleState, side: SideId, item: ItemId, target: number, ev: BEvent[]) {
+  const m = s.sides[side].team[target], name = formOf(m).name, mx = maxHp(m);
+  ev.push({ t: 'msg', text: `使用了 ${ITEMS[item].name}！` });
+  const isActive = target === s.sides[side].active;
+  if (item === 'revive') {
+    m.hp = Math.floor(mx / 2); m.status = null;
+    ev.push({ t: 'msg', text: `${name} 復活了！` });
+    return;
+  }
+  if (item === 'ether') {
+    const v = volOf(s, side); v.energy = Math.min(MAX_ENERGY, v.energy + 3);
+    ev.push({ t: 'energy', side, value: v.energy });
+    ev.push({ t: 'msg', text: `${formOf(active(s, side)).name} 充滿了能量！` });
+    return;
+  }
+  const amt = item === 'potion' ? Math.min(mx - m.hp, Math.floor(mx / 2)) : mx - m.hp;
+  m.hp += amt;
+  if (item === 'superpotion') m.status = null;
+  if (isActive) {
+    ev.push({ t: 'heal', side, amount: amt, hp: m.hp });
+    if (item === 'superpotion') ev.push({ t: 'status', side, status: null });
+  }
+  ev.push({ t: 'msg', text: `${name} 回復了 ${amt} HP。` });
+}
+
+function applyStatus(s: BattleState, side: SideId, st: StatusId, ev: BEvent[]): boolean {
+  const m = active(s, side);
+  if (m.status || m.hp <= 0) return false;
+  if (st === 'freeze' && (formOf(m).ability === 'colossal' || formOf(m).elems.includes('ice'))) return false;
+  if (st === 'burn' && formOf(m).elems.includes('fire')) return false;
+  if (st === 'para' && formOf(m).elems.includes('elec')) return false;
+  m.status = st;
+  if (st === 'freeze') volOf(s, side).freezeTurns = 0;
+  ev.push({ t: 'status', side, status: st });
+  ev.push({ t: 'msg', text: `${nameOf(s, side)} ${STATUS_NAME[st]}了！` });
+  return true;
+}
+
+function changeStat(s: BattleState, side: SideId, key: StatKey, delta: number, ev: BEvent[]) {
+  const v = volOf(s, side), before = v.stages[key];
+  v.stages[key] = Math.max(-4, Math.min(4, before + delta));
+  const real = v.stages[key] - before;
+  const label = { atk: '攻擊', def: '防禦', spd: '速度' }[key];
+  if (!real) { ev.push({ t: 'msg', text: `${nameOf(s, side)} 的${label}已經無法再改變了。` }); return; }
+  ev.push({ t: 'stat', side, key, delta: real });
+  ev.push({ t: 'msg', text: `${nameOf(s, side)} 的${label}${real > 0 ? (real > 1 ? '大幅提高' : '提高') : '下降'}了！` });
+}
+
+function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
+  const me = active(s, side), foe: SideId = side === 0 ? 1 : 0, v = volOf(s, side);
+  const myName = nameOf(s, side);
+
+  // 行動前的異常狀態判定
+  if (me.status === 'freeze') {
+    v.freezeTurns++;
+    if (v.freezeTurns >= 3 || chance(s.rng, 0.3)) {
+      me.status = null; ev.push({ t: 'status', side, status: null }); ev.push({ t: 'msg', text: `${myName} 的冰融化了！` });
+    } else { ev.push({ t: 'msg', text: `${myName} 被凍住了，無法行動！` }); return; }
+  }
+  if (me.status === 'para' && chance(s.rng, 0.25)) { ev.push({ t: 'msg', text: `${myName} 全身麻痺，無法行動！` }); return; }
+
+  let sk = skillFor(me, slot);
+  if (!canAfford(s, side, slot)) sk = STRUGGLE;
+  if (me.status === 'glitch' && me.skills.length > 1 && chance(s.rng, 0.3)) {
+    const alt = SKILLS[me.skills[int(s.rng, 0, me.skills.length - 1)]];
+    if (alt.cost <= v.energy) { sk = alt; ev.push({ t: 'msg', text: `資料錯亂！技能變成了 ${alt.name}！` }); }
+  }
+  v.energy -= sk.cost;
+  ev.push({ t: 'energy', side, value: v.energy });
+  ev.push({ t: 'use', side, skill: sk.id });
+  ev.push({ t: 'msg', text: `${myName} 使用了 ${sk.name}！` });
+
+  const fx = sk.fx ?? {};
+  if (fx.energy) { v.energy = Math.min(MAX_ENERGY, v.energy + fx.energy); ev.push({ t: 'energy', side, value: v.energy }); }
+
+  // 變化技
+  if (sk.power === 0) {
+    if (fx.heal) {
+      // 同一場戰鬥中重複回復，效果會逐次減弱（避免無限拖延）
+      const mx = maxHp(me), amt = Math.min(mx - me.hp, Math.floor(mx * fx.heal * Math.pow(0.7, v.healUses)));
+      v.healUses++;
+      me.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: me.hp });
+      ev.push({ t: 'msg', text: amt > 0 ? `${myName} 回復了 ${amt} HP！` : `${myName} 的 HP 已經是滿的。` });
+    }
+    if (fx.shield) {
+      v.shield = Math.floor(maxHp(me) * fx.shield); ev.push({ t: 'shield', side, amount: v.shield });
+      ev.push({ t: 'msg', text: `${myName} 被泡沫護盾包圍了！` });
+    }
+    if (fx.stat?.self) changeStat(s, side, fx.stat.key, fx.stat.delta, ev);
+    if (fx.status || (fx.stat && !fx.stat.self)) {
+      if (!chance(s.rng, sk.acc / 100)) { ev.push({ t: 'miss', side }); ev.push({ t: 'msg', text: '但是沒有命中！' }); return; }
+      let any = false;
+      if (fx.status) any = applyStatus(s, foe, fx.status.id, ev) || any;
+      if (fx.stat && !fx.stat.self) { changeStat(s, foe, fx.stat.key, fx.stat.delta, ev); any = true; }
+      if (!any) ev.push({ t: 'msg', text: '但是沒有效果……' });
+    }
+    return;
+  }
+
+  // 攻擊技
+  if (sk.id !== 'luresnap' && !chance(s.rng, sk.acc / 100)) { ev.push({ t: 'miss', side }); ev.push({ t: 'msg', text: `${myName} 的攻擊沒有命中！` }); return; }
+  const hits = fx.multi ? int(s.rng, fx.multi[0], fx.multi[1]) : 1;
+  let total = 0, landed = 0;
+  for (let h = 0; h < hits; h++) {
+    const target = active(s, foe);
+    if (target.hp <= 0 || me.hp <= 0) break;
+    const r = calcDamage(s, side, foe, sk);
+    landed++;
+    total += dealDamage(s, foe, r.dmg, r.eff, r.crit, ev);
+    afterHitAbilities(s, side, foe, ev);
+  }
+  if (hits > 1) ev.push({ t: 'msg', text: `擊中了 ${landed} 次！` });
+  if (fx.drain && total > 0 && me.hp > 0) {
+    const amt = Math.min(maxHp(me) - me.hp, Math.floor(total * fx.drain));
+    if (amt > 0) { me.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: me.hp }); ev.push({ t: 'msg', text: `${myName} 吸取了 ${amt} HP！` }); }
+  }
+  if (active(s, foe).hp > 0) {
+    if (fx.status && chance(s.rng, fx.status.chance)) applyStatus(s, foe, fx.status.id, ev);
+    if (fx.stat && !fx.stat.self && chance(s.rng, fx.stat.chance ?? 1)) changeStat(s, foe, fx.stat.key, fx.stat.delta, ev);
+  }
+  if (fx.stat?.self && me.hp > 0) changeStat(s, side, fx.stat.key, fx.stat.delta, ev);
+}
+
+export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill) {
+  const me = active(s, side), tg = active(s, foe);
+  const fm = formOf(me), ft = formOf(tg);
+  const vm = volOf(s, side), vt = volOf(s, foe);
+  let A = statsOf(me).atk * stageMult(vm.stages.atk);
+  if (me.status === 'burn') A *= 0.75;
+  let D = statsOf(tg).def * stageMult(vt.stages.def);
+  if (ft.ability === 'sturdy') D *= 1.2;
+  const base = (((2 * me.lv) / 5 + 2) * sk.power * A) / D / 50 + 2;
+  const eff = effectiveness(sk.elem, ft.elems);
+  const crit = chance(s.rng, 0.0625);
+  let mod = eff * (crit ? 1.5 : 1) * range(s.rng, 0.85, 1);
+  if (sk.elem && fm.elems.includes(sk.elem)) mod *= 1.3;
+  if (fm.ability === 'blazing' && sk.elem === 'fire' && me.hp < maxHp(me) / 3) mod *= 1.5;
+  if (fm.ability === 'tidegod' && sk.elem === 'water') mod *= 1.3;
+  if (ft.ability === 'hardshell') mod *= 0.85;
+  return { dmg: Math.max(1, Math.floor(base * mod)), eff, crit };
+}
+
+function dealDamage(s: BattleState, side: SideId, dmg: number, eff: number, crit: boolean, ev: BEvent[]): number {
+  const m = active(s, side), v = volOf(s, side);
+  let absorbed = 0;
+  if (v.shield > 0) { absorbed = Math.min(v.shield, dmg); v.shield -= absorbed; dmg -= absorbed; }
+  let real = Math.min(m.hp, dmg);
+  if (m.hp - dmg <= 0 && formOf(m).ability === 'undying' && !v.undyingUsed) {
+    v.undyingUsed = true; real = m.hp - 1;
+  }
+  m.hp -= real;
+  ev.push({ t: 'dmg', side, amount: real, hp: m.hp, eff, crit, shield: v.shield });
+  if (absorbed) ev.push({ t: 'msg', text: `護盾擋下了 ${absorbed} 點傷害！` });
+  if (crit) ev.push({ t: 'msg', text: '擊中要害！' });
+  if (eff >= 2) ev.push({ t: 'msg', text: '效果絕佳！' });
+  else if (eff > 0 && eff < 1) ev.push({ t: 'msg', text: '效果不太好……' });
+  if (m.hp === 1 && real < dmg && formOf(m).ability === 'undying') ev.push({ t: 'msg', text: `${nameOf(s, side)} 的不死骨撐住了！` });
+  return real;
+}
+
+function afterHitAbilities(s: BattleState, att: SideId, def: SideId, ev: BEvent[]) {
+  const fa = formOf(active(s, att)), fd = formOf(active(s, def));
+  if (active(s, att).hp <= 0) return;
+  if (fd.ability === 'static' && chance(s.rng, 0.3)) applyStatus(s, att, 'para', ev);
+  if (fd.ability === 'stinger' && chance(s.rng, 0.3)) applyStatus(s, att, 'poison', ev);
+  if (fa.ability === 'lure' && active(s, def).hp > 0 && chance(s.rng, 0.2)) applyStatus(s, def, 'para', ev);
+  if (fa.ability === 'stormking' && active(s, def).hp > 0 && chance(s.rng, 0.3)) applyStatus(s, def, 'para', ev);
+}
+
+function checkFaints(s: BattleState, ev: BEvent[]) {
+  for (const side of [0, 1] as SideId[]) {
+    const m = active(s, side);
+    if (m.hp > 0 || s.needSwitch[side]) continue;
+    m.status = null;
+    ev.push({ t: 'faint', side });
+    ev.push({ t: 'msg', text: `${nameOf(s, side)} 倒下了！` });
+    const alive = s.sides[side].team.some((x) => x.hp > 0);
+    if (!alive) {
+      const winner: SideId = side === 0 ? 1 : 0;
+      s.over = { winner };
+      ev.push({ t: 'end', winner });
+      return;
+    }
+    s.needSwitch[side] = true;
+  }
+}
+
+export const VORTEX_TURN = 20;
+
+function endOfTurn(s: BattleState, ev: BEvent[]) {
+  if (s.turn === VORTEX_TURN) ev.push({ t: 'msg', text: '海面開始捲起漩渦！每回合雙方都會受到傷害。' });
+  for (const side of [0, 1] as SideId[]) {
+    if (s.over) return;
+    const m = active(s, side), v = volOf(s, side), f = formOf(m);
+    if (m.hp <= 0) continue;
+    const mx = maxHp(m);
+    if (m.status === 'burn' || m.status === 'poison') {
+      const d = Math.max(1, Math.floor(mx / (m.status === 'burn' ? 16 : 10)));
+      m.hp = Math.max(0, m.hp - d);
+      ev.push({ t: 'dmg', side, amount: d, hp: m.hp, eff: 1, crit: false, shield: v.shield });
+      ev.push({ t: 'msg', text: `${nameOf(s, side)} 受到${m.status === 'burn' ? '灼傷' : '毒'}的傷害！` });
+      checkFaints(s, ev);
+      if (m.hp <= 0) continue;
+    }
+    if (s.turn >= VORTEX_TURN) {
+      const d = Math.max(1, Math.floor((mx * (s.turn - VORTEX_TURN + 1)) / 12));
+      m.hp = Math.max(0, m.hp - d);
+      ev.push({ t: 'dmg', side, amount: d, hp: m.hp, eff: 1, crit: false, shield: v.shield });
+      checkFaints(s, ev);
+      if (m.hp <= 0 || s.over) continue;
+    }
+    if ((f.ability === 'moist' || f.ability === 'photosyn') && m.hp < mx && s.turn < VORTEX_TURN) {
+      const amt = Math.min(mx - m.hp, Math.max(1, Math.floor(mx / 16)));
+      m.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: m.hp });
+    }
+    v.turnsIn++;
+    v.energy = Math.min(MAX_ENERGY, v.energy + 1 + (f.ability === 'tidegod' ? 1 : 0));
+    ev.push({ t: 'energy', side, value: v.energy });
+  }
+}
+
+// 倒下後的強制換人（不算一回合）
+export function forcedSwitch(s: BattleState, side: SideId, to: number): BEvent[] {
+  const ev: BEvent[] = [];
+  switchIn(s, side, to, ev);
+  return ev;
+}
+
+// ── AI ──
+export function aiChoose(s: BattleState, side: SideId): Action {
+  const me = active(s, side), foe: SideId = side === 0 ? 1 : 0, tg = active(s, foe);
+  const v = volOf(s, side), hpRatio = me.hp / maxHp(me);
+  let best: { slot: number; score: number } = { slot: -1, score: 1 };
+  me.skills.forEach((id, slot) => {
+    const sk = SKILLS[id];
+    if (!sk || sk.cost > v.energy) return;
+    let score = 0;
+    if (sk.power > 0) {
+      const eff = effectiveness(sk.elem, formOf(tg).elems);
+      const stab = sk.elem && formOf(me).elems.includes(sk.elem) ? 1.3 : 1;
+      const hits = sk.fx?.multi ? (sk.fx.multi[0] + sk.fx.multi[1]) / 2 : 1;
+      score = sk.power * hits * eff * stab * (sk.acc / 100);
+      if (sk.fx?.drain && hpRatio < 0.6) score *= 1.3;
+    } else {
+      if (sk.fx?.heal) score = hpRatio < 0.35 ? 140 : hpRatio < 0.6 ? 50 : 0;
+      if (sk.fx?.status) score = tg.status ? 0 : 55;
+      if (sk.fx?.shield) score = v.shield > 0 ? 0 : 35;
+      if (sk.fx?.stat?.self) score = v.stages[sk.fx.stat.key] >= 2 ? 0 : 38;
+      if (sk.fx?.energy) score = v.energy <= 1 ? 30 : 5;
+    }
+    score *= 0.8 + next(s.rng) * 0.4;
+    if (score > best.score) best = { slot, score };
+  });
+  return { type: 'skill', slot: best.slot };
+}
+
+export function aiForcedSwitch(s: BattleState, side: SideId): number {
+  return s.sides[side].team.findIndex((m) => m.hp > 0);
+}
+
+export const statusLabel = (st: StatusId | null) => (st ? STATUS_NAME[st] : '');
+export const elemColor = (e: keyof typeof ELEM) => ELEM[e].color;
