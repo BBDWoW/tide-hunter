@@ -13,7 +13,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: #03050d; }
+html, body { margin: 0; height: 100%; background: #03050d; touch-action: manipulation; -webkit-text-size-adjust: 100%; }
 :root { --sat: env(safe-area-inset-top, 0px); --sar: env(safe-area-inset-right, 0px); --sab: env(safe-area-inset-bottom, 0px); --sal: env(safe-area-inset-left, 0px); }
 body { background: #03050d; color: var(--ink); font-family: var(--f-pixel); -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
 button { font: inherit; color: inherit; }
@@ -134,6 +134,10 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .title-en { font-family: var(--f-num); font-size: calc(var(--u) * 3.2); letter-spacing: 0.4em; color: #ffe0b0; text-shadow: 0 calc(var(--u) * 0.6) 0 #4a1a5a; }
 .title-sub { font-size: calc(var(--u) * 4.4); color: #ffe8d0; text-shadow: 0 calc(var(--u) * 0.6) 0 #4a1a5a; }
 .title-menu { width: calc(var(--u) * 82); }
+/* 橫向時選單改成兩欄，五個選項也放得下 */
+.console.landscape .title-menu { width: calc(var(--u) * 150); display: grid; grid-template-columns: 1fr 1fr; column-gap: calc(var(--u) * 4); }
+.ambient { position: fixed; inset: -10%; width: 120%; height: 120%; filter: blur(24px) brightness(0.55) saturate(1.2); pointer-events: none; z-index: 0; }
+.console.landscape .frame { z-index: 1; box-shadow: 0 0 24px rgba(0, 0, 0, 0.6); }
 .portrait .title-logo h1 { font-size: calc(var(--u) * 26); }
 .portrait .title-sub { display: none; }
 .portrait .dock-center { place-items: center; }

@@ -16,8 +16,11 @@ function safeInsets() {
 
 function measure(): Viewport {
   const ins = safeInsets();
-  const portraitRaw = window.innerHeight > window.innerWidth * 1.15;
-  const vw = window.innerWidth - (portraitRaw ? 0 : ins.l + ins.r), vh = window.innerHeight - (portraitRaw ? 0 : ins.t + ins.b);
+  // 用版面的寬高（不受兩指縮放影響），避免畫面被縮放後變窄、偏移
+  const de = document.documentElement;
+  const W0 = de.clientWidth || window.innerWidth, H0 = window.innerHeight;
+  const portraitRaw = H0 > W0 * 1.15;
+  const vw = W0 - (portraitRaw ? 0 : ins.l + ins.r), vh = H0 - (portraitRaw ? 0 : ins.t + ins.b);
   const portrait = portraitRaw;
   if (portrait) {
     const w = vw, h = Math.round((w * 9) / 16);
@@ -31,12 +34,19 @@ export function useViewport() {
   const [vp, setVp] = useState(measure);
   useEffect(() => {
     const on = () => setVp(measure());
+    // 轉向時手機會晚一點才更新尺寸，所以多量幾次
+    const onTurn = () => { on(); setTimeout(on, 150); setTimeout(on, 450); };
     window.addEventListener('resize', on);
-    window.addEventListener('orientationchange', on);
-    return () => { window.removeEventListener('resize', on); window.removeEventListener('orientationchange', on); };
+    window.addEventListener('orientationchange', onTurn);
+    window.visualViewport?.addEventListener('resize', on);
+    return () => { window.removeEventListener('resize', on); window.removeEventListener('orientationchange', onTurn); window.visualViewport?.removeEventListener('resize', on); };
   }, []);
   return vp;
 }
+
+// 橫向時螢幕比 16:9 長，兩側用目前場景的模糊延伸填滿（不要黑邊）
+let ambient: HTMLCanvasElement | null = null;
+const setAmbient = (c: HTMLCanvasElement | null) => { ambient = c; };
 
 export type SceneDraw = (ctx: CanvasRenderingContext2D, t: number, dt: number) => void;
 
@@ -53,6 +63,7 @@ export function SceneCanvas({ draw, label }: { draw: SceneDraw; label?: string }
     const loop = (now: number) => {
       const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; t += reduce ? dt * 0.25 : dt;
       fn.current(ctx, t, dt);
+      if (ambient) ambient.getContext('2d')!.drawImage(ref.current!, 0, 0, ambient.width, ambient.height);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -75,6 +86,7 @@ export function GameScreen({ vp, scene, overlay, dock, panel, dockTall, onScene,
   const lower = (dock || panel) && vp.portrait;
   return (
     <div class={`console ${vp.portrait ? 'portrait' : 'landscape'}`}>
+      {!vp.portrait && <canvas class="ambient" width={32} height={18} ref={setAmbient} aria-hidden="true" />}
       <div class={`frame ${tappable ? 'tappable' : ''}`} style={{ width: `${vp.w}px`, height: `${vp.h}px`, '--u': `${vp.u}px` }} {...onScene}>
         {scene}
         <div class="overlay">{overlay}</div>
