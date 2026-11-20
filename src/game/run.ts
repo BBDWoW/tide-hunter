@@ -137,10 +137,12 @@ export interface RunState {
   specialLv?: number; // 特殊區域的基準等級（依進入時的位置決定）
   notice?: string; // 回到海圖時要顯示的訊息
   lifeStones?: number; // 生命石：全滅時可以讓全隊復活
+  seenEvents?: string[]; // 這一局已經遇過的事件（不重複）
+  eventFight?: { form: string; lv: number }; // 事件引發的戰鬥
   catchBait: number;
   lures: Record<'star' | 'legend', number>;
   boons: Record<string, number>;
-  perks: { reel: number; discount: number }; // 港口設施帶來的永久加成
+  perks: { reel: number; discount: number; camp?: number }; // 港口設施帶來的永久加成
   route: RouteNode[][]; // 每一站有 1–3 個岔路可選
   picked: number | null; // 這一站選了哪一條
   path: number[]; // 走過的路線
@@ -163,8 +165,9 @@ export function newRun(first: Mon, meta?: Meta): RunState {
     version: 4, seed, rng, zone: 'shallows', zoneNo: 0,
     party: [first],
     items: { potion: 3 + up('supply'), superpotion: 0, revive: 1, ether: 1 },
-    catchBait: 1 + up('bait'), lures: { star: up('star'), legend: 0 }, boons: {},
-    perks: { reel: up('rod') * 0.08, discount: up('discount') * 0.1 },
+    catchBait: 1 + up('bait'), lures: { star: up('star'), legend: up('legend') }, boons: {},
+    perks: { reel: up('rod') * 0.08, discount: up('discount') * 0.1, camp: up('herbal') * 0.15 },
+    lifeStones: up('kiln'),
     route: generateRoute(rng), picked: null, path: [],
     station: 0, shells: up('supply') * 20, caught: 0, battlesWon: 0,
   };
@@ -391,7 +394,7 @@ export function loadRun(): RunState | null {
   } catch { return null; }
 }
 
-export interface Dex { seen: string[]; caught: string[]; bestStation: number; clears: number }
+export interface Dex { seen: string[]; caught: string[]; bestStation: number; clears: number; bosses?: string[]; evolved?: string[]; mutants?: number }
 export function loadDex(): Dex {
   try {
     const d = JSON.parse(localStorage.getItem(DEX_KEY) || 'null');

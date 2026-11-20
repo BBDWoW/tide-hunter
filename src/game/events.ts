@@ -4,7 +4,7 @@ import { FORMS } from '../data/creatures';
 import type { Elem } from '../data/types';
 import { formOf, gainXp, makeMon, maxHp, xpToNext } from './creature';
 import { next } from './rng';
-import { applyBoon, boon, healParty, markCaught, PARTY_MAX, rollBoons, rollTreasure, zoneOf, type RunState } from './run';
+import { applyBoon, boon, healParty, markCaught, PARTY_MAX, rollBoons, rollTreasure, zoneOf, type RunState, type ZoneId } from './run';
 
 export interface EventOption {
   label: string;
@@ -12,7 +12,7 @@ export interface EventOption {
   can?: (r: RunState) => boolean;
   act: (r: RunState) => string; // 回傳結果文字
 }
-export interface GameEvent { id: string; title: string; text: string; options: EventOption[] }
+export interface GameEvent { id: string; title: string; text: string; options: EventOption[]; zones?: ZoneId[] } // zones：只在這些區域出現
 
 const roll = (r: RunState) => next(r.rng);
 const hasElem = (r: RunState, e: Elem) => r.party.some((m) => m.hp > 0 && formOf(m).elems.includes(e));
@@ -26,6 +26,14 @@ function zoneMon(r: RunState, rarities: string[]) {
   const id = pool[Math.floor(roll(r) * pool.length)] ?? zoneOf(r).pool[0];
   return makeMon(id, Math.max(3, zoneOf(r).lvBase + r.station));
 }
+/** 事件引發戰鬥：從這片海域挑一隻，打完會回到航線 */
+function fight(r: RunState, rarities: string[], lvBonus = 0, form?: string): void {
+  const pool = zoneOf(r).pool.filter((id) => rarities.includes(FORMS[id].rarity));
+  const id = form ?? pool[Math.floor(roll(r) * pool.length)] ?? zoneOf(r).pool[0];
+  r.eventFight = { form: id, lv: Math.max(3, Math.round(zoneOf(r).lvBase + r.station * 0.8) + lvBonus) };
+}
+const expAll = (r: RunState, ratio: number) => { for (const m of alive(r)) gainXp(m, Math.floor(xpToNext(m.lv) * ratio)); };
+const cureAll = (r: RunState) => { for (const m of r.party) m.status = null; };
 function addMon(r: RunState, rarities: string[]): string {
   if (r.party.length >= PARTY_MAX) { r.shells += 50; return '隊伍已經滿了，牠依依不捨地游走了，留下 50 枚貝殼幣當謝禮。'; }
   const m = zoneMon(r, rarities);
@@ -143,6 +151,211 @@ export const EVENTS: GameEvent[] = [
       { label: '小心繞開', act: () => '你屏住呼吸，慢慢繞過了水母群。' },
     ],
   },
+  // ── M4：通用事件 ──
+  {
+    id: 'lostchild', title: '迷路的小潮靈', text: '一隻小小的潮靈繞著船打轉，好像跟家人走散了。',
+    options: [
+      { label: '幫牠找家人', hint: '全隊獲得經驗值', act: (r) => { expAll(r, 0.35); r.shells += 25; return '在一片礁石旁找到了牠的家人！牠們送你 25 枚貝殼幣，夥伴們也學到了不少。'; } },
+      { label: '收留牠', act: (r) => `小潮靈開心地跳上了船。${addMon(r, ['N'])}` },
+      leave,
+    ],
+  },
+  {
+    id: 'sunkenchest', title: '沉沒的寶箱', text: '透過清澈的海水，可以看到海底躺著一個生鏽的寶箱。',
+    options: [
+      { label: '讓水屬性夥伴潛下去', hint: '需要水屬性夥伴', can: (r) => hasElem(r, 'water'), act: (r) => { const a = rollTreasure(r, 'treasure'), b = rollTreasure(r, 'treasure'); return `夥伴把寶箱整個拖了上來！${a.text}${b.text}`; } },
+      { label: '用釣竿勾勾看', act: (r) => { if (roll(r) < 0.55) { const l = rollTreasure(r, 'treasure'); return `勾到了！${l.text}`; } return '釣線斷了，寶箱沉回了海底的泥沙裡。'; } },
+      leave,
+    ],
+  },
+  {
+    id: 'pirates', title: '海盜船', text: '一艘掛著骷髏旗的小船攔住去路：「留下買路錢，或是跟我們的看門潮靈打一場！」',
+    options: [
+      { label: '迎戰', hint: '和強敵戰鬥', act: (r) => { fight(r, ['A', 'B'], 2); return '海盜放出了牠們的看門潮靈！'; } },
+      { label: '交出 40 枚貝殼幣', can: (r) => r.shells >= 40, act: (r) => { r.shells -= 40; return '海盜收下貝殼幣，大笑著揚長而去。'; } },
+      { label: '全速逃跑', hint: '全隊損失 10% HP', act: (r) => { hurtAll(r, 0.1); return '船身被砲彈擦過，總算甩掉了海盜。'; } },
+    ],
+  },
+  {
+    id: 'fogbank', title: '濃霧', text: '前方湧起一大片濃霧，什麼都看不清楚。',
+    options: [
+      { label: '穿過去', hint: '可能有收穫，也可能受傷', act: (r) => { if (roll(r) < 0.5) { r.lures.star++; return '霧裡有東西閃了一下……你撈到了一個星光餌！'; } hurtAll(r, 0.15); return '船撞上了暗礁，夥伴們被晃得東倒西歪。'; } },
+      { label: '等霧散去', act: () => '你耐心地等了一陣，霧散了，海面恢復平靜。' },
+    ],
+  },
+  {
+    id: 'seasong', title: '海之歌', text: '遠方傳來一陣悠揚的歌聲，聽了讓人心情平靜。',
+    options: [
+      { label: '靜靜地聽', act: (r) => { healParty(r, 0.3); cureAll(r); return '夥伴們閉上眼睛。全隊回復 30% HP，異常狀態也消失了。'; } },
+      { label: '跟著一起唱', act: (r) => { expAll(r, 0.25); return '夥伴們跟著哼了起來，好像領悟了什麼。全隊獲得經驗值！'; } },
+    ],
+  },
+  {
+    id: 'contest', title: '釣魚大賽', text: '一群漁夫正在舉辦釣魚大賽：「報名費 20 枚貝殼幣，獎品很豐富喔！」',
+    options: [
+      { label: '報名參加', hint: '20 枚貝殼幣', can: (r) => r.shells >= 20, act: (r) => {
+        r.shells -= 20; const x = roll(r);
+        if (x < 0.1) { r.lures.legend++; return '你釣到了全場最大的魚！冠軍獎品是傳說餌！'; }
+        if (x < 0.4) { r.lures.star++; return '你拿到第二名！獎品是星光餌。'; }
+        r.shells += 45; return '你拿到參加獎，45 枚貝殼幣。';
+      } },
+      leave,
+    ],
+  },
+  {
+    id: 'shipwright', title: '流浪船匠', text: '一位船匠划著工具船靠近：「我可以幫你的船改裝一下，要 70 枚貝殼幣。」',
+    options: [
+      { label: '請他改裝', hint: '70 枚貝殼幣換一張好的能力卡', can: (r) => r.shells >= 70, act: (r) => { r.shells -= 70; const id = rollBoons(r, true)[0]; return `船匠叮叮噹噹地忙了一陣……${applyBoon(r, id)}`; } },
+      leave,
+    ],
+  },
+  {
+    id: 'barter', title: '以物易物的商人', text: '一位商人搖著鈴鐺：「不收錢，只交換東西！」',
+    options: [
+      { label: '海藻藥膏換捕捉餌', hint: '藥膏 ×1 → 捕捉餌 ×1', can: (r) => r.items.potion > 0, act: (r) => { r.items.potion--; r.catchBait++; return '交換成功！'; } },
+      { label: '2 個捕捉餌換星光餌', hint: '捕捉餌 ×2 → 星光餌 ×1', can: (r) => r.catchBait >= 2, act: (r) => { r.catchBait -= 2; r.lures.star++; return '交換成功！'; } },
+      { label: '捕捉餌換生命石', hint: '捕捉餌 ×3 → 生命石 ×1', can: (r) => r.catchBait >= 3, act: (r) => { r.catchBait -= 3; r.lifeStones = (r.lifeStones ?? 0) + 1; return '商人從箱底拿出一顆發光的石頭。你得到了生命石！'; } },
+      leave,
+    ],
+  },
+  {
+    id: 'meteor', title: '流星雨', text: '夜空中劃過一道又一道流星。據說對著流星許願，願望就會實現。',
+    options: [
+      { label: '希望發大財', act: (r) => { r.shells += 50; return '一顆流星落進海裡，海面浮起了 50 枚貝殼幣！'; } },
+      { label: '希望收服更多夥伴', act: (r) => { r.catchBait++; return '船上突然多了一個捕捉餌。'; } },
+      { label: '希望大家平安', act: (r) => { healParty(r, 0.4, true); return '溫暖的光灑在船上，全隊回復 40% HP。'; } },
+    ],
+  },
+  {
+    id: 'giantshadow', title: '巨大魚影', text: '船底下游過一道巨大的影子，大得嚇人。',
+    options: [
+      { label: '下竿挑戰', hint: '稀有的強敵', act: (r) => { fight(r, ['S', 'A'], 3); return '影子咬住了釣餌，猛力往下拉！'; } },
+      { label: '靜靜等牠游走', act: () => '影子慢慢沉入深處，消失不見了。' },
+    ],
+  },
+  {
+    id: 'island', title: '無人島', text: '一座地圖上沒有的小島，島上長滿了椰子樹。',
+    options: [
+      { label: '上岸休息', act: (r) => { healParty(r, 0.4, true); return '夥伴們在沙灘上睡了個午覺。全隊回復 40% HP。'; } },
+      { label: '深入探險', hint: '可能找到寶物，也可能遇到潮靈', act: (r) => { if (roll(r) < 0.5) { const l = rollTreasure(r, 'treasure'); return `在洞穴裡找到了寶箱！${l.text}`; } fight(r, ['N', 'B']); return '樹叢裡跳出了一隻潮靈！'; } },
+      leave,
+    ],
+  },
+  {
+    id: 'postbird', title: '信天翁郵差', text: '一隻背著郵袋的信天翁停在船桅上，好像累壞了。',
+    options: [
+      { label: '分牠一點食物', act: (r) => { r.catchBait++; r.shells += 20; return '信天翁吃飽後，留下一個包裹就飛走了。裡面有捕捉餌和 20 枚貝殼幣。'; } },
+      { label: '幫牠送信', hint: '多航行一段路，全隊損失 10% HP', act: (r) => { hurtAll(r, 0.1); r.lures.star++; r.shells += 40; return '收信的老奶奶非常高興，送了你星光餌和 40 枚貝殼幣。'; } },
+      leave,
+    ],
+  },
+  // ── M4：海域專屬事件 ──
+  {
+    id: 'coralgarden', title: '珊瑚花園', zones: ['shallows', 'forest'], text: '一片色彩繽紛的珊瑚花園，小魚在其中穿梭。',
+    options: [
+      { label: '讓草屬性夥伴吸收養分', hint: '需要草屬性夥伴', can: (r) => hasElem(r, 'grass'), act: (r) => { expAll(r, 0.5); return '珊瑚的養分讓夥伴們精神百倍。全隊獲得大量經驗值！'; } },
+      { label: '欣賞一下', act: (r) => { healParty(r, 0.2); return '美麗的景色讓大家放鬆下來，全隊回復 20% HP。'; } },
+    ],
+  },
+  {
+    id: 'lighthouse', title: '燈塔守護者', zones: ['shallows'], text: '一座孤零零的燈塔，守塔人向你招手。',
+    options: [
+      { label: '上去拜訪', act: (r) => { r.items.potion += 2; return '守塔人請你喝了熱茶，還送你兩個海藻藥膏。「前面的海域，霸主很喜歡用水屬性的招式喔。」'; } },
+      leave,
+    ],
+  },
+  {
+    id: 'frozenmon', title: '冰封的潮靈', zones: ['ice'], text: '一塊浮冰裡凍著一隻潮靈，牠的眼睛好像還在動。',
+    options: [
+      { label: '讓火屬性夥伴融冰', hint: '需要火屬性夥伴', can: (r) => hasElem(r, 'fire'), act: (r) => `冰慢慢融化了，潮靈感激地看著你……${addMon(r, ['A', 'B'])}` },
+      { label: '用力敲開', hint: '全隊損失 10% HP', act: (r) => { hurtAll(r, 0.1); if (roll(r) < 0.5) return `冰塊裂開了！${addMon(r, ['B', 'N'])}`; return '冰塊碎了，但裡面的潮靈一溜煙游走了。'; } },
+      leave,
+    ],
+  },
+  {
+    id: 'aurora', title: '極光之夜', zones: ['ice'], text: '天空中舞動著綠色與紫色的極光，海面映得一片夢幻。',
+    options: [
+      { label: '整夜看著極光', act: (r) => { healParty(r, 0.35, true); expAll(r, 0.2); return '夥伴們看得入迷。全隊回復 35% HP，也獲得了一些經驗值。'; } },
+    ],
+  },
+  {
+    id: 'eruption', title: '海底火山噴發', zones: ['lava'], text: '前方海面突然噴出滾燙的岩漿，海水在沸騰！',
+    options: [
+      { label: '趁亂撈寶', hint: '全隊損失 25% HP', act: (r) => { hurtAll(r, 0.25); r.shells += 80; return '你在噴發的縫隙間撈到了被沖上來的寶石，換得 80 枚貝殼幣！'; } },
+      { label: '讓水屬性夥伴降溫', hint: '需要水屬性夥伴', can: (r) => hasElem(r, 'water'), act: (r) => { const l = rollTreasure(r, 'treasure'); return `夥伴噴出水柱，冷卻的岩漿裡露出一個寶箱！${l.text}`; } },
+      { label: '快點離開', act: () => '你掉頭就跑，背後傳來轟隆巨響。' },
+    ],
+  },
+  {
+    id: 'forge', title: '熔岩鍛爐', zones: ['lava'], text: '一座建在火山口邊緣的古老鍛爐，爐火至今沒有熄滅。',
+    options: [
+      { label: '投入 40 枚貝殼幣', hint: '鍛造一張能力卡', can: (r) => r.shells >= 40, act: (r) => { r.shells -= 40; const id = rollBoons(r)[0]; return `爐火猛地竄高……${applyBoon(r, id)}`; } },
+      { label: '讓火屬性夥伴淬鍊', hint: '需要火屬性夥伴', can: (r) => hasElem(r, 'fire'), act: (r) => { for (const m of alive(r)) if (formOf(m).elems.includes('fire')) gainXp(m, xpToNext(m.lv) - m.xp); return '火屬性的夥伴在爐火中鍛鍊，各升了 1 級！'; } },
+      leave,
+    ],
+  },
+  {
+    id: 'datacache', title: '加密資料庫', zones: ['cyber', 'core'], text: '海面浮著一個發光的方塊，上面寫著「存取受限」。',
+    options: [
+      { label: '讓數碼屬性夥伴解密', hint: '需要數碼屬性夥伴', can: (r) => hasElem(r, 'data'), act: (r) => { if (roll(r) < 0.3) { r.lures.legend++; return '解密成功！資料庫裡藏著一個傳說餌！'; } r.lures.star++; r.shells += 40; return '解密成功！得到星光餌和 40 枚貝殼幣。'; } },
+      { label: '硬闖', hint: '可能觸發防衛程式', act: (r) => { if (roll(r) < 0.5) { r.shells += 60; return '方塊打開了，裡面有 60 枚貝殼幣。'; } fight(r, ['A', 'B'], 1); return '警報響起！防衛程式啟動了！'; } },
+      leave,
+    ],
+  },
+  {
+    id: 'vending', title: '故障販賣機', zones: ['cyber'], text: '一台浮在海上的販賣機，螢幕閃爍著亂碼。',
+    options: [
+      { label: '投 30 枚貝殼幣', can: (r) => r.shells >= 30, act: (r) => {
+        r.shells -= 30; const x = roll(r);
+        if (x < 0.3) { r.items.superpotion++; return '掉出了一瓶珍珠精華！'; }
+        if (x < 0.55) { r.catchBait += 2; return '掉出了兩個捕捉餌！'; }
+        if (x < 0.7) { r.lifeStones = (r.lifeStones ?? 0) + 1; return '機器發出怪聲，掉出了一顆生命石！'; }
+        return '螢幕顯示「ERROR」，什麼都沒掉出來……';
+      } },
+      { label: '拍兩下', act: (r) => { if (roll(r) < 0.3) { r.items.potion++; return '哐啷一聲，掉出一個海藻藥膏。'; } return '販賣機發出嗶嗶聲，沒有反應。'; } },
+    ],
+  },
+  {
+    id: 'abysslight', title: '深淵之光', zones: ['abyss'], text: '黑暗深處有一道光在閃爍，好像在引誘你靠近。',
+    options: [
+      { label: '跟著光前進', hint: '可能是陷阱', act: (r) => { if (roll(r) < 0.45) { r.shells += 100; return '光源是一顆巨大的黑珍珠！賣了 100 枚貝殼幣。'; } fight(r, ['N', 'B'], 2, 'abyss_lantern'); return '光的後面是一張滿是尖牙的大嘴！'; } },
+      leave,
+    ],
+  },
+  {
+    id: 'whalesong', title: '古鯨之歌', zones: ['abyss', 'void'], text: '深海中迴盪著低沉的鯨歌，海水都跟著震動。',
+    options: [
+      { label: '閉上眼睛聆聽', act: (r) => { healParty(r, 0.5, true); cureAll(r); return '鯨歌撫平了所有的傷痛。全隊回復 50% HP，異常狀態也消失了。'; } },
+    ],
+  },
+  {
+    id: 'spiritfont', title: '聖泉', zones: ['forest'], text: '森林深處湧出一道清泉，泉水閃著淡淡的綠光。',
+    options: [
+      { label: '讓夥伴喝泉水', act: (r) => { healParty(r, 1, true); cureAll(r); return '清涼的泉水流遍全身，全隊完全回復！'; } },
+    ],
+  },
+  {
+    id: 'mirror', title: '虛像之鏡', zones: ['void'], text: '一面浮在空中的鏡子，鏡子裡的你在對你微笑。',
+    options: [
+      { label: '觸碰鏡子', hint: '結果難以預料', act: (r) => {
+        const a = alive(r); if (!a.length) return '什麼也沒發生。';
+        const m = a[Math.floor(roll(r) * a.length)];
+        if (roll(r) < 0.6) { for (let i = 0; i < 2; i++) gainXp(m, xpToNext(m.lv) - m.xp); return `鏡中的 ${formOf(m).name} 走了出來，和本體合而為一！升到了 Lv${m.lv}！`; }
+        m.hp = 1; return `鏡子吸走了 ${formOf(m).name} 的力量，HP 只剩 1……`;
+      } },
+      leave,
+    ],
+  },
 ];
 
-export const pickEvent = (r: RunState): GameEvent => EVENTS[Math.floor(next(r.rng) * EVENTS.length)];
+/** 挑一個事件：只挑這片海域會出現的、這一局還沒遇過的；海域專屬事件比較容易出現 */
+export function pickEvent(r: RunState): GameEvent {
+  const seen = new Set(r.seenEvents ?? []);
+  let cands = EVENTS.filter((e) => (!e.zones || e.zones.includes(r.zone)) && !seen.has(e.id));
+  if (!cands.length) cands = EVENTS.filter((e) => !e.zones || e.zones.includes(r.zone));
+  const weights = cands.map((e) => (e.zones ? 3 : 1));
+  let x = next(r.rng) * weights.reduce((a, b) => a + b, 0), pick = cands[0];
+  for (let i = 0; i < cands.length; i++) { x -= weights[i]; if (x <= 0) { pick = cands[i]; break; } }
+  r.seenEvents = [...(r.seenEvents ?? []), pick.id];
+  return pick;
+}

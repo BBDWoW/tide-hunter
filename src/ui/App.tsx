@@ -8,6 +8,7 @@ import { pickEvent, type GameEvent } from '../game/events';
 import { loadMeta, pearlsFor, returnFromRun, saveMeta } from '../game/meta';
 import { useViewport } from './layout';
 import { makeMon, makeMutant } from '../game/creature';
+import { next } from '../game/rng';
 import { FORMS } from '../data/creatures';
 import { APP_VERSION, fetchLatestVersion } from '../game/version';
 import { setScene } from '../audio/engine';
@@ -128,6 +129,7 @@ export function App() {
       break;
     case 'after':
       body = <AfterBattle vp={vp} run={run!} result={screen.result} onDone={() => {
+        if (boss && screen.result.outcome === 'win') { const id = screen.result.enemy.form; updateDex((d) => { d.bosses = [...new Set([...(d.bosses ?? []), id])]; }); }
         if (boss && screen.result.outcome === 'win' && run!.returnTo) { leaveSpecial(run!); saveRun(run); go({ k: 'voyage' }); return; }
         if (boss && screen.result.outcome === 'win') {
           if (run!.zoneNo < FINAL_ZONE) { run!.pendingZone = true; saveRun(run); go({ k: 'zonepick' }); } else finishRun(true);
@@ -144,7 +146,19 @@ export function App() {
       body = <Dex vp={vp} onBack={() => go({ k: 'title' })} />;
       break;
     case 'event':
-      body = <EventScreen vp={vp} run={run!} ev={screen.ev} onDone={() => { if (run!.party.every((m) => m.hp <= 0)) finishRun(false); else advance(); }} />;
+      body = <EventScreen vp={vp} run={run!} ev={screen.ev} onDone={() => {
+        if (run!.party.every((m) => m.hp <= 0)) { finishRun(false); return; }
+        // 事件引發的戰鬥：打完（或逃跑）後回到航線
+        const f = run!.eventFight;
+        if (f) {
+          run!.eventFight = undefined; saveRun(run);
+          const mon = makeMon(f.form, f.lv, false, true, () => next(run!.rng));
+          markSeen(mon.form);
+          go({ k: 'battle', enc: { mon, rarity: FORMS[f.form].rarity } });
+          return;
+        }
+        advance();
+      }} />;
       break;
     case 'zonepick':
       body = <ZonePick vp={vp} run={run!} onPick={(z) => { enterZone(run!, z); saveRun(run); go({ k: 'voyage' }); }} />;

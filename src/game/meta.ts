@@ -4,7 +4,7 @@ import { SKILLS } from '../data/skills';
 import { STAGE_SLOTS } from '../data/types';
 import { ancestryOf, makeMon, maxHp, newUid, type Mon } from './creature';
 
-export type UpgradeId = 'bait' | 'rod' | 'discount' | 'supply' | 'bay' | 'star';
+export type UpgradeId = 'bait' | 'rod' | 'discount' | 'supply' | 'bay' | 'star' | 'school' | 'herbal' | 'kiln' | 'legend';
 export const UPGRADES: Record<UpgradeId, { name: string; desc: (lv: number) => string; costs: number[] }> = {
   bait: { name: '餌料倉', desc: (lv) => `開局的捕捉餌 +${lv}`, costs: [20, 45, 80] },
   rod: { name: '釣竿工坊', desc: (lv) => `收線時的捕捉區變寬 ${lv * 8}%`, costs: [25, 55, 95] },
@@ -12,14 +12,41 @@ export const UPGRADES: Record<UpgradeId, { name: string; desc: (lv: number) => s
   supply: { name: '補給庫', desc: (lv) => `開局多 ${lv} 個海藻藥膏、${lv * 20} 枚貝殼幣`, costs: [15, 35, 60] },
   bay: { name: '棲息灣擴建', desc: (lv) => `棲息灣可以住 ${2 + lv} 隻夥伴`, costs: [30, 65, 110] },
   star: { name: '星光祭壇', desc: () => '開局獲得 1 個星光餌', costs: [120] },
+  school: { name: '訓練所', desc: (lv) => `初始夥伴開局等級 +${lv}`, costs: [40, 85, 140] },
+  herbal: { name: '藥草園', desc: (lv) => `營地休息多回復 ${lv * 15}% HP`, costs: [35, 75] },
+  kiln: { name: '生命石窯', desc: () => '開局獲得 1 顆生命石', costs: [150] },
+  legend: { name: '傳說祭壇', desc: () => '開局獲得 1 個傳說餌', costs: [260] },
 };
 
-export const RECRUITS: { form: string; cost: number }[] = [
+// 招募：前四隻一開始就能招募；其他的要先在圖鑑收服過（同一條進化線的任何型態都算）
+export const RECRUITS: { form: string; cost: number; needDex?: boolean }[] = [
   { form: 'zaploach', cost: 30 },
   { form: 'starsand', cost: 30 },
   { form: 'bubcrab', cost: 40 },
   { form: 'gull1', cost: 60 },
+  { form: 'jelly1', cost: 40, needDex: true },
+  { form: 'iceshrimp', cost: 50, needDex: true },
+  { form: 'lavasnail', cost: 50, needDex: true },
+  { form: 'sprout_orb', cost: 55, needDex: true },
+  { form: 'snow_crystal_spirit', cost: 60, needDex: true },
+  { form: 'lava_bubble', cost: 60, needDex: true },
+  { form: 'shadow_soul_flame', cost: 70, needDex: true },
+  { form: 'cubelet', cost: 70, needDex: true },
+  { form: 'pixfish', cost: 90, needDex: true },
+  { form: 'lanternlarva', cost: 90, needDex: true },
+  { form: 'abyss_wisp', cost: 90, needDex: true },
+  { form: 'coral', cost: 80, needDex: true },
+  { form: 'tide_cell', cost: 130, needDex: true },
+  { form: 'thunder_wyrmling', cost: 220, needDex: true },
+  { form: 'phantom_cub', cost: 220, needDex: true },
 ];
+/** 這隻能不能招募：不需要圖鑑，或圖鑑收服過牠的任何一個型態 */
+export function recruitUnlocked(form: string, caught: string[]): boolean {
+  const r = RECRUITS.find((x) => x.form === form);
+  if (!r?.needDex) return true;
+  const family = FORMS[form].family;
+  return caught.some((id) => FORMS[id]?.family === family);
+}
 
 export interface BayMon {
   id: string;
@@ -40,6 +67,8 @@ export interface Meta {
   recruits: string[];
   bay: BayMon[];
   runs: number;
+  achieved?: string[]; // 已經領取獎勵的成就
+  title?: string; // 目前顯示的稱號（成就 id）
 }
 
 const KEY = 'tidehunter.meta.v1';
@@ -59,9 +88,9 @@ export function buyUpgrade(m: Meta, id: UpgradeId): boolean {
   if (cost === undefined || m.pearls < cost) return false;
   m.pearls -= cost; m.upgrades[id] = lv + 1; saveMeta(m); return true;
 }
-export function buyRecruit(m: Meta, form: string): boolean {
+export function buyRecruit(m: Meta, form: string, caught: string[] = []): boolean {
   const r = RECRUITS.find((x) => x.form === form);
-  if (!r || m.recruits.includes(form) || m.pearls < r.cost) return false;
+  if (!r || m.recruits.includes(form) || m.pearls < r.cost || !recruitUnlocked(form, caught)) return false;
   m.pearls -= r.cost; m.recruits.push(form); saveMeta(m); return true;
 }
 
@@ -93,9 +122,9 @@ export function bringBack(m: Meta, mon: Mon, replaceId?: string): BayMon {
 }
 
 // 從棲息灣帶夥伴出海
-export function bayStartLevel(b: BayMon) { return Math.min(10, 5 + Math.floor(b.bond / 2)); }
+export function bayStartLevel(b: BayMon, m?: Meta) { return Math.min(10, 5 + Math.floor(b.bond / 2)) + (m ? upLv(m, 'school') : 0); }
 export function monFromBay(b: BayMon): Mon {
-  const mon = makeMon(b.root, bayStartLevel(b));
+  const mon = makeMon(b.root, bayStartLevel(b, loadMeta()));
   mon.bayId = b.id;
   mon.bond = b.bond;
   mon.evoBonus = b.evoMemory.length ? 2 : 0;
@@ -120,3 +149,41 @@ export function returnFromRun(m: Meta, party: Mon[]) {
   }
   saveMeta(m);
 }
+
+// ── 成就與稱號 ──
+export interface AchStats { caught: string[]; clears: number; bestStation: number; bosses: string[]; evolved: string[]; mutants: number; bay: number; runs: number }
+export interface Achievement { id: string; title: string; desc: string; reward: number; check: (s: AchStats) => boolean }
+const has = (arr: string[], ...ids: string[]) => ids.every((id) => arr.includes(id));
+export const ACHIEVEMENTS: Achievement[] = [
+  { id: 'catch2', title: '新手獵手', desc: '第一次收服夥伴', reward: 10, check: (s) => s.caught.length >= 2 },
+  { id: 'catch10', title: '見習獵手', desc: '圖鑑收服 10 種', reward: 20, check: (s) => s.caught.length >= 10 },
+  { id: 'catch30', title: '資深獵手', desc: '圖鑑收服 30 種', reward: 40, check: (s) => s.caught.length >= 30 },
+  { id: 'catch60', title: '海洋博物學家', desc: '圖鑑收服 60 種', reward: 80, check: (s) => s.caught.length >= 60 },
+  { id: 'catch100', title: '潮汐百科', desc: '圖鑑收服 100 種', reward: 150, check: (s) => s.caught.length >= 100 },
+  { id: 'whale', title: '鯨嘯克星', desc: '打倒碧藍淺灘的霸主', reward: 20, check: (s) => has(s.bosses, 'whale') },
+  { id: 'twokings', title: '冰火雙王', desc: '打倒冰冠海豹王與熔岩海龍王', reward: 60, check: (s) => has(s.bosses, 'frostking', 'lavadragon') },
+  { id: 'deep', title: '深海終結者', desc: '打倒主機海皇與冥海巨鯨', reward: 90, check: (s) => has(s.bosses, 'mainframe_leviathan', 'nether_whale') },
+  { id: 'guardians', title: '秘境探索家', desc: '打倒三個特殊區域的守護者', reward: 70, check: (s) => has(s.bosses, 'vine_antler_deer', 'void_star_dragon', 'domain_realm_core') },
+  { id: 'clear1', title: '潮汐獵手', desc: '第一次通關', reward: 60, check: (s) => s.clears >= 1 },
+  { id: 'clear5', title: '傳奇船長', desc: '通關 5 次', reward: 120, check: (s) => s.clears >= 5 },
+  { id: 'far', title: '遠洋航海士', desc: '一局航行到第 30 站', reward: 50, check: (s) => s.bestStation >= 30 },
+  { id: 'ssr', title: '傳說的邂逅', desc: '收服任何一隻傳說級（SSR）', reward: 50, check: (s) => s.caught.some((id) => FORMS[id]?.rarity === 'SSR') },
+  { id: 'mutant', title: '異色收藏家', desc: '收服一隻 ✦ 異變個體', reward: 40, check: (s) => s.mutants >= 1 },
+  { id: 'guard', title: '守護之心', desc: '讓初始夥伴進化成守護型', reward: 30, check: (s) => s.evolved.some((id) => ['water3b', 'fire3b', 'grass3b'].includes(id)) },
+  { id: 'env', title: '環境之子', desc: '讓夥伴進化成地區形態', reward: 30, check: (s) => s.evolved.some((id) => !!FORMS[id]?.recolor) },
+  { id: 'baylove', title: '棲息灣大家庭', desc: '棲息灣住滿 4 隻夥伴', reward: 30, check: (s) => s.bay >= 4 },
+  { id: 'runs10', title: '老練的水手', desc: '出海 10 次', reward: 30, check: (s) => s.runs >= 10 },
+];
+export function claimAchievement(m: Meta, id: string): boolean {
+  const a = ACHIEVEMENTS.find((x) => x.id === id);
+  if (!a || m.achieved?.includes(id)) return false;
+  m.achieved = [...(m.achieved ?? []), id]; m.pearls += a.reward; m.totalPearls += a.reward;
+  if (!m.title) m.title = id;
+  saveMeta(m); return true;
+}
+/** 從圖鑑與港口資料整理出成就要用的統計 */
+export function achStats(m: Meta, d: { caught: string[]; clears: number; bestStation: number; bosses?: string[]; evolved?: string[]; mutants?: number }): AchStats {
+  return { caught: d.caught, clears: d.clears, bestStation: d.bestStation, bosses: d.bosses ?? [], evolved: d.evolved ?? [], mutants: d.mutants ?? 0, bay: m.bay.length, runs: m.runs };
+}
+export const claimable = (m: Meta, st: AchStats) => ACHIEVEMENTS.filter((a) => !m.achieved?.includes(a.id) && a.check(st)).length;
+export const titleOf = (m: Meta) => ACHIEVEMENTS.find((a) => a.id === m.title)?.title ?? null;

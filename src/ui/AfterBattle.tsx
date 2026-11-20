@@ -4,7 +4,7 @@ import { FORMS } from '../data/creatures';
 import { SKILLS } from '../data/skills';
 import { RARITY, STAGE_NAME } from '../data/types';
 import { evolve, evolveTarget, formOf, gainXp, maxHp, skillSlots, xpReward, xpToNext, type Mon } from '../game/creature';
-import { applyBoon, boon, isBoss, markCaught, nodeOf, PARTY_MAX, rollBoons, ZONES, type RunState, type ZoneId } from '../game/run';
+import { applyBoon, boon, isBoss, markCaught, updateDex, nodeOf, PARTY_MAX, rollBoons, ZONES, type RunState, type ZoneId } from '../game/run';
 import { BOON_TIER, BOONS } from '../data/boons';
 import { EVO_W, playEvolution } from '../render/evo';
 import type { BattleResult } from './Battle';
@@ -39,6 +39,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
       enemy.hp = Math.max(1, Math.round(maxHp(enemy) * ratio));
       caughtMon.current = enemy;
       markCaught(enemy.form);
+      if (enemy.mutant) updateDex((d) => { d.mutants = (d.mutants ?? 0) + 1; });
       run.caught++;
       if (run.party.length < PARTY_MAX) { run.party.push(enemy); out.push({ uid: enemy.uid, text: `${formOf(enemy).name} 加入了隊伍！` }); }
       else q.push({ k: 'full', mon: enemy });
@@ -97,6 +98,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
             <EvolveScene mon={find(cur.uid)!} to={cur.to}
               onDone={(learn) => {
                 const m = find(cur.uid)!;
+                updateDex((d) => { d.evolved = [...new Set([...(d.evolved ?? []), cur.to])]; });
                 const branch = Object.values(FORMS).flatMap((f) => f.evolve ?? []).find((e) => e.to === cur.to && (e.style || e.zone));
                 const why = branch?.zone ? `（受到${ZONES[branch.zone as ZoneId]?.name ?? ''}的環境影響）` : branch?.style ? `（依戰鬥風格走向${branch.style === 'guard' ? '守護型' : '攻擊型'}）` : '';
                 note(m.uid, `進化成了 ${formOf(m).name}！${why}`);

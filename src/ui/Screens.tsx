@@ -4,7 +4,7 @@ import { FORMS, STARTERS } from '../data/creatures';
 import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/types';
 import { ITEMS, statusLabel, type ItemId } from '../game/battle';
 import { ancestryOf, formOf, makeMon, maxHp, xpToNext, type Mon } from '../game/creature';
-import { bayCap, bayStartLevel, bringBack, buyRecruit, buyUpgrade, loadMeta, monFromBay, RECRUITS, saveMeta, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
+import { achStats, ACHIEVEMENTS, bayCap, bayStartLevel, bringBack, buyRecruit, buyUpgrade, claimable, claimAchievement, loadMeta, monFromBay, RECRUITS, recruitUnlocked, saveMeta, titleOf, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
 import { SKILLS } from '../data/skills';
 import { canUseOutside, enterSpecial, FINAL_ZONE, ZONE_CHOICES, healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
@@ -36,7 +36,7 @@ export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp, onPort }:
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={drawTitle} label="夕陽下的海面，潮靈躍出水面" />}
       overlay={<>
-        <div class="title-logo"><span class="title-en">TIDE HUNTER</span><h1>潮汐獵手</h1><span class="title-sub">釣起潮靈 · 收服 · 進化 · 挑戰霸主</span></div>
+        <div class="title-logo"><span class="title-en">TIDE HUNTER</span><h1>潮汐獵手</h1><span class="title-sub">釣起潮靈 · 收服 · 進化 · 挑戰霸主</span>{titleOf(meta) && <span class="title-badge">🏅 {titleOf(meta)}</span>}</div>
         <div class="title-tools">
           <button class="tool-btn" onClick={() => { setNews(false); setSound(!sound); }} aria-label="聲音設定">{snd.muted ? '🔇' : '🔊'}</button>
           <button class="tool-btn news-btn" onClick={() => { setSound(false); news ? setNews(false) : openNews(); }} aria-label="更新通知">📢 通知{unread && <i class="news-dot" aria-label="有新消息" />}</button>
@@ -69,7 +69,7 @@ export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp, onPort }:
           <Win class="title-menu">
             {hasSave && <MenuItem onClick={onContinue} hot>繼續冒險</MenuItem>}
             <MenuItem onClick={onNew} hot={!hasSave}>新的冒險</MenuItem>
-            <MenuItem onClick={onPort} sub={`◆ ${meta.pearls}`}>港口</MenuItem>
+            <MenuItem onClick={onPort} sub={claimable(meta, achStats(meta, dex)) ? `● 成就可領　◆ ${meta.pearls}` : `◆ ${meta.pearls}`}>港口</MenuItem>
             <MenuItem onClick={onDex} sub={`${dex.caught.length}/${Object.keys(FORMS).length}`}>圖鑑</MenuItem>
             <MenuItem onClick={onHelp}>玩法說明</MenuItem>
           </Win>
@@ -91,7 +91,7 @@ export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (m: 
   const cur = opts[sel];
   const formOfOpt = (o: StartOpt) => (o.kind === 'base' ? o.form : o.bay.root);
   const f = FORMS[formOfOpt(cur)];
-  const pick = () => onPick(cur.kind === 'base' ? makeMon(cur.form, 5) : monFromBay(cur.bay));
+  const pick = () => onPick(cur.kind === 'base' ? makeMon(cur.form, 5 + upLv(meta, 'school')) : monFromBay(cur.bay));
   const move = (d: number) => setSel((s0) => (s0 + d + opts.length) % opts.length);
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
@@ -143,7 +143,8 @@ export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (m: 
 // ── 港口 ──
 export function Port({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
   const [meta, setMeta] = useState(loadMeta);
-  const [tab, setTab] = useState<'up' | 'recruit' | 'bay'>('up');
+  const [tab, setTab] = useState<'up' | 'recruit' | 'bay' | 'ach'>('up');
+  const dex = loadDex(), st = achStats(meta, dex), canClaim = claimable(meta, st);
   const [, force] = useState(0);
   const refresh = () => { setMeta(loadMeta()); force((n) => n + 1); };
   return (
@@ -151,7 +152,7 @@ export function Port({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
       panel={
         <Win class="big-panel port" title={`港口　珍珠 ◆ ${meta.pearls}`}>
           <div class="tabs">
-            {([['up', '設施升級'], ['recruit', '招募夥伴'], ['bay', `棲息灣 ${meta.bay.length}/${bayCap(meta)}`]] as const).map(([k, label]) => (
+            {([['up', '設施升級'], ['recruit', '招募夥伴'], ['bay', `棲息灣 ${meta.bay.length}/${bayCap(meta)}`], ['ach', `成就${canClaim ? ` ●${canClaim}` : ''}`]] as const).map(([k, label]) => (
               <button key={k} class={`tab ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}>{label}</button>
             ))}
           </div>
@@ -172,12 +173,12 @@ export function Port({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
           {tab === 'recruit' && (
             <div class="pick-grid">
               {RECRUITS.map((r) => {
-                const owned = meta.recruits.includes(r.form), f = FORMS[r.form];
+                const owned = meta.recruits.includes(r.form), f = FORMS[r.form], open = recruitUnlocked(r.form, dex.caught);
                 return (
-                  <button class="pick" key={r.form} disabled={owned || meta.pearls < r.cost} onClick={() => { buyRecruit(meta, r.form); refresh(); }}>
-                    <Sprite form={r.form} size={48} />
-                    <span class="grow"><span class="row-gap"><b>{f.name}</b><RarityTag r={f.rarity} /></span><Elems list={f.elems} />
-                      <span class="small dim">{owned ? '已招募，可以選為初始夥伴' : `◆ ${r.cost}`}</span></span>
+                  <button class="pick" key={r.form} disabled={owned || !open || meta.pearls < r.cost} onClick={() => { buyRecruit(meta, r.form, dex.caught); refresh(); }}>
+                    <Sprite form={r.form} size={48} silhouette={!open} still={!open} />
+                    <span class="grow"><span class="row-gap"><b>{open ? f.name : '？？？'}</b>{open && <RarityTag r={f.rarity} />}</span>{open && <Elems list={f.elems} />}
+                      <span class="small dim">{owned ? '已招募，可以選為初始夥伴' : open ? `◆ ${r.cost}` : '在冒險中收服過這一族才能招募'}</span></span>
                   </button>
                 );
               })}
@@ -191,13 +192,28 @@ export function Port({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
                   <span class="grow">
                     <span class="row-gap"><b>{FORMS[b.form].name}</b>{b.iv && <IvStars iv={b.iv} />}</span>
                     <span class="small">羈絆 <span class="hearts">{'❤'.repeat(Math.min(10, b.bond))}</span> {b.bond}</span>
-                    <span class="small dim">出海時：{FORMS[b.root].name} Lv{bayStartLevel(b)}{b.legacy ? `・傳承「${SKILLS[b.legacy]?.name}」` : ''}</span>
+                    <span class="small dim">出海時：{FORMS[b.root].name} Lv{bayStartLevel(b, meta)}{b.legacy ? `・傳承「${SKILLS[b.legacy]?.name}」` : ''}</span>
                     <button class="chip-btn" onClick={() => { meta.bay = meta.bay.filter((x) => x.id !== b.id); saveMeta(meta); refresh(); }}>放生</button>
                   </span>
                 </div>
               ))}
             </div>
           ) : <p class="small dim">棲息灣還是空的。冒險結束時，可以帶一隻夥伴回來住。</p>)}
+          {tab === 'ach' && (
+            <div class="item-list">
+              <p class="small dim">完成成就可以領取珍珠，也會解鎖稱號，顯示在主畫面上。{titleOf(meta) ? `目前稱號：「${titleOf(meta)}」` : ''}</p>
+              {ACHIEVEMENTS.map((a) => {
+                const got = meta.achieved?.includes(a.id), done = a.check(st);
+                return (
+                  <div class={`ach-row ${got ? 'got' : done ? 'ready' : ''}`} key={a.id}>
+                    <span class="grow"><b>{got ? '🏅' : done ? '✨' : '🔒'} {a.title}</b><span class="small dim">{a.desc}</span></span>
+                    {got ? (meta.title === a.id ? <span class="small accent">使用中</span> : <button class="chip-btn" onClick={() => { meta.title = a.id; saveMeta(meta); refresh(); }}>設為稱號</button>)
+                      : <button class="chip-btn" disabled={!done} onClick={() => { claimAchievement(meta, a.id); refresh(); }}>{done ? `領取 ◆ ${a.reward}` : `◆ ${a.reward}`}</button>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <MenuItem onClick={onBack} hot>返回標題</MenuItem>
         </Win>
       } />
@@ -232,7 +248,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
     else if (node.kind === 'shop') action = { text: `漂流商店的老闆揮著手。你有 ${run.shells} 枚貝殼幣。`, btn: '逛商店', fn: () => setPanel('shop') };
     else action = rested
       ? { text: '夥伴們休息好了，準備出發。', btn: '繼續航行', fn: onNext }
-      : { text: '找到一座小島可以紮營：全隊回復 60% HP，倒下的夥伴也會醒來。', btn: '紮營休息', fn: () => { healParty(run, 0.6, true); setRested(true); } };
+      : { text: `找到一座小島可以紮營：全隊回復 ${Math.round((0.6 + (run.perks?.camp ?? 0)) * 100)}% HP，倒下的夥伴也會醒來。`, btn: '紮營休息', fn: () => { healParty(run, 0.6 + (run.perks?.camp ?? 0), true); setRested(true); } };
   }
   const hv = opts[hover] ?? opts[0];
 
@@ -525,7 +541,7 @@ export function EventScreen({ vp, run, ev, onDone }: { vp: Viewport; run: RunSta
           <p>{ev.text}</p>
           {result ? <>
             <p class="accent">{result}</p>
-            <MenuItem onClick={onDone} hot>繼續航行</MenuItem>
+            <MenuItem onClick={onDone} hot>{run.eventFight ? '⚔ 開始戰鬥' : '繼續航行'}</MenuItem>
           </> : ev.options.map((o, i) => {
             const ok = o.can ? o.can(run) : true;
             return <MenuItem key={i} disabled={!ok} onClick={() => { setResult(o.act(run)); saveRun(run); }} sub={o.hint}>{o.label}</MenuItem>;

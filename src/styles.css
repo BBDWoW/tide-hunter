@@ -340,3 +340,10 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .sm-bar em { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #fff; }
 .mutant-tag { color: #ff8af0; font-size: 0.85em; text-shadow: 0 0 6px rgba(255, 138, 240, 0.7); white-space: nowrap; }
 .env-hint { color: #8fe0b0; margin: 2px 0; }
+
+/* ── M4：成就與稱號 ── */
+.ach-row { display: flex; align-items: center; gap: 0.8em; padding: 0.35em 0.5em; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+.ach-row .grow { display: grid; }
+.ach-row.ready { background: rgba(255, 207, 74, 0.1); }
+.ach-row.got b { color: var(--amber); }
+.title-badge { margin-top: calc(var(--u) * 1); font-size: max(10px, calc(var(--u) * 3.4)); color: #ffe9a0; background: rgba(5, 10, 32, 0.55); border: 1px solid rgba(255, 207, 74, 0.6); padding: 0.1em 0.8em; }
