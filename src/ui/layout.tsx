@@ -7,9 +7,18 @@ export const SCENE_W = 256, SCENE_H = 144;
 
 export interface Viewport { portrait: boolean; w: number; h: number; u: number }
 
+// 手機的瀏海、底部橫條等安全區域（加到主畫面全螢幕時才會有值）
+function safeInsets() {
+  const cs = getComputedStyle(document.documentElement);
+  const v = (k: string) => parseFloat(cs.getPropertyValue(k)) || 0;
+  return { t: v('--sat'), r: v('--sar'), b: v('--sab'), l: v('--sal') };
+}
+
 function measure(): Viewport {
-  const vw = window.innerWidth, vh = window.innerHeight;
-  const portrait = vh > vw * 1.15;
+  const ins = safeInsets();
+  const portraitRaw = window.innerHeight > window.innerWidth * 1.15;
+  const vw = window.innerWidth - (portraitRaw ? 0 : ins.l + ins.r), vh = window.innerHeight - (portraitRaw ? 0 : ins.t + ins.b);
+  const portrait = portraitRaw;
   if (portrait) {
     const w = vw, h = Math.round((w * 9) / 16);
     return { portrait, w, h, u: w / SCENE_W };

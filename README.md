@@ -18,6 +18,12 @@ npm run preview  # 預覽打包結果
 推到 `main` 分支時，GitHub Actions 會自動打包並部署到 GitHub Pages（設定在 `.github/workflows/deploy.yml`）。
 第一次使用前，要在儲存庫的 **Settings → Pages → Build and deployment → Source** 選 **GitHub Actions**。
 
+## 加到手機主畫面
+
+- `public/manifest.webmanifest`：App 名稱、全螢幕、圖標；`index.html` 有 iPhone 專用的設定
+- 圖標在 `public/`（`icon-192.png`、`icon-512.png`、`icon-maskable-512.png`、`apple-touch-icon.png`），想換圖標直接替換這幾張
+- iPhone：用 Safari 打開 → 分享 → 加入主畫面；Android：用 Chrome 打開 → 選單 → 安裝應用程式
+
 ## 版本與更新通知
 
 - 每次更新都要在 `src/data/changelog.json` **最上面**加一筆（版本號、日期、更新項目）。主畫面的「📢 通知」會列出這些內容，右下角顯示目前版本
