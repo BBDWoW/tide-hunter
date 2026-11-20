@@ -35,7 +35,7 @@ export const ABILITIES: Record<AbilityId, { name: string; desc: string }> = {
   none: { name: '—', desc: '' },
 };
 
-export type Category = '魚類' | '甲殼' | '水鳥' | '海怪' | '礦物' | '水母' | '抽象' | '骷髏' | '龍' | '巨獸' | '神獸';
+export type Category = '魚類' | '甲殼' | '水鳥' | '海怪' | '礦物' | '水母' | '抽象' | '骷髏' | '龍' | '巨獸' | '神獸' | '機械';
 
 export interface Form {
   id: string;
@@ -197,6 +197,100 @@ const F: Form[] = [
   { id: 'lavadragon', name: '熔岩海龍王', family: 'lavadragon', stage: 3, rarity: 'A', category: '龍', elems: ['fire', 'water'], sprite: 'lavadragon', pal: 'lavaeel',
     base: { hp: 100, atk: 82, def: 78, spd: 58 }, ability: 'colossal',
     learn: [[1, 'eruption'], [1, 'lavaflow'], [1, 'tidewave'], [1, 'heatup']], desc: '熔岩裂谷的霸主，在岩漿與海水的交界處沉睡。' },
+  // ── 美術包新增角色（31 隻） ──
+  { id: 'thunder_wyrmling', name: '雷靈幼龍', family: 'thunderline', stage: 1, rarity: 'S', category: '龍', elems: ['elec', 'fly'], sprite: 'thunder_wyrmling', pal: 'water',
+    base: { hp: 62, atk: 70, def: 56, spd: 76 }, ability: 'static',
+    learn: [[1, 'zap'], [1, 'gust'], [12, 'thunder']], evolve: [{ to: 'sky_thunder_dragon', level: 16 }], desc: '在雷雨中誕生的小龍，打噴嚏的時候會冒出電火花。' },
+  { id: 'sky_thunder_dragon', name: '天雷蒼龍', family: 'thunderline', stage: 3, rarity: 'S', category: '龍', elems: ['elec', 'fly'], sprite: 'sky_thunder_dragon', pal: 'water',
+    base: { hp: 88, atk: 108, def: 78, spd: 100 }, ability: 'stormking',
+    learn: [[16, 'divebomb'], [18, 'stormfang'], [20, 'roar']], desc: '駕著雷雲巡視海面的蒼龍，翅膀一拍就是一道落雷。' },
+  { id: 'tide_cell', name: '潮汐胞體', family: 'tideline', stage: 1, rarity: 'A', category: '抽象', elems: ['water', 'dark'], sprite: 'tide_cell', pal: 'water',
+    base: { hp: 56, atk: 52, def: 58, spd: 54 }, ability: 'moist',
+    learn: [[1, 'watergun'], [1, 'darkbite'], [10, 'surge']], evolve: [{ to: 'deepsea_star_vortex', level: 16 }], desc: '隨著潮汐脈動的神秘胞體，裡面好像藏著一小片星空。' },
+  { id: 'deepsea_star_vortex', name: '深海星渦', family: 'tideline', stage: 3, rarity: 'A', category: '抽象', elems: ['water', 'dark'], sprite: 'deepsea_star_vortex', pal: 'water',
+    base: { hp: 90, atk: 92, def: 84, spd: 80 }, ability: 'oceanpower',
+    learn: [[16, 'tidewave'], [16, 'soulsip'], [18, 'whalecry'], [20, 'abyssmaw']], desc: '在深海捲起星光漩渦的存在，據說漩渦的盡頭連著夜空。' },
+  { id: 'snow_crystal_spirit', name: '雪晶靈', family: 'snowspirit', stage: 1, rarity: 'N', category: '抽象', elems: ['ice'], sprite: 'snow_crystal_spirit', pal: 'water',
+    base: { hp: 48, atk: 44, def: 52, spd: 52 }, ability: 'regen',
+    learn: [[1, 'icepebble'], [1, 'hail'], [15, 'frostfang']], desc: '雪花聚在一起變成的小精靈，摸起來涼涼軟軟的。' },
+  { id: 'frost_wing_core', name: '霜翼核', family: 'frostwing', stage: 2, rarity: 'B', category: '抽象', elems: ['ice', 'fly'], sprite: 'frost_wing_core', pal: 'water',
+    base: { hp: 58, atk: 70, def: 56, spd: 84 }, ability: 'firststrike',
+    learn: [[1, 'icepebble'], [1, 'gust'], [14, 'frostfang'], [18, 'aurorabeam']], desc: '冰核長出了霜之翼，在冰峽之間飛得飛快。' },
+  { id: 'ice_ink_beast', name: '冰墨獸', family: 'iceink', stage: 2, rarity: 'B', category: '巨獸', elems: ['ice', 'dark'], sprite: 'ice_ink_beast', pal: 'water',
+    base: { hp: 66, atk: 76, def: 60, spd: 66 }, ability: 'thickfat',
+    learn: [[1, 'darkbite'], [1, 'icepebble'], [14, 'soulsip'], [18, 'icebeam']], desc: '會噴出冰冷墨汁的野獸，墨汁一碰到空氣就結成冰。' },
+  { id: 'frost_crystal_fawn', name: '霜晶幼鹿', family: 'frostdeer', stage: 1, rarity: 'SSR', category: '神獸', elems: ['ice', 'grass'], sprite: 'frost_crystal_fawn', pal: 'water',
+    base: { hp: 70, atk: 68, def: 68, spd: 72 }, ability: 'waterbarrier',
+    learn: [[1, 'icepebble'], [1, 'leafblade'], [16, 'frostfang']], evolve: [{ to: 'frost_qilin', level: 20 }], desc: '鹿角是透明冰晶的小鹿，走過的地方會開出霜花。' },
+  { id: 'frost_qilin', name: '極霜麒麟', family: 'frostdeer', stage: 3, rarity: 'SSR', category: '神獸', elems: ['ice', 'grass'], sprite: 'frost_qilin', pal: 'water',
+    base: { hp: 96, atk: 104, def: 92, spd: 96 }, ability: 'waterbarrier', extra: ['dragonpresence'],
+    learn: [[20, 'icebeam'], [20, 'aurorabeam'], [22, 'thornburst'], [24, 'surge']], desc: '守護冰封峽灣的聖獸，祥雲般的寒氣讓萬物沉睡。' },
+  { id: 'lava_bubble', name: '熔岩泡', family: 'lavabubble', stage: 1, rarity: 'N', category: '抽象', elems: ['fire'], sprite: 'lava_bubble', pal: 'water',
+    base: { hp: 46, atk: 50, def: 44, spd: 56 }, ability: 'blazing',
+    learn: [[1, 'ember'], [13, 'flamebite']], desc: '從岩漿裡冒出來的泡泡，有了意識之後就到處亂跳。' },
+  { id: 'fire_rock_bug', name: '火岩蟲', family: 'firebug', stage: 1, rarity: 'N', category: '甲殼', elems: ['fire', 'rock'], sprite: 'fire_rock_bug', pal: 'water',
+    base: { hp: 48, atk: 54, def: 60, spd: 42 }, ability: 'hardshell',
+    learn: [[1, 'ember'], [1, 'pebble'], [14, 'lavaflow']], desc: '背著燒紅岩塊的小蟲，喜歡躲在熔岩縫裡取暖。' },
+  { id: 'magma_core_rock', name: '熔核巨石', family: 'magmarock', stage: 2, rarity: 'B', category: '礦物', elems: ['rock', 'fire'], sprite: 'magma_core_rock', pal: 'water',
+    base: { hp: 72, atk: 74, def: 90, spd: 34 }, ability: 'sturdy',
+    learn: [[1, 'pebble'], [1, 'ember'], [14, 'rockslide'], [18, 'eruption']], desc: '裡面裹著熔岩核心的巨石，平常一動也不動。' },
+  { id: 'ember_chick', name: '炎羽雛鳳', family: 'phoenix', stage: 1, rarity: 'SSR', category: '神獸', elems: ['fire', 'fly'], sprite: 'ember_chick', pal: 'water',
+    base: { hp: 66, atk: 74, def: 58, spd: 80 }, ability: 'blazing',
+    learn: [[1, 'ember'], [1, 'peck'], [16, 'flamebite']], evolve: [{ to: 'cinder_phoenix', level: 20 }], desc: '羽毛是火焰做的雛鳥，生氣時全身會燒得更旺。' },
+  { id: 'cinder_phoenix', name: '燼天凰', family: 'phoenix', stage: 3, rarity: 'SSR', category: '神獸', elems: ['fire', 'fly'], sprite: 'cinder_phoenix', pal: 'water',
+    base: { hp: 92, atk: 110, def: 80, spd: 104 }, ability: 'blazing', extra: ['undying'],
+    learn: [[20, 'eruption'], [20, 'divebomb'], [22, 'lavaflow'], [24, 'heatup']], desc: '浴火重生的神鳥，傳說牠倒下的地方會長出新的火山。' },
+  { id: 'sprout_orb', name: '芽靈球', family: 'sproutorb', stage: 1, rarity: 'N', category: '抽象', elems: ['grass'], sprite: 'sprout_orb', pal: 'water',
+    base: { hp: 52, atk: 44, def: 54, spd: 48 }, ability: 'photosyn',
+    learn: [[1, 'leafblade'], [1, 'vinebind'], [12, 'photosynth']], desc: '聖林裡滾來滾去的嫩芽球，曬到太陽就會長出新葉。' },
+  { id: 'mushroom_sprite', name: '傘菇妖', family: 'mushroom', stage: 2, rarity: 'B', category: '抽象', elems: ['grass', 'dark'], sprite: 'mushroom_sprite', pal: 'water',
+    base: { hp: 62, atk: 66, def: 62, spd: 52 }, ability: 'stinger',
+    learn: [[1, 'leafblade'], [1, 'sporecloud'], [14, 'soulsip'], [18, 'thornburst']], desc: '頂著毒傘的妖精，會在聖林的陰影裡惡作劇。' },
+  { id: 'vine_antler_deer', name: '藤角鹿', family: 'vinedeer', stage: 3, rarity: 'A', category: '巨獸', elems: ['grass'], sprite: 'vine_antler_deer', pal: 'water',
+    base: { hp: 84, atk: 90, def: 80, spd: 78 }, ability: 'regen',
+    learn: [[1, 'leafblade'], [1, 'vinebind'], [1, 'photosynth'], [14, 'thornburst']], desc: '聖林域的守護者，鹿角上纏繞的藤蔓會開出花。' },
+  { id: 'shadow_soul_flame', name: '影魂火', family: 'soulflame', stage: 1, rarity: 'N', category: '抽象', elems: ['dark', 'fire'], sprite: 'shadow_soul_flame', pal: 'water',
+    base: { hp: 46, atk: 56, def: 40, spd: 60 }, ability: 'undying',
+    learn: [[1, 'darkbite'], [1, 'ember'], [12, 'bonecurse']], desc: '在無稽區飄蕩的鬼火，偶爾會模仿聽到的聲音。' },
+  { id: 'rune_wraith', name: '纏符靈', family: 'runewraith', stage: 2, rarity: 'B', category: '抽象', elems: ['dark', 'data'], sprite: 'rune_wraith', pal: 'water',
+    base: { hp: 60, atk: 72, def: 52, spd: 70 }, ability: 'static',
+    learn: [[1, 'darkbite'], [1, 'glitchwave'], [14, 'soulsip'], [18, 'datastorm']], desc: '身上纏滿看不懂的符文，符文一亮就會讓周圍的東西出錯。' },
+  { id: 'vine_trace_spirit', name: '藤痕靈', family: 'vinetrace', stage: 2, rarity: 'B', category: '抽象', elems: ['dark', 'grass'], sprite: 'vine_trace_spirit', pal: 'water',
+    base: { hp: 62, atk: 66, def: 60, spd: 64 }, ability: 'regen',
+    learn: [[1, 'darkbite'], [1, 'vinebind'], [14, 'sporecloud'], [18, 'soulsip']], desc: '只剩下藤蔓痕跡的影子生物，摸不到也抓不住。' },
+  { id: 'phantom_cub', name: '虛影幼獸', family: 'voidline', stage: 1, rarity: 'S', category: '巨獸', elems: ['dark'], sprite: 'phantom_cub', pal: 'water',
+    base: { hp: 60, atk: 70, def: 56, spd: 74 }, ability: 'firststrike',
+    learn: [[1, 'darkbite'], [10, 'bonecurse']], evolve: [{ to: 'void_star_dragon', level: 16 }], desc: '半透明的小獸，眨眼間就會從視線裡消失。' },
+  { id: 'void_star_dragon', name: '虛無星龍', family: 'voidline', stage: 3, rarity: 'S', category: '龍', elems: ['dark', 'fly'], sprite: 'void_star_dragon', pal: 'water',
+    base: { hp: 90, atk: 106, def: 78, spd: 96 }, ability: 'lure', extra: ['dragonpresence'],
+    learn: [[16, 'abyssmaw'], [16, 'gust'], [18, 'soulsip'], [20, 'datastorm']], desc: '無稽區的主宰，鱗片上倒映著不存在的星空。' },
+  { id: 'cubelet', name: '立方子', family: 'cubelet', stage: 1, rarity: 'N', category: '機械', elems: ['data'], sprite: 'cubelet', pal: 'water',
+    base: { hp: 46, atk: 48, def: 58, spd: 50 }, ability: 'sturdy',
+    learn: [[1, 'bitshot'], [10, 'firewall']], desc: '由小方塊組成的生命，會把自己拆開再重新拼起來。' },
+  { id: 'orbit_construct', name: '環構機', family: 'orbit', stage: 2, rarity: 'B', category: '機械', elems: ['data', 'elec'], sprite: 'orbit_construct', pal: 'water',
+    base: { hp: 60, atk: 68, def: 64, spd: 70 }, ability: 'static',
+    learn: [[1, 'bitshot'], [1, 'zap'], [14, 'glitchwave'], [18, 'thunder']], desc: '核心周圍有圓環不停旋轉的構造體，轉得越快力量越強。' },
+  { id: 'polyhedral_sentinel', name: '多面傀', family: 'polyhedral', stage: 2, rarity: 'A', category: '機械', elems: ['data', 'rock'], sprite: 'polyhedral_sentinel', pal: 'water',
+    base: { hp: 70, atk: 80, def: 88, spd: 52 }, ability: 'hardshell',
+    learn: [[1, 'bitshot'], [1, 'pebble'], [14, 'firewall'], [18, 'rockslide']], desc: '由多面體組成的守衛，會擋在域核的入口不讓人通過。' },
+  { id: 'domain_coreling', name: '域核幼體', family: 'domaincore', stage: 1, rarity: 'S', category: '抽象', elems: ['data'], sprite: 'domain_coreling', pal: 'water',
+    base: { hp: 58, atk: 66, def: 62, spd: 70 }, ability: 'static',
+    learn: [[1, 'bitshot'], [1, 'glitchwave'], [14, 'datastorm']], evolve: [{ to: 'domain_realm_core', level: 16 }], desc: '剛剛誕生的域核，發出閃爍的光芒。' },
+  { id: 'domain_realm_core', name: '域界核心', family: 'domaincore', stage: 3, rarity: 'S', category: '抽象', elems: ['data'], sprite: 'domain_realm_core', pal: 'water',
+    base: { hp: 92, atk: 100, def: 90, spd: 86 }, ability: 'waterbarrier',
+    learn: [[16, 'datastorm'], [16, 'firewall'], [18, 'thunder'], [20, 'focus']], desc: '支撐整個域核區域的核心，環繞著它的光帶就是區域的邊界。' },
+  { id: 'cube_coreling', name: '方核幼體', family: 'cubecore', stage: 1, rarity: 'A', category: '機械', elems: ['data', 'water'], sprite: 'cube_coreling', pal: 'water',
+    base: { hp: 56, atk: 60, def: 66, spd: 58 }, ability: 'hardshell',
+    learn: [[1, 'bitshot'], [1, 'watergun'], [12, 'firewall']], evolve: [{ to: 'matrix_domain_core', level: 16 }], desc: '被水晶環包住的小方核，會把海水轉換成資料。' },
+  { id: 'matrix_domain_core', name: '矩陣域核', family: 'cubecore', stage: 3, rarity: 'A', category: '機械', elems: ['data', 'water'], sprite: 'matrix_domain_core', pal: 'water',
+    base: { hp: 86, atk: 94, def: 96, spd: 72 }, ability: 'hardshell',
+    learn: [[16, 'datastorm'], [16, 'tidewave'], [18, 'firewall'], [20, 'crabcannon']], desc: '無數方核排成矩陣的巨大存在，運算著海流的方向。' },
+  { id: 'chaos_zygote', name: '混沌胚核', family: 'chaosline', stage: 1, rarity: 'SSR', category: '抽象', elems: ['data', 'dark'], sprite: 'chaos_zygote', pal: 'water',
+    base: { hp: 68, atk: 76, def: 62, spd: 74 }, ability: 'lure',
+    learn: [[1, 'bitshot'], [1, 'darkbite'], [14, 'glitchwave']], evolve: [{ to: 'chaos_eye_realm', level: 18 }], desc: '混沌之中凝聚成形的胚核，裡面的眼睛一直在看著你。' },
+  { id: 'chaos_eye_realm', name: '渾沌瞳域', family: 'chaosline', stage: 3, rarity: 'SSR', category: '抽象', elems: ['data', 'dark'], sprite: 'chaos_eye_realm', pal: 'water',
+    base: { hp: 98, atk: 112, def: 86, spd: 96 }, ability: 'lure', extra: ['dragonpresence'],
+    learn: [[18, 'datastorm'], [18, 'abyssmaw'], [20, 'glitchwave'], [22, 'soulsip']], desc: '被這隻眼睛注視的地方，現實就會開始崩解。' },
   // ── 霸主 ──
   { id: 'whale', name: '鯨嘯', family: 'whale', stage: 3, rarity: 'A', category: '巨獸', elems: ['water'], sprite: 'whale', pal: 'whale',
     base: { hp: 110, atk: 74, def: 70, spd: 46 }, ability: 'colossal',
@@ -207,7 +301,10 @@ export const FORMS: Record<string, Form> = Object.fromEntries(F.map((f) => [f.id
 export const STARTERS = ['water1', 'fire1', 'grass1'];
 
 // 淺灘出現的野生生物（以家族的第一個形態表示）
-export const ICE_POOL = ['iceshrimp', 'snowgull', 'icegolem', 'walrus', 'aurorawhale', 'jelly1', 'zaploach', 'starsand', 'thunderfang', 'chubby1'];
-export const LAVA_POOL = ['lavasnail', 'magmaeel', 'obsidiancrab', 'cinderbone', 'magmacore', 'bonebream', 'starsand', 'bubcrab', 'dragon', 'chubby1'];
-export const ZONE1_POOL = ['bubcrab', 'starsand', 'zaploach', 'jelly1', 'gull1', 'coral', 'bonebream', 'angler', 'dragon', 'thunderfang', 'chubby1'];
+export const ICE_POOL = ['snow_crystal_spirit', 'frost_wing_core', 'ice_ink_beast', 'frost_crystal_fawn', 'iceshrimp', 'snowgull', 'icegolem', 'walrus', 'aurorawhale', 'jelly1', 'zaploach', 'starsand', 'thunderfang', 'chubby1'];
+export const LAVA_POOL = ['lava_bubble', 'fire_rock_bug', 'magma_core_rock', 'ember_chick', 'lavasnail', 'magmaeel', 'obsidiancrab', 'cinderbone', 'magmacore', 'bonebream', 'starsand', 'bubcrab', 'dragon', 'chubby1'];
+export const FOREST_POOL = ['sprout_orb', 'mushroom_sprite', 'vine_antler_deer', 'coral', 'grass1', 'frost_crystal_fawn'];
+export const VOID_POOL = ['shadow_soul_flame', 'rune_wraith', 'vine_trace_spirit', 'phantom_cub', 'bonebream', 'cinderbone', 'chaos_zygote'];
+export const CORE_POOL = ['cubelet', 'orbit_construct', 'polyhedral_sentinel', 'domain_coreling', 'cube_coreling', 'chaos_zygote', 'zaploach'];
+export const ZONE1_POOL = ['bubcrab', 'starsand', 'zaploach', 'jelly1', 'gull1', 'coral', 'bonebream', 'angler', 'dragon', 'thunderfang', 'chubby1', 'thunder_wyrmling', 'tide_cell'];
 export const ZONE1_BOSS = 'whale';

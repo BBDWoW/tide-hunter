@@ -42,12 +42,15 @@ function pxEllipse(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: nu
 }
 
 // ── 海景主題 ──
-export type ThemeId = 'day' | 'sunset' | 'ice' | 'lava';
+export type ThemeId = 'day' | 'sunset' | 'ice' | 'lava' | 'forest' | 'void' | 'core';
 interface Theme { sky: string[]; sea: string[]; far: string; near: string; sun: string; glow: string; cloud: [string, string]; foam: string; glint: string; horizon: number; sunX: number; sunY: number; sunR: number }
 const THEMES: Record<ThemeId, Theme> = {
   day: { sky: ['#2f7fd8', '#5fb0f0', '#c8f0ff'], sea: ['#7fd8f0', '#2fa4d6', '#0d5f9e', '#073a6e'], far: '#8cc4dc', near: '#5f9fc0', sun: '#fffbe0', glow: '#fff1a8', cloud: ['#ffffff', '#cfe4fa'], foam: '#f2fdff', glint: '#ffffff', horizon: 46, sunX: 206, sunY: 14, sunR: 7 },
   ice: { sky: ['#7aa8d8', '#b8daf4', '#eef8ff'], sea: ['#c8eef8', '#7ac0e0', '#2a72a8', '#103e6a'], far: '#e4f2fc', near: '#c4dcf0', sun: '#ffffff', glow: '#eaf6ff', cloud: ['#ffffff', '#d4e6f6'], foam: '#ffffff', glint: '#ffffff', horizon: 48, sunX: 62, sunY: 16, sunR: 6 },
   lava: { sky: ['#160606', '#4a1410', '#a8341a', '#ff8a3a'], sea: ['#b8502a', '#5e2016', '#2a0e10', '#120608'], far: '#3a1612', near: '#1e0a0a', sun: '#ffd08a', glow: '#ff6a2a', cloud: ['#5a2a24', '#341612'], foam: '#ffb070', glint: '#ffd08a', horizon: 54, sunX: 204, sunY: 30, sunR: 9 },
+  forest: { sky: ['#2a6a4a', '#5aa86a', '#c8ecb0'], sea: ['#7ad8b0', '#2a9a7a', '#0e5a4a', '#063028'], far: '#3a7a4a', near: '#245a34', sun: '#fffbd0', glow: '#e8ffb0', cloud: ['#f4fff0', '#c8e8c0'], foam: '#e8fff0', glint: '#fffbd0', horizon: 50, sunX: 70, sunY: 18, sunR: 7 },
+  void: { sky: ['#06020e', '#1e0a34', '#4a1a6a', '#8a4ab0'], sea: ['#6a3a9a', '#2a1050', '#12062a', '#06020e'], far: '#1a0a2a', near: '#0e0418', sun: '#e8d8ff', glow: '#a86aff', cloud: ['#4a2a6a', '#2a1440'], foam: '#c89aff', glint: '#e8d8ff', horizon: 52, sunX: 200, sunY: 22, sunR: 8 },
+  core: { sky: ['#020a1a', '#062a4a', '#0a5a7a', '#2ab0c8'], sea: ['#2ac8d8', '#0a6a8a', '#04304a', '#020e1e'], far: '#0a3a5a', near: '#062440', sun: '#e8ffff', glow: '#5ff1ff', cloud: ['#1a4a6a', '#0e2a44'], foam: '#8affff', glint: '#e8ffff', horizon: 50, sunX: 128, sunY: 20, sunR: 7 },
   sunset: { sky: ['#1d1d5c', '#6a2f7a', '#e0607a', '#ffb070'], sea: ['#f0a07a', '#a84e78', '#3a2a6a', '#141640'], far: '#8a4a7a', near: '#5a2f62', sun: '#fff0b0', glow: '#ffb070', cloud: ['#ffc4a8', '#c8708a'], foam: '#ffe0c8', glint: '#fff6c8', horizon: 74, sunX: 128, sunY: 70, sunR: 14 },
 };
 
@@ -117,6 +120,24 @@ function backdrop(id: ThemeId) {
       for (let yy = 0; yy < 24; yy++) { x.fillStyle = yy % 3 ? '#ff6a1a' : '#ffb04a'; x.fillRect(vx - 2 + Math.round(Math.sin(yy * 0.6) * 2), hz - 28 + yy, 2, 1); }
       x.fillStyle = 'rgba(255,120,40,0.25)'; for (let r = 4; r < 22; r += 3) pxCircle(x, vx, hz - 32, r, 'rgba(255,120,40,0.06)', hz - 28);
     }
+    if (id === 'forest') {
+      // 巨樹剪影
+      for (const [cx, h, w] of [[40, 38, 16], [96, 30, 12], [160, 44, 20], [224, 34, 14]] as const) {
+        x.fillStyle = '#1e4a2a'; x.fillRect(cx - 2, hz - h + 10, 4, h - 10);
+        pxCircle(x, cx, hz - h + 8, w / 2 + 2, '#1e4a2a', hz); pxCircle(x, cx - 6, hz - h + 14, w / 2 - 1, '#245a34', hz); pxCircle(x, cx + 6, hz - h + 13, w / 2 - 1, '#2a6a3a', hz);
+      }
+    }
+    if (id === 'void') {
+      // 浮空碎石
+      const r = seeded(91);
+      for (let i = 0; i < 9; i++) { const cx = Math.floor(r() * W), cy = 8 + Math.floor(r() * (hz - 18)), w = 3 + Math.floor(r() * 7); x.fillStyle = '#2a1440'; x.fillRect(cx, cy, w, 3); x.fillRect(cx + 1, cy + 3, w - 2, 2); x.fillStyle = '#6a3a9a'; x.fillRect(cx, cy, w, 1); }
+    }
+    if (id === 'core') {
+      // 海面網格
+      x.fillStyle = 'rgba(95,241,255,0.18)';
+      for (let k = 0; k < 8; k++) { const y = Math.round(hz + 2 + Math.pow(k / 8, 1.6) * (H - hz)); x.fillRect(0, y, W, 1); }
+      for (let k = -12; k <= 12; k++) for (let y = hz; y < H; y += 2) x.fillRect(Math.round(W / 2 + k * 6 * (1 + (y - hz) / 12)), y, 1, 1);
+    }
     // 地平線亮線
     x.fillStyle = th.foam; x.globalAlpha = 0.6; x.fillRect(0, hz, W, 1); x.globalAlpha = 1;
   });
@@ -175,6 +196,21 @@ export function drawSea(ctx: CanvasRenderingContext2D, t: number, id: ThemeId = 
     for (let i = 0; i < 40; i++) { const x = (i * 47 + Math.sin(t + i) * 6 + t * 6) % W, y = (i * 29 + t * (10 + (i % 4) * 3)) % H; ctx.fillRect(Math.round(x), Math.round(y), i % 5 ? 1 : 2, i % 5 ? 1 : 2); }
     return;
   }
+  if (id === 'forest') {
+    // 螢火光點
+    for (let i = 0; i < 26; i++) { const x = (i * 41 + Math.sin(t * 0.8 + i) * 8) % W, y = (i * 23 + Math.cos(t * 0.6 + i) * 5) % (H - 10); if (Math.sin(t * 3 + i) < 0) continue; ctx.fillStyle = i % 3 ? 'rgba(230,255,150,0.9)' : 'rgba(255,255,220,0.9)'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }
+    return;
+  }
+  if (id === 'void') {
+    // 錯亂方塊
+    for (let i = 0; i < 14; i++) { if ((Math.floor(t * 6) + i * 7) % 5) continue; const x = (i * 67 + Math.floor(t * 3) * 13) % W, y = (i * 37) % H; ctx.fillStyle = i % 2 ? 'rgba(200,154,255,0.7)' : 'rgba(95,241,255,0.5)'; ctx.fillRect(x, y, 2 + (i % 3) * 2, 1 + (i % 2)); }
+    return;
+  }
+  if (id === 'core') {
+    // 往上流動的資料光點
+    for (let i = 0; i < 32; i++) { const x = (i * 29) % W, y = H - ((i * 17 + t * (12 + (i % 4) * 4)) % H); ctx.fillStyle = i % 4 ? 'rgba(95,241,255,0.75)' : 'rgba(255,255,255,0.9)'; ctx.fillRect(x, Math.round(y), 1, i % 3 ? 2 : 1); }
+    return;
+  }
   if (id === 'lava') {
     // 往上飄的火星
     for (let i = 0; i < 30; i++) { const x = (i * 53 + Math.sin(t * 1.5 + i) * 4) % W, y = H - ((i * 31 + t * (8 + (i % 5) * 3)) % H); ctx.fillStyle = i % 3 ? 'rgba(255,140,40,0.8)' : 'rgba(255,220,120,0.9)'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }
@@ -195,6 +231,9 @@ export const BATTLE = { player: { x: 66, y: 100 }, enemy: { x: 190, y: 66 } };
 const PLAT: Record<string, { rim: [string, string]; top: [string, string]; side: [string, string]; mid: [string, string]; deco: string[]; grass: string | null; rtop: [string, string]; rtop2: [string, string]; rbot: [string, string]; rmid: [string, string] }> = {
   day: { rim: ['#8fd8e8', '#bfeff6'], top: ['#fff4d0', '#f6e2a8'], side: ['#b8915a', '#c9a468'], mid: ['#e0c080', '#ecd394'], deco: ['#fffaf0', '#ff9a8a'], grass: '#5fae5a', rtop: ['#7ab86a', '#5fa25a'], rtop2: ['#a6d48a', '#8cc474'], rbot: ['#5a6878', '#6a7888'], rmid: ['#a8b0b8', '#8c96a2'] },
   ice: { rim: ['#ffffff', '#c8f0fa'], top: ['#ffffff', '#eef8ff'], side: ['#8ac0e0', '#a8d4ee'], mid: ['#d8eefa', '#e8f6ff'], deco: ['#ffffff', '#9ad8ff'], grass: null, rtop: ['#ffffff', '#e4f2fc'], rtop2: ['#ffffff', '#eef8ff'], rbot: ['#4a6a8a', '#5a7a9a'], rmid: ['#8aa8c4', '#7a98b4'] },
+  forest: { rim: ['#c8f4d8', '#9ae4b8'], top: ['#7ac85a', '#6ab84a'], side: ['#5a3a20', '#6a4a28'], mid: ['#5aa84a', '#4c9a40'], deco: ['#ffe08a', '#ff9ab0'], grass: '#2a7a3a', rtop: ['#4c9a40', '#3a8a34'], rtop2: ['#7ac85a', '#6ab84a'], rbot: ['#3a2a1a', '#4a3420'], rmid: ['#6a5a3a', '#5a4a30'] },
+  void: { rim: ['#c89aff', '#8a5ad0'], top: ['#3a2a5a', '#2e2048'], side: ['#140a24', '#1c0e30'], mid: ['#24163c', '#2a1a44'], deco: ['#c89aff', '#5ff1ff'], grass: null, rtop: ['#4a2a7a', '#3a1a6a'], rtop2: ['#2a1a44', '#24163c'], rbot: ['#0a0414', '#120820'], rmid: ['#1e1034', '#18102c'] },
+  core: { rim: ['#8affff', '#5ff1ff'], top: ['#1a4a6a', '#164060'], side: ['#062440', '#0a2a48'], mid: ['#0e3a5a', '#103e60'], deco: ['#5ff1ff', '#ffffff'], grass: null, rtop: ['#2ab0c8', '#1a90b0'], rtop2: ['#164060', '#1a4a6a'], rbot: ['#041828', '#062030'], rmid: ['#0a2a48', '#0e3050'] },
   lava: { rim: ['#ff8a3a', '#ffb070'], top: ['#5a4a4a', '#4a3a3a'], side: ['#2a1a1a', '#1a1010'], mid: ['#3a2a2a', '#443232'], deco: ['#ff7a1a', '#ffd04a'], grass: null, rtop: ['#ff6a1a', '#c84a1a'], rtop2: ['#3a2a2a', '#4a3434'], rbot: ['#1a0e0e', '#24140e'], rmid: ['#3a2a2a', '#2e2020'] },
 };
 function shoal(th = 'day') {
@@ -486,7 +525,7 @@ export function drawPort(ctx: CanvasRenderingContext2D, t: number, bay: string[]
 }
 
 // ── 海圖：俯視的航線 ──
-export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'event' | 'boss';
+export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'event' | 'portal' | 'boss';
 export interface ChartNode { kind: NodeKind }
 export function chartPos(step: number, idx: number, n: number): [number, number] {
   const x = 16 + step * 25, ys = n === 1 ? [60] : n === 2 ? [42, 80] : [30, 60, 90];
@@ -496,6 +535,9 @@ const CHART_COL: Record<string, { sea: string[]; land: [string, string]; sand: s
   day: { sea: ['#0a3f7a', '#1676b8', '#3fb6d8', '#8fe4ee'], land: ['#5fae5a', '#4c9a4c'], sand: '#f2dc9c', foam: '#e8fbff' },
   ice: { sea: ['#1a4a7a', '#3a7ab0', '#8ac4e4', '#d8f0fa'], land: ['#ffffff', '#e4f0fa'], sand: '#a8d0ec', foam: '#ffffff' },
   lava: { sea: ['#140606', '#3a1210', '#7a2a18', '#c8501e'], land: ['#2a1a1a', '#3a2424'], sand: '#ff7a1a', foam: '#ffb070' },
+  forest: { sea: ['#063028', '#0e5a4a', '#2a9a7a', '#7ad8b0'], land: ['#2a7a3a', '#1e6a30'], sand: '#a8d890', foam: '#e8fff0' },
+  void: { sea: ['#06020e', '#12062a', '#2a1050', '#6a3a9a'], land: ['#2a1a44', '#1e1034'], sand: '#8a5ad0', foam: '#c89aff' },
+  core: { sea: ['#020e1e', '#04304a', '#0a6a8a', '#2ac8d8'], land: ['#164060', '#1a4a6a'], sand: '#5ff1ff', foam: '#8affff' },
 };
 function chartBase(route: ChartNode[][], seed: number, theme = 'day') {
   const C = CHART_COL[theme] ?? CHART_COL.day;
@@ -520,7 +562,7 @@ function chartBase(route: ChartNode[][], seed: number, theme = 'day') {
     x.fillStyle = '#ff5a6e'; for (let i = 0; i < 6; i++) x.fillRect(cx, cy - 7 + i, 1, 1);
   });
 }
-const NODE_COL: Record<NodeKind, string> = { fish: '#f4f8ff', elite: '#c58cff', treasure: '#ffcf4a', camp: '#ff9a3a', shop: '#7ee3c8', event: '#9ad8ff', boss: '#e8304a' };
+const NODE_COL: Record<NodeKind, string> = { fish: '#f4f8ff', elite: '#c58cff', treasure: '#ffcf4a', camp: '#ff9a3a', shop: '#7ee3c8', event: '#9ad8ff', portal: '#c89aff', boss: '#e8304a' };
 function nodeIcon(ctx: CanvasRenderingContext2D, k: NodeKind, x: number, y: number) {
   ctx.fillStyle = '#141a33'; ctx.fillRect(x - 6, y - 14, 13, 11);
   ctx.fillStyle = NODE_COL[k]; ctx.fillRect(x - 5, y - 13, 11, 9);
@@ -529,12 +571,16 @@ function nodeIcon(ctx: CanvasRenderingContext2D, k: NodeKind, x: number, y: numb
   if (k === 'elite') { ctx.fillStyle = '#ffcf4a'; ctx.fillRect(x - 4, y - 12, 1, 1); ctx.fillRect(x + 4, y - 12, 1, 1); }
   if (k === 'camp') { ctx.fillRect(x, y - 12, 1, 1); ctx.fillRect(x - 1, y - 11, 3, 1); ctx.fillRect(x - 2, y - 10, 5, 1); ctx.fillRect(x - 3, y - 9, 7, 2); }
   if (k === 'treasure') { ctx.fillRect(x - 3, y - 11, 7, 6); ctx.fillStyle = '#ffcf4a'; ctx.fillRect(x - 2, y - 10, 5, 2); ctx.fillRect(x, y - 8, 1, 2); }
+  if (k === 'portal') { ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 1, y - 12, 3, 7); ctx.fillStyle = '#5ff1ff'; ctx.fillRect(x, y - 11, 1, 5); ctx.fillStyle = '#141a33'; ctx.fillRect(x - 3, y - 9, 1, 1); ctx.fillRect(x + 3, y - 9, 1, 1); }
   if (k === 'event') { ctx.fillRect(x - 2, y - 12, 5, 1); ctx.fillRect(x + 2, y - 11, 1, 2); ctx.fillRect(x, y - 9, 2, 1); ctx.fillRect(x, y - 8, 1, 1); ctx.fillRect(x, y - 6, 1, 1); }
   if (k === 'shop') { ctx.fillRect(x - 3, y - 11, 7, 1); ctx.fillRect(x - 2, y - 10, 1, 4); ctx.fillRect(x + 2, y - 10, 1, 4); ctx.fillRect(x - 3, y - 7, 7, 1); }
   if (k === 'boss') { ctx.fillRect(x - 3, y - 11, 7, 4); ctx.fillStyle = '#e8304a'; ctx.fillRect(x - 2, y - 10, 2, 2); ctx.fillRect(x + 1, y - 10, 2, 2); ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 2, y - 7, 1, 2); ctx.fillRect(x, y - 7, 1, 2); ctx.fillRect(x + 2, y - 7, 1, 2); }
 }
 function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number, theme = 'day') {
-  const fog = hex(theme === 'lava' ? '#3a2622' : '#e4edf8'), fog2 = hex(theme === 'lava' ? '#2a1a18' : '#c6d4e8');
+  const dark = theme === 'lava' || theme === 'void' || theme === 'core';
+  const FOG: Record<string, [string, string]> = { lava: ['#3a2622', '#2a1a18'], void: ['#1e1030', '#140a22'], core: ['#0a2a40', '#061c30'], forest: ['#e0f0e0', '#c4dcc4'] };
+  const [f1, f2] = FOG[theme] ?? ['#e4edf8', '#c6d4e8'];
+  const fog = hex(f1), fog2 = hex(f2);
   for (let y = 0; y < H; y++) {
     const wave = Math.sin(y * 0.18 + t * 0.6) * 3 + Math.sin(y * 0.05 - t * 0.3) * 4;
     const x0 = Math.round(fx + wave);
@@ -549,7 +595,7 @@ function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number, theme = '
   // 霧上的雲團
   for (let k = 0; k < 6; k++) {
     const cx = fx + 14 + ((k * 37 + t * 3) % Math.max(20, W - fx)), cy = 14 + k * 22;
-    ctx.drawImage(cloudSprite(theme === 'lava' ? 'lava' : 'day', k % 5), Math.round(cx - 30), cy);
+    ctx.drawImage(cloudSprite(dark ? (theme as ThemeId) : 'day', k % 5), Math.round(cx - 30), cy);
   }
 }
 

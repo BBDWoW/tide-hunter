@@ -96,6 +96,10 @@ const S: Skill[] = [
   { id: 'lavaflow', name: '熔岩流', elem: 'fire', power: 80, cost: 2, acc: 95, desc: '傾瀉熔岩，30% 使對手灼傷。', fx: { status: { id: 'burn', chance: 0.3 } }, anim: 'splash' },
   { id: 'eruption', name: '噴發', elem: 'fire', power: 110, cost: 3, acc: 90, desc: '火山般的猛烈噴發。', anim: 'beam' },
   { id: 'obsidianedge', name: '黑曜刃', elem: 'rock', power: 75, cost: 2, acc: 95, desc: '用黑曜石刃斬擊，30% 降低對手防禦。', fx: { stat: { key: 'def', delta: -1, self: false, chance: 0.3 } }, anim: 'hit' },
+  { id: 'bitshot', name: '位元射擊', elem: 'data', power: 40, cost: 0, acc: 100, desc: '射出一串位元攻擊。', anim: 'beam' },
+  { id: 'glitchwave', name: '錯亂波', elem: 'data', power: 0, cost: 1, acc: 90, desc: '使對手資料錯亂（技能可能變成別招）。', fx: { status: { id: 'glitch', chance: 1 } }, anim: 'beam' },
+  { id: 'datastorm', name: '資料風暴', elem: 'data', power: 95, cost: 3, acc: 90, desc: '狂暴的資料流，20% 使對手資料錯亂。', fx: { status: { id: 'glitch', chance: 0.2 } }, anim: 'beam' },
+  { id: 'firewall', name: '防火牆', elem: null, power: 0, cost: 1, acc: 100, desc: '產生最大 HP 30% 的護盾。', fx: { shield: 0.3 }, anim: 'buff' },
   { id: 'stormfang', name: '霆牙爆', elem: 'elec', power: 110, cost: 3, acc: 90, desc: '帶著落雷的撕咬，30% 使對手麻痺。', fx: { status: { id: 'para', chance: 0.3 } }, anim: 'beam' },
   { id: 'crabcannon', name: '鉗砲', elem: 'water', power: 90, cost: 2, acc: 85, desc: '從巨鉗發射高壓水砲。', anim: 'beam' },
 ];

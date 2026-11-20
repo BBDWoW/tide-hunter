@@ -19,8 +19,8 @@ for (const f of Object.values(FORMS)) {
   drawSprite(sx, f.sprite, PAL[f.pal], n, 0, { f: 1 });
   out.push({ path: `sprites_2frames/${f.sprite}.png`, data: strip.toDataURL('image/png') });
 }
-for (const id of ['day', 'sunset', 'ice', 'lava'] as const) out.push({ path: `scenes/bg-${id}.png`, data: sceneLayers.backdrop(id).toDataURL('image/png') });
-for (const th of ['day', 'ice', 'lava']) {
+for (const id of ['day', 'sunset', 'ice', 'lava', 'forest', 'void', 'core'] as const) out.push({ path: `scenes/bg-${id}.png`, data: sceneLayers.backdrop(id).toDataURL('image/png') });
+for (const th of ['day', 'ice', 'lava', 'forest', 'void', 'core']) {
   out.push({ path: `scenes/shoal-${th}.png`, data: sceneLayers.shoal(th).toDataURL('image/png') });
   out.push({ path: `scenes/reef-${th}.png`, data: sceneLayers.reef(th).toDataURL('image/png') });
 }

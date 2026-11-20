@@ -6,7 +6,7 @@ import { ITEMS, type ItemId } from '../game/battle';
 import { ancestryOf, formOf, makeMon, maxHp, xpToNext, type Mon } from '../game/creature';
 import { bayCap, bayStartLevel, bringBack, buyRecruit, buyUpgrade, loadMeta, monFromBay, RECRUITS, saveMeta, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
 import { SKILLS } from '../data/skills';
-import { healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
+import { enterSpecial, healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
 import { BOONS, LURES } from '../data/boons';
 import { chartPos, drawChart, drawDeep, drawPort, drawSea, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
@@ -179,13 +179,19 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
   const choose = (j: number) => { run.picked = j; saveRun(run); setPanel(null); force((n) => n + 1); };
 
   const node = run.picked !== null ? opts[run.picked] : null;
-  let action: { text: string; btn: string; fn: () => void } | null = null;
+  let action: { text: string; btn: string; fn: () => void; alt?: { btn: string; fn: () => void } } | null = null;
+  const notice = run.notice;
   if (node) {
     const spot = spotName(run, node.spot);
     if (node.kind === 'fish') action = { text: `${spot.name}的釣點。${spot.desc}`, btn: '拋竿出擊', fn: onGo };
     else if (node.kind === 'elite') action = { text: `精英釣點（${spot.name}）。強大的潮靈盤據在這裡，打贏能挑更好的能力卡。`, btn: '挑戰精英', fn: onGo };
     else if (node.kind === 'treasure') action = { text: '寶藏點！海面閃閃發光，這裡只會釣到寶箱。', btn: '拋竿撈寶', fn: onGo };
     else if (node.kind === 'boss') action = { text: `海面暗了下來……${zoneOf(run).name}的霸主就在前方。先整理好隊伍吧。`, btn: '挑戰霸主', fn: onGo };
+    else if (node.kind === 'portal' && node.target) {
+      const tz = ZONES[node.target];
+      action = { text: `海面裂開了一道發光的縫隙，裡面隱約看得到「${tz.name}」。${tz.desc}要進去嗎？（打倒守護者後會回到這條航線）`, btn: '進入', fn: () => { enterSpecial(run, node.target!); saveRun(run); force((n) => n + 1); },
+        alt: { btn: '不進入', fn: onNext } };
+    }
     else if (node.kind === 'event') action = { text: '海面上好像發生了什麼事……要過去看看嗎？', btn: '前往查看', fn: onGo };
     else if (node.kind === 'shop') action = { text: `漂流商店的老闆揮著手。你有 ${run.shells} 枚貝殼幣。`, btn: '逛商店', fn: () => setPanel('shop') };
     else action = rested
@@ -198,7 +204,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={(c, t) => drawChart(c, t, run.route, run.station, run.picked, run.path, run.seed, zoneOf(run).theme)} label="海圖與航線" />}
       overlay={<>
-        <Win class="banner left"><span class="eyebrow">海域 {run.zoneNo + 1} · {zoneOf(run).name}</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b></Win>
+        <Win class="banner left"><span class="eyebrow">{zoneOf(run).special ? '特殊區域' : `海域 ${run.zoneNo + 1}`} · {zoneOf(run).name}</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b></Win>
         <Win class="banner right"><span class="res">🐚 {run.shells}</span><span class="res">捕捉餌 {run.catchBait}</span></Win>
         {run.picked === null && opts.map((o, j) => {
           const [x, y] = chartPos(run.station, j, opts.length);
@@ -217,6 +223,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
       dock={
         <div class="dock-split">
           <Win class="msg">
+            {notice && <p class="accent">{notice}</p>}
             {node && action ? <p>{action.text}</p> : <p><b>選擇航線：</b>{NODE_INFO[hv.kind].name}{hv.kind === 'fish' || hv.kind === 'elite' ? `（${spotName(run, hv.spot).name}）` : ''}——{NODE_INFO[hv.kind].desc}</p>}
             <div class="party-strip">
               {run.party.map((m) => (
@@ -230,10 +237,10 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
           </Win>
           <Win class="cmd">
             <div class="cmd-grid">
-              {node && action ? <MenuItem onClick={action.fn} hot>{action.btn}</MenuItem>
+              {node && action ? <><MenuItem onClick={() => { run.notice = undefined; action!.fn(); }} hot>{action.btn}</MenuItem>{action.alt && <MenuItem onClick={action.alt.fn}>{action.alt.btn}</MenuItem>}</>
                 : opts.map((o, j) => <MenuItem key={j} hot={j === hover} onHover={() => setHover(j)} onClick={() => choose(j)}>{NODE_INFO[o.kind].name}{o.kind === 'fish' || o.kind === 'elite' ? `・${spotName(run, o.spot).name}` : ''}</MenuItem>)}
               <MenuItem onClick={() => setPanel(panel === 'party' ? null : 'party')}>隊伍</MenuItem>
-              <MenuItem onClick={() => setPanel(panel === 'items' ? null : 'items')}>道具</MenuItem>
+              {!action?.alt && <MenuItem onClick={() => setPanel(panel === 'items' ? null : 'items')}>道具</MenuItem>}
               <MenuItem onClick={onQuit}>存檔離開</MenuItem>
             </div>
           </Win>
@@ -453,7 +460,7 @@ export function EventScreen({ vp, run, ev, onDone }: { vp: Viewport; run: RunSta
 // ── 選擇下一片海域 ──
 export function ZonePick({ vp, run, onPick }: { vp: Viewport; run: RunState; onPick: (z: ZoneId) => void }) {
   const opts: ZoneId[] = ['ice', 'lava'];
-  const show: Record<ZoneId, string[]> = { shallows: [], ice: ['iceshrimp', 'walrus', 'frostking'], lava: ['lavasnail', 'cinderbone', 'lavadragon'] };
+  const show: Partial<Record<ZoneId, string[]>> = { shallows: [], ice: ['iceshrimp', 'walrus', 'frostking'], lava: ['lavasnail', 'cinderbone', 'lavadragon'] };
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={drawTitle} label="夕陽下的海面" />}
       panel={
@@ -463,7 +470,7 @@ export function ZonePick({ vp, run, onPick }: { vp: Viewport; run: RunState; onP
             {opts.map((z) => (
               <button class={`zone-card zone-${z}`} key={z} onClick={() => onPick(z)}>
                 <b class="big-name">{ZONES[z].name}</b>
-                <div class="row-gap">{show[z].map((f) => <Sprite form={f} size={48} key={f} still />)}</div>
+                <div class="row-gap">{(show[z] ?? []).map((f) => <Sprite form={f} size={48} key={f} still />)}</div>
                 <span class="small">{ZONES[z].desc}</span>
               </button>
             ))}

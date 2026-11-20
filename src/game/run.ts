@@ -1,5 +1,5 @@
 // 一局冒險的狀態：隊伍、道具、航程站點、存檔
-import { FORMS, ICE_POOL, LAVA_POOL, ZONE1_POOL } from '../data/creatures';
+import { CORE_POOL, FOREST_POOL, FORMS, ICE_POOL, LAVA_POOL, VOID_POOL, ZONE1_POOL } from '../data/creatures';
 import { effectiveness, RARITY_ORDER, type Rarity } from '../data/types';
 import { makeMon, maxHp, type Mon } from './creature';
 import { int, makeRng, newSeed, next, weighted, type Rng } from './rng';
@@ -8,7 +8,7 @@ import { BOON_LIST, BOON_TIER, BOONS, type LureId } from '../data/boons';
 import { gainXp, xpToNext } from './creature';
 import { upLv, type Meta, type UpgradeId } from './meta';
 
-export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'event' | 'boss';
+export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'event' | 'portal' | 'boss';
 export const NODE_INFO: Record<NodeKind, { name: string; desc: string }> = {
   fish: { name: '釣點', desc: '普通的釣點，水面下有東西在游動。' },
   elite: { name: '精英釣點', desc: '強大的潮靈盤據在這裡。更難打，但戰後的能力卡更好。' },
@@ -16,9 +16,10 @@ export const NODE_INFO: Record<NodeKind, { name: string; desc: string }> = {
   camp: { name: '營地', desc: '可以紮營休息的小島。' },
   shop: { name: '漂流商店', desc: '一艘賣漁具的小船，可以用貝殼幣買東西。' },
   event: { name: '神秘事件', desc: '海面上好像發生了什麼事……' },
+  portal: { name: '神秘入口', desc: '海面裂開了一道發光的縫隙，不知道通往哪裡……' },
   boss: { name: '霸主', desc: '這片海域的霸主就在前方。' },
 };
-export interface RouteNode { kind: NodeKind; spot: SpotKind }
+export interface RouteNode { kind: NodeKind; spot: SpotKind; target?: ZoneId }
 export const ROUTE_LEN = 10;
 
 export type SpotKind = 'shallow' | 'reef' | 'wreck' | 'deep';
@@ -29,9 +30,10 @@ export const SPOT_INFO: Record<SpotKind, { name: string; desc: string }> = {
   deep: { name: '深水區', desc: '看不見底的深藍，有發光的生物在游動。' },
 };
 // ── 海域 ──
-export type ZoneId = 'shallows' | 'ice' | 'lava';
+export type ZoneId = 'shallows' | 'ice' | 'lava' | 'forest' | 'void' | 'core';
+export type ThemeName = 'day' | 'ice' | 'lava' | 'forest' | 'void' | 'core';
 export interface ZoneInfo {
-  name: string; desc: string; theme: 'day' | 'ice' | 'lava';
+  name: string; desc: string; theme: ThemeName; special?: boolean;
   pool: string[]; boss: string; bossLv: number; lvBase: number;
   spots: Record<SpotKind, { name: string; desc: string }>;
   bias: Record<SpotKind, Record<string, number>>;
@@ -64,6 +66,40 @@ export const ZONES: Record<ZoneId, ZoneInfo> = {
     },
     bias: { shallow: { lavasnail: 3, bubcrab: 2 }, reef: { obsidiancrab: 3, lavasnail: 2, starsand: 2 }, wreck: { cinderbone: 3, bonebream: 3 }, deep: { magmaeel: 3, magmacore: 1 } },
   },
+  // ── 特殊區域：航行途中有機率出現入口 ──
+  forest: {
+    name: '聖林域', desc: '海中央長出一整片古老的森林，草木的潮靈在這裡生活。守護者是藤角鹿。', theme: 'forest', special: true,
+    pool: FOREST_POOL, boss: 'vine_antler_deer', bossLv: 0, lvBase: 0,
+    spots: {
+      shallow: { name: '林間淺溪', desc: '清澈的溪水流過樹根。' },
+      reef: { name: '苔石灘', desc: '長滿青苔的石頭，踩上去軟軟的。' },
+      wreck: { name: '古木殘骸', desc: '倒下的巨木泡在水裡，裡面住著小生物。' },
+      deep: { name: '聖泉', desc: '森林中央的泉水，深不見底。' },
+    },
+    bias: { shallow: { sprout_orb: 3 }, reef: { mushroom_sprite: 3 }, wreck: { mushroom_sprite: 2, coral: 2 }, deep: { vine_antler_deer: 2, frost_crystal_fawn: 1 } },
+  },
+  void: {
+    name: '無稽區', desc: '一切都說不通的地方。影子會自己走動，符文浮在半空中。守護者是虛無星龍。', theme: 'void', special: true,
+    pool: VOID_POOL, boss: 'void_star_dragon', bossLv: 0, lvBase: 0,
+    spots: {
+      shallow: { name: '倒影水面', desc: '水面映出的不是天空，而是另一片海。' },
+      reef: { name: '浮空碎石', desc: '石頭飄在半空中，下面是看不見底的黑。' },
+      wreck: { name: '幽靈船', desc: '一艘半透明的船，時隱時現。' },
+      deep: { name: '虛無之淵', desc: '什麼都沒有的深淵，只有一雙雙眼睛。' },
+    },
+    bias: { shallow: { shadow_soul_flame: 3 }, reef: { rune_wraith: 3 }, wreck: { bonebream: 3, vine_trace_spirit: 2 }, deep: { phantom_cub: 2, cinderbone: 2 } },
+  },
+  core: {
+    name: '域核區域', desc: '由光與資料構成的奇異海域，方塊和圓環在空中運轉。守護者是域界核心。', theme: 'core', special: true,
+    pool: CORE_POOL, boss: 'domain_realm_core', bossLv: 0, lvBase: 0,
+    spots: {
+      shallow: { name: '資料淺層', desc: '海水裡流動著發光的數字。' },
+      reef: { name: '方塊礁', desc: '由立方體堆成的礁石。' },
+      wreck: { name: '廢棄節點', desc: '停止運轉的舊核心，偶爾還會閃一下。' },
+      deep: { name: '核心深層', desc: '越往下越亮，所有資料都流向這裡。' },
+    },
+    bias: { shallow: { cubelet: 3, zaploach: 2 }, reef: { polyhedral_sentinel: 3, cube_coreling: 2 }, wreck: { orbit_construct: 3 }, deep: { domain_coreling: 2, chaos_zygote: 1 } },
+  },
 };
 export const zoneOf = (run: RunState) => ZONES[run.zone ?? 'shallows'];
 export const spotName = (run: RunState, spot: SpotKind) => zoneOf(run).spots[spot];
@@ -74,6 +110,9 @@ export interface RunState {
   zone: ZoneId;
   zoneNo: number; // 第幾片海域（0 起算）
   pendingZone?: boolean; // 已打倒霸主、還沒選下一片海域
+  returnTo?: { zone: ZoneId; route: RouteNode[][]; station: number; path: number[] }; // 在特殊區域時，原本的航線
+  specialLv?: number; // 特殊區域的基準等級（依進入時的位置決定）
+  notice?: string; // 回到海圖時要顯示的訊息
   catchBait: number;
   lures: Record<'star' | 'legend', number>;
   boons: Record<string, number>;
@@ -108,15 +147,19 @@ export function newRun(first: Mon, meta?: Meta): RunState {
 }
 
 // 產生分岔航線：第一站固定釣點、最後一站是霸主，中間每站 2–3 個選項
-function generateRoute(rng: Rng): RouteNode[][] {
+// 主海域有機率在中段出現通往特殊區域的「神秘入口」
+const SPECIALS: ZoneId[] = ['forest', 'void', 'core'];
+function generateRoute(rng: Rng, len = ROUTE_LEN, special = false): RouteNode[][] {
   const spots: SpotKind[] = ['shallow', 'reef', 'wreck', 'deep'];
   const sp = () => spots[Math.floor(next(rng) * spots.length)];
-  const route: RouteNode[][] = [[{ kind: 'fish', spot: 'shallow' }]];
-  for (let i = 1; i < ROUTE_LEN - 1; i++) {
+  const route: RouteNode[][] = [[{ kind: 'fish', spot: special ? sp() : 'shallow' }]];
+  for (let i = 1; i < len - 1; i++) {
     const n = next(rng) < 0.45 ? 3 : 2, opts: RouteNode[] = [];
-    const weights: [NodeKind, number][] = [['fish', 42], ['treasure', 10], ['event', 16]];
-    if (i >= 3) weights.push(['elite', 16], ['camp', 12]);
-    if (i >= 2) weights.push(['shop', 12]);
+    const weights: [NodeKind, number][] = special
+      ? [['fish', 40], ['elite', 20], ['treasure', 18], ['event', 16]]
+      : [['fish', 42], ['treasure', 10], ['event', 16]];
+    if (!special && i >= 3) weights.push(['elite', 16], ['camp', 12]);
+    if (!special && i >= 2) weights.push(['shop', 12]);
     for (let k = 0; k < n; k++) {
       let kind = weighted(rng, weights);
       if (kind !== 'fish' && opts.some((o) => o.kind === kind)) kind = 'fish';
@@ -124,17 +167,43 @@ function generateRoute(rng: Rng): RouteNode[][] {
     }
     route.push(opts);
   }
-  // 保證中段有商店、霸主前有營地可以選
-  const ensure = (kind: NodeKind, from: number, to: number) => {
-    for (let i = from; i <= to; i++) if (route[i].some((o) => o.kind === kind)) return;
-    const i = from + Math.floor(next(rng) * (to - from + 1));
-    route[i][route[i].length - 1] = { kind, spot: sp() };
-  };
-  ensure('shop', 3, 6);
-  ensure('camp', 7, 8);
-  ensure('fish', 1, 1);
+  if (!special) {
+    // 保證中段有商店、霸主前有營地可以選
+    const ensure = (kind: NodeKind, from: number, to: number) => {
+      for (let i = from; i <= to; i++) if (route[i].some((o) => o.kind === kind)) return;
+      const i = from + Math.floor(next(rng) * (to - from + 1));
+      route[i][route[i].length - 1] = { kind, spot: sp() };
+    };
+    ensure('shop', 3, 6);
+    ensure('camp', 7, 8);
+    ensure('fish', 1, 1);
+    // 40% 機率在第 3–7 站出現神秘入口
+    if (next(rng) < 0.4) {
+      const i = 3 + Math.floor(next(rng) * 5);
+      const target = SPECIALS[Math.floor(next(rng) * SPECIALS.length)];
+      const node: RouteNode = { kind: 'portal', spot: sp(), target };
+      if (route[i].length < 3) route[i].push(node); else route[i][0] = node;
+    }
+  }
   route.push([{ kind: 'boss', spot: 'deep' }]);
   return route;
+}
+
+// 進入特殊區域：記住原本的航線，換成一段 5 站的短航線（最後是守護者）
+export function enterSpecial(run: RunState, target: ZoneId) {
+  run.returnTo = { zone: run.zone, route: run.route, station: run.station, path: [...run.path, run.picked ?? 0] };
+  run.specialLv = Math.round(ZONES[run.zone].lvBase + run.station * 0.8 + 2);
+  run.zone = target;
+  run.route = generateRoute(run.rng, 5, true); run.station = 0; run.picked = null; run.path = [];
+}
+// 打倒守護者後回到原本的航線（入口那一站算走過），並拿到獎勵
+export function leaveSpecial(run: RunState) {
+  const back = run.returnTo; if (!back) return;
+  const name = ZONES[run.zone].name;
+  run.zone = back.zone; run.route = back.route; run.path = back.path; run.station = back.station + 1; run.picked = null;
+  run.returnTo = undefined; run.specialLv = undefined;
+  run.lures.legend += 1; run.shells += 60; run.catchBait += 1;
+  run.notice = `你從${name}回來了！守護者留下了謝禮：傳說餌 ×1、捕捉餌 ×1、60 枚貝殼幣。`;
 }
 
 // 打倒霸主後前往下一片海域：重新產生航線，全隊回復一半（倒下的也會醒來）
@@ -188,7 +257,7 @@ const chanceOf = (r: Rng, p: number) => next(r) < p;
 // 拋竿品質 q（0–1）：完美拋竿可以把稀有度往上推一級（但推不到 S／SSR）
 export function rollEncounter(run: RunState, q: number, shadow: Shadow): Encounter {
   if (isBoss(run)) {
-    const z = zoneOf(run), mon = makeMon(z.boss, z.bossLv, true, true);
+    const z = zoneOf(run), mon = makeMon(z.boss, z.special ? (run.specialLv ?? 10) + 3 : z.bossLv, true, true);
     return { mon, rarity: FORMS[z.boss].rarity };
   }
   let rarity = shadow.rarity;
@@ -207,7 +276,7 @@ export function rollEncounter(run: RunState, q: number, shadow: Shadow): Encount
   const bias = zoneOf(run).bias[nodeOf(run).spot];
   let formId = weighted(run.rng, pool.map((id) => [id, bias[id] ?? 1] as [string, number]));
   const elite = nodeOf(run).kind === 'elite' ? 2 : 0;
-  const lv = firstStop(run) ? 3 : Math.max(2, Math.round(zoneOf(run).lvBase + run.station * 0.8 + int(run.rng, 0, 2)) - ({ N: 0, B: 0, A: 1, S: 2, SSR: 2 } as const)[rarity] + elite);
+  const lv = firstStop(run) ? 3 : Math.max(2, Math.round((zoneOf(run).special ? (run.specialLv ?? 10) : zoneOf(run).lvBase) + run.station * 0.8 + int(run.rng, 0, 2)) - ({ N: 0, B: 0, A: 1, S: 2, SSR: 2 } as const)[rarity] + elite);
   const ev = FORMS[formId].evolve?.find((e) => lv >= e.level);
   if (ev) formId = ev.to;
   return { mon: makeMon(formId, lv, false, true), rarity };
