@@ -17,7 +17,6 @@ export interface Volatile {
   freezeTurns: number;
   sleepTurns: number;
   undyingUsed: boolean;
-  healUses: number;
 }
 
 export interface SideMods { atk: number; def: number; energy: number; crit: number }
@@ -77,7 +76,7 @@ export const active = (s: BattleState, side: SideId) => s.sides[side].team[s.sid
 export const volOf = (s: BattleState, side: SideId) => s.sides[side].vol[active(s, side).uid];
 
 function freshVol(): Volatile {
-  return { energy: 2, shield: 0, stages: { atk: 0, def: 0, spd: 0 }, turnsIn: 0, freezeTurns: 0, sleepTurns: 0, undyingUsed: false, healUses: 0 };
+  return { energy: 2, shield: 0, stages: { atk: 0, def: 0, spd: 0 }, turnsIn: 0, freezeTurns: 0, sleepTurns: 0, undyingUsed: false };
 }
 
 type SideInit = { team: Mon[]; name: string; mods?: SideMods };
@@ -270,9 +269,8 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
   // 變化技
   if (sk.power === 0) {
     if (fx.heal) {
-      // 同一場戰鬥中重複回復，效果會逐次減弱（避免無限拖延）
-      const mx = maxHp(me), amt = Math.min(mx - me.hp, Math.floor(mx * fx.heal * Math.pow(0.7, v.healUses)));
-      v.healUses++;
+      // 每次都回復固定比例（拖延戰鬥由第 20 回合起的漩渦處理）
+      const mx = maxHp(me), amt = Math.min(mx - me.hp, Math.floor(mx * fx.heal));
       me.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: me.hp });
       ev.push({ t: 'msg', text: amt > 0 ? `${myName} 回復了 ${amt} HP！` : `${myName} 的 HP 已經是滿的。` });
     }

@@ -51,7 +51,7 @@ const S: Skill[] = [
   // 草
   { id: 'leafblade', name: '葉刃', elem: 'grass', power: 40, cost: 0, acc: 100, desc: '用葉片切割對手。', anim: 'hit' },
   { id: 'vinebind', name: '纏藤', elem: 'grass', power: 35, cost: 1, acc: 100, desc: '降低對手速度。', fx: { stat: { key: 'spd', delta: -1, self: false } }, anim: 'hit' },
-  { id: 'photosynth', name: '光合作用', elem: 'grass', power: 0, cost: 2, acc: 100, desc: '回復最大 HP 的 40%。', fx: { heal: 0.4 }, anim: 'heal' },
+  { id: 'photosynth', name: '光合作用', elem: 'grass', power: 0, cost: 2, acc: 100, desc: '回復最大 HP 的 30%。', fx: { heal: 0.3 }, anim: 'heal' },
   { id: 'thornburst', name: '棘刺爆', elem: 'grass', power: 85, cost: 3, acc: 95, desc: '20% 使對手中毒。', fx: { status: { id: 'poison', chance: 0.2 } }, anim: 'beam' },
   { id: 'sporecloud', name: '孢子雲', elem: 'grass', power: 0, cost: 1, acc: 85, desc: '使對手中毒。', fx: { status: { id: 'poison', chance: 1 } }, anim: 'splash' },
   // 電
