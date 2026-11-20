@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { boon, enterZone, FINAL_ZONE, leaveSpecial, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
+import { boon, enterZone, zoneOf, FINAL_ZONE, leaveSpecial, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
 import { AfterBattle } from './AfterBattle';
 import { Battle, type BattleResult } from './Battle';
 import { Fishing } from './Fishing';
@@ -10,12 +10,16 @@ import { useViewport } from './layout';
 import { makeMon, makeMutant } from '../game/creature';
 import { FORMS } from '../data/creatures';
 import { APP_VERSION, fetchLatestVersion } from '../game/version';
+import { setScene } from '../audio/engine';
+import type { SongId } from '../audio/songs';
 
 // 只在這些畫面自動更新（不在冒險途中），重新整理不會打斷遊戲
 const SAFE_TO_UPDATE = new Set(['title', 'port', 'dex', 'help']);
 const CHECK_EVERY = 60_000;
 
 /** 每分鐘檢查一次有沒有新版本（只在正式網站）；回傳新版本號 */
+const zoneTheme = (r: RunState) => zoneOf(r).theme;
+
 function useNewVersion(): string | null {
   const [latest, setLatest] = useState<string | null>(null);
   useEffect(() => {
@@ -67,9 +71,16 @@ export function App() {
   const [screen, setScreen] = useState<Screen>({ k: 'title' });
   const [run, setRun] = useState<RunState | null>(null);
   const [n, setN] = useState(0); // 換畫面時強制重新掛載
-  const newVersion = useNewVersion();
-  const go = (s: Screen) => { setScreen(s); setN((x) => x + 1); };
   const boss = !!run && isBoss(run);
+  const newVersion = useNewVersion();
+
+  // 背景音樂：依畫面與所在海域切換
+  useEffect(() => {
+    const k = screen.k, theme = run && !['title', 'port', 'dex', 'help', 'starter', 'end'].includes(k) ? zoneTheme(run) : 'sunset';
+    const song: SongId = k === 'battle' ? (boss ? 'boss' : 'battle') : k === 'fishing' ? 'fish' : ['voyage', 'event', 'zonepick', 'after'].includes(k) ? 'voyage' : 'bay';
+    setScene(song, theme);
+  }, [screen.k, run?.zone, boss]);
+  const go = (s: Screen) => { setScreen(s); setN((x) => x + 1); };
 
   // 冒險結束：結算珍珠、讓棲息灣的夥伴回港
   const finishRun = (win: boolean) => {

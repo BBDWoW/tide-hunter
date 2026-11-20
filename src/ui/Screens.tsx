@@ -9,6 +9,7 @@ import { SKILLS } from '../data/skills';
 import { canUseOutside, enterSpecial, FINAL_ZONE, ZONE_CHOICES, healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
 import { APP_VERSION, CHANGELOG, hasUnreadNews, markNewsRead } from '../game/version';
+import { loadSound, saveSound, type SoundSettings } from '../audio/engine';
 import { BOONS, LURES } from '../data/boons';
 import { chartPos, drawChart, drawDeep, drawPort, drawSea, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
 import { AbilityLines, Bar, Elems, IvStars, EnvHint, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
@@ -26,6 +27,9 @@ export function MenuItem({ children, onClick, disabled, hot, sel, sub, onHover }
 export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp, onPort }: { vp: Viewport; hasSave: boolean; onNew: () => void; onContinue: () => void; onDex: () => void; onHelp: () => void; onPort: () => void }) {
   const dex = loadDex(), meta = loadMeta();
   const [news, setNews] = useState(false);
+  const [sound, setSound] = useState(false);
+  const [snd, setSnd] = useState(loadSound);
+  const updSnd = (p: Partial<SoundSettings>) => { const n = { ...snd, ...p }; setSnd(n); saveSound(n); };
   const [unread, setUnread] = useState(hasUnreadNews);
   const openNews = () => { setNews(true); setUnread(false); markNewsRead(); };
   return (
@@ -33,10 +37,21 @@ export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp, onPort }:
       scene={<SceneCanvas draw={drawTitle} label="夕陽下的海面，潮靈躍出水面" />}
       overlay={<>
         <div class="title-logo"><span class="title-en">TIDE HUNTER</span><h1>潮汐獵手</h1><span class="title-sub">釣起潮靈 · 收服 · 進化 · 挑戰霸主</span></div>
-        <button class="news-btn" onClick={() => (news ? setNews(false) : openNews())} aria-label="更新通知">📢 通知{unread && <i class="news-dot" aria-label="有新消息" />}</button>
+        <div class="title-tools">
+          <button class="tool-btn" onClick={() => { setNews(false); setSound(!sound); }} aria-label="聲音設定">{snd.muted ? '🔇' : '🔊'}</button>
+          <button class="tool-btn news-btn" onClick={() => { setSound(false); news ? setNews(false) : openNews(); }} aria-label="更新通知">📢 通知{unread && <i class="news-dot" aria-label="有新消息" />}</button>
+        </div>
         <span class="app-version">v{APP_VERSION}</span>
       </>}
-      panel={news && (
+      panel={sound ? (
+        <Win class="big-panel sound-panel" title="聲音設定">
+          <label class="snd-row"><span>背景音樂</span><input type="range" min="0" max="100" value={Math.round(snd.music * 100)} onInput={(e) => updSnd({ music: Number((e.target as HTMLInputElement).value) / 100 })} /><b>{Math.round(snd.music * 100)}</b></label>
+          <label class="snd-row"><span>海浪與環境音</span><input type="range" min="0" max="100" value={Math.round(snd.amb * 100)} onInput={(e) => updSnd({ amb: Number((e.target as HTMLInputElement).value) / 100 })} /><b>{Math.round(snd.amb * 100)}</b></label>
+          <MenuItem onClick={() => updSnd({ muted: !snd.muted })} hot={snd.muted}>{snd.muted ? '🔇 目前靜音，點一下開啟聲音' : '🔊 點一下靜音'}</MenuItem>
+          <p class="small dim">聲音會在第一次點擊畫面後開始播放。電腦上也可以按 M 鍵切換靜音。</p>
+          <MenuItem onClick={() => setSound(false)}>關閉</MenuItem>
+        </Win>
+      ) : news && (
         <Win class="big-panel" title={`更新通知　目前版本 v${APP_VERSION}`}>
           <div class="item-list">
             {CHANGELOG.map((c, i) => (

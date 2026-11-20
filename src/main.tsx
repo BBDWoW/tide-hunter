@@ -3,6 +3,7 @@ import './data/sprites';
 import './styles.css';
 import { App } from './ui/App';
 import { artReady } from './render/art';
+import { loadSound, saveSound, unlockAudio } from './audio/engine';
 
 // 啟動畫面：進度條跟著美術載入前進，完成後淡出（最少顯示 1.2 秒，才不會一閃而過）
 const splash = document.getElementById('splash');
@@ -24,5 +25,13 @@ function hideSplash() {
 // 手機：禁止兩指縮放（iOS Safari 不理會 viewport 的設定，要另外擋）；連點兩下放大由 CSS 的 touch-action 處理
 for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
 document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
+// 聲音：瀏覽器規定要先有使用者操作，所以第一次點擊／按鍵時才開始播放；M 鍵切換靜音
+for (const ev of ['pointerdown', 'touchend', 'keydown']) document.addEventListener(ev, () => unlockAudio(), { passive: true });
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'm' && e.key !== 'M') return;
+  if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+  const s = loadSound(); saveSound({ ...s, muted: !s.muted });
+});
 
 artReady.then(() => { render(<App />, document.getElementById('app')!); hideSplash(); });
