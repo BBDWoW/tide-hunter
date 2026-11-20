@@ -3,6 +3,10 @@ import '../src/data/sprites';
 import { FORMS } from '../src/data/creatures';
 import { drawSprite, PAL, spriteSize } from '../src/render/pixel';
 import { sceneLayers } from '../src/render/scene';
+import { artReady } from '../src/render/art';
+
+// 一定要等 PNG 美術載入完成，才不會匯出程式畫的舊版本
+artReady.then(() => {
 
 const out: { path: string; data: string }[] = [];
 const seen = new Set<string>();
@@ -19,11 +23,12 @@ for (const f of Object.values(FORMS)) {
   drawSprite(sx, f.sprite, PAL[f.pal], n, 0, { f: 1 });
   out.push({ path: `sprites_2frames/${f.sprite}.png`, data: strip.toDataURL('image/png') });
 }
-for (const id of ['day', 'sunset', 'ice', 'lava', 'forest', 'void', 'core'] as const) out.push({ path: `scenes/bg-${id}.png`, data: sceneLayers.backdrop(id).toDataURL('image/png') });
-for (const th of ['day', 'ice', 'lava', 'forest', 'void', 'core']) {
+for (const id of ['day', 'sunset', 'ice', 'lava', 'forest', 'void', 'core', 'cyber', 'abyss'] as const) out.push({ path: `scenes/bg-${id}.png`, data: sceneLayers.backdrop(id).toDataURL('image/png') });
+for (const th of ['day', 'ice', 'lava', 'forest', 'void', 'core', 'cyber', 'abyss']) {
   out.push({ path: `scenes/shoal-${th}.png`, data: sceneLayers.shoal(th).toDataURL('image/png') });
   out.push({ path: `scenes/reef-${th}.png`, data: sceneLayers.reef(th).toDataURL('image/png') });
 }
 const list = Object.values(FORMS).map((f) => ({ id: f.sprite, form: f.id, name: f.name, size: spriteSize(f.sprite), rarity: f.rarity, pal: f.pal }));
 (window as unknown as Record<string, unknown>).__export = { files: out, list, palettes: PAL };
 document.getElementById('s')!.textContent = `done: ${out.length} files`;
+});

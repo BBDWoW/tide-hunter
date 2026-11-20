@@ -1,5 +1,5 @@
 // 一局冒險的狀態：隊伍、道具、航程站點、存檔
-import { CORE_POOL, FOREST_POOL, FORMS, ICE_POOL, LAVA_POOL, VOID_POOL, ZONE1_POOL } from '../data/creatures';
+import { ABYSS_POOL, CORE_POOL, CYBER_POOL, FOREST_POOL, FORMS, ICE_POOL, LAVA_POOL, VOID_POOL, ZONE1_POOL } from '../data/creatures';
 import { effectiveness, RARITY_ORDER, type Rarity } from '../data/types';
 import { formOf, makeMon, makeMutant, maxHp, MUTANT_CHANCE, type Mon } from './creature';
 import { int, makeRng, newSeed, next, weighted, type Rng } from './rng';
@@ -30,8 +30,8 @@ export const SPOT_INFO: Record<SpotKind, { name: string; desc: string }> = {
   deep: { name: '深水區', desc: '看不見底的深藍，有發光的生物在游動。' },
 };
 // ── 海域 ──
-export type ZoneId = 'shallows' | 'ice' | 'lava' | 'forest' | 'void' | 'core';
-export type ThemeName = 'day' | 'ice' | 'lava' | 'forest' | 'void' | 'core';
+export type ZoneId = 'shallows' | 'ice' | 'lava' | 'cyber' | 'abyss' | 'forest' | 'void' | 'core';
+export type ThemeName = 'day' | 'ice' | 'lava' | 'cyber' | 'abyss' | 'forest' | 'void' | 'core';
 export interface ZoneInfo {
   name: string; desc: string; theme: ThemeName; special?: boolean;
   pool: string[]; boss: string; bossLv: number; lvBase: number;
@@ -65,6 +65,29 @@ export const ZONES: Record<ZoneId, ZoneInfo> = {
       deep: { name: '熔岩深淵', desc: '海底裂縫湧出岩漿，海水在沸騰。' },
     },
     bias: { shallow: { lavasnail: 3, bubcrab: 2 }, reef: { obsidiancrab: 3, lavasnail: 2, starsand: 2 }, wreck: { cinderbone: 3, bonebream: 3 }, deep: { magmaeel: 3, magmacore: 1 } },
+  },
+  // ── 第三片海域 ──
+  cyber: {
+    name: '電子海域', desc: '海面是發光的網格，水裡流動著資料。霸主是由主機構成的機械海龍。', theme: 'cyber',
+    pool: CYBER_POOL, boss: 'mainframe_leviathan', bossLv: 30, lvBase: 22,
+    spots: {
+      shallow: { name: '訊號淺灘', desc: '網格海面上跳動著一格格光點。' },
+      reef: { name: '電路礁', desc: '由電路板堆成的礁石，指示燈閃個不停。' },
+      wreck: { name: '廢棄機房', desc: '沉在海裡的機房，伺服器還在運轉。' },
+      deep: { name: '資料深流', desc: '所有資料都往這裡流，越深越亮。' },
+    },
+    bias: { shallow: { pixfish: 3, dronegull: 2 }, reef: { routercrab: 3, polyhedral_sentinel: 2 }, wreck: { virus_jelly: 3, cablesnake: 2 }, deep: { neonray: 3, cipher_whale: 1 } },
+  },
+  abyss: {
+    name: '深淵', desc: '照不到光的海底，只有生物自己發出的光。霸主是全身佈滿傷痕的遠古巨鯨。', theme: 'abyss',
+    pool: ABYSS_POOL, boss: 'nether_whale', bossLv: 30, lvBase: 22,
+    spots: {
+      shallow: { name: '海雪坡', desc: '細細的海雪不停落下，堆成白色的斜坡。' },
+      reef: { name: '岩柱林', desc: '一根根黑色岩柱，縫隙裡有東西在發光。' },
+      wreck: { name: '骸骨海床', desc: '巨大生物的骨頭散落一地。' },
+      deep: { name: '無光海溝', desc: '連生物光都吞沒的海溝。' },
+    },
+    bias: { shallow: { lanternlarva: 3, abyss_wisp: 2 }, reef: { pressure_shell: 3, bonecrab: 2 }, wreck: { bonecrab: 3, bonebream: 2 }, deep: { gulper: 3, ghost_squid: 2, drowned_bell: 1 } },
   },
   // ── 特殊區域：航行途中有機率出現入口 ──
   forest: {
@@ -213,6 +236,10 @@ export function enterZone(run: RunState, zone: ZoneId) {
   run.route = generateRoute(run.rng); run.station = 0; run.picked = null; run.path = [];
   healParty(run, 0.5, true);
 }
+/** 第幾片海域（0 起算）打完霸主就通關 */
+export const FINAL_ZONE = 2;
+/** 每一階段可以選的海域 */
+export const ZONE_CHOICES: ZoneId[][] = [['shallows'], ['ice', 'lava'], ['cyber', 'abyss']];
 export const totalStation = (run: RunState) => run.zoneNo * ROUTE_LEN + run.station + 1;
 
 export const nodeOf = (run: RunState): RouteNode => run.route[run.station][run.picked ?? 0];

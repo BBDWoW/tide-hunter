@@ -412,6 +412,7 @@ export function hitChance(s: BattleState, side: SideId, sk: Skill): number {
   let acc = sk.acc / 100;
   if (active(s, side).status === 'blind') acc *= 0.6;
   if (s.field?.id === 'fog' && sk.elem !== 'dark') acc *= 0.8;
+  if (s.field?.id === 'abyss' && sk.elem !== 'dark' && sk.power > 0) acc *= 0.85;
   return acc;
 }
 
@@ -437,6 +438,7 @@ export function effPower(s: BattleState, side: SideId, foe: SideId, sk: Skill): 
   if (f === 'aurora' && (sk.elem === 'ice' || sk.elem === 'fly')) p *= 1.3;
   if (f === 'grid' && sk.elem === 'data') p *= 1.5;
   if (f === 'grove' && sk.elem === 'grass') p *= 1.5;
+  if (f === 'abyss' && sk.elem === 'dark') p *= 1.5;
   return p;
 }
 

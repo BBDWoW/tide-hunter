@@ -5,7 +5,7 @@ export type StatusId = 'burn' | 'para' | 'poison' | 'freeze' | 'glitch' | 'sleep
 export type StatKey = 'atk' | 'def' | 'spd';
 
 // 場地／天候：同一時間只會有一種，持續數回合，對雙方都有效
-export type FieldId = 'tide' | 'lava' | 'fog' | 'storm' | 'aurora' | 'grid' | 'grove';
+export type FieldId = 'tide' | 'lava' | 'fog' | 'storm' | 'aurora' | 'grid' | 'grove' | 'abyss';
 export const FIELDS: Record<FieldId, { name: string; desc: string; color: string }> = {
   tide: { name: '漲潮', desc: '水屬性技能威力 ×1.5，火屬性技能威力 ×0.5。', color: '#3a9be0' },
   lava: { name: '熔岩地面', desc: '火屬性技能威力 ×1.2；非火、非岩屬性每回合受到 1/16 傷害。', color: '#e2512a' },
@@ -14,6 +14,7 @@ export const FIELDS: Record<FieldId, { name: string; desc: string; color: string
   aurora: { name: '極光', desc: '冰、飛屬性技能威力 ×1.3，冰凍機率加倍。', color: '#7fd8e8' },
   grid: { name: '資料網格', desc: '數碼屬性技能威力 ×1.5，資料錯亂機率加倍。', color: '#1fae9a' },
   grove: { name: '聖林', desc: '草屬性技能威力 ×1.5；每回合雙方回復 1/16 HP（草屬性 1/8）。', color: '#4caf50' },
+  abyss: { name: '深淵', desc: '暗屬性技能威力 ×1.5；暗屬性以外的攻擊命中率 ×0.85。', color: '#5b3a9a' },
 };
 
 export interface SkillEffect {
@@ -177,6 +178,10 @@ const S: Skill[] = [
   { id: 'crash', name: '程式崩潰', elem: 'data', power: 65, cost: 2, acc: 100, desc: '對資料錯亂的對手威力 ×1.6。', fx: { chain: { id: 'glitch', mult: 1.6 } }, anim: 'beam' },
   { id: 'virus', name: '病毒注入', elem: 'data', power: 50, cost: 1, acc: 100, desc: '注入病毒程式，30% 使對手中毒。', fx: { status: { id: 'poison', chance: 0.3 } }, anim: 'beam' },
   { id: 'selfdestruct', name: '自毀程序', elem: 'data', power: 170, cost: 3, acc: 100, desc: '啟動自毀程序，造成巨大傷害，但自己會倒下。', fx: { selfKO: true }, anim: 'beam' },
+  // ── 第三片海域 ──
+  { id: 'reboot', name: '系統重啟', elem: 'data', power: 0, cost: 2, acc: 100, desc: '重新啟動：治癒自己的異常狀態，並回復最大 HP 的 30%。', fx: { cleanse: true, heal: 0.3 }, anim: 'heal' },
+  { id: 'engulf', name: '吞沒', elem: 'dark', power: 100, cost: 3, acc: 95, desc: '張開巨口吞沒一切，回復造成傷害的 30%。', fx: { drain: 0.3 }, anim: 'hit' },
+  { id: 'abyssveil', name: '深淵', elem: 'dark', power: 0, cost: 2, acc: 100, desc: '場地變成「深淵」5 回合：暗屬性威力 ×1.5，暗屬性以外的攻擊命中率 ×0.85。', fx: { field: { id: 'abyss', turns: 5 } }, anim: 'splash' },
 ];
 
 

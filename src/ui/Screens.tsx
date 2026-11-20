@@ -6,7 +6,7 @@ import { ITEMS, statusLabel, type ItemId } from '../game/battle';
 import { ancestryOf, formOf, makeMon, maxHp, xpToNext, type Mon } from '../game/creature';
 import { bayCap, bayStartLevel, bringBack, buyRecruit, buyUpgrade, loadMeta, monFromBay, RECRUITS, saveMeta, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
 import { SKILLS } from '../data/skills';
-import { canUseOutside, enterSpecial, healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
+import { canUseOutside, enterSpecial, FINAL_ZONE, ZONE_CHOICES, healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
 import { APP_VERSION, CHANGELOG, hasUnreadNews, markNewsRead } from '../game/version';
 import { BOONS, LURES } from '../data/boons';
@@ -523,13 +523,13 @@ export function EventScreen({ vp, run, ev, onDone }: { vp: Viewport; run: RunSta
 
 // ── 選擇下一片海域 ──
 export function ZonePick({ vp, run, onPick }: { vp: Viewport; run: RunState; onPick: (z: ZoneId) => void }) {
-  const opts: ZoneId[] = ['ice', 'lava'];
-  const show: Partial<Record<ZoneId, string[]>> = { shallows: [], ice: ['iceshrimp', 'walrus', 'frostking'], lava: ['lavasnail', 'cinderbone', 'lavadragon'] };
+  const opts: ZoneId[] = ZONE_CHOICES[run.zoneNo + 1] ?? ['ice', 'lava'];
+  const show: Partial<Record<ZoneId, string[]>> = { shallows: [], ice: ['iceshrimp', 'walrus', 'frostking'], lava: ['lavasnail', 'cinderbone', 'lavadragon'], cyber: ['pixfish', 'neonray', 'mainframe_leviathan'], abyss: ['lanternlarva', 'ghost_squid', 'nether_whale'] };
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={drawTitle} label="夕陽下的海面" />}
       panel={
         <Win class="big-panel" title={`${zoneOf(run).name}的霸主被擊敗了！要往哪裡前進？`}>
-          <p class="small dim">全隊會在出發前回復一半 HP，倒下的夥伴也會醒來。</p>
+          <p class="small dim">全隊會在出發前回復一半 HP，倒下的夥伴也會醒來。{run.zoneNo + 1 >= FINAL_ZONE ? '這是最後一片海域，打倒霸主就通關！' : ''}</p>
           <div class="zone-row">
             {opts.map((z) => (
               <button class={`zone-card zone-${z}`} key={z} onClick={() => onPick(z)}>

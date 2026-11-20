@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { boon, enterZone, leaveSpecial, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
+import { boon, enterZone, FINAL_ZONE, leaveSpecial, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
 import { AfterBattle } from './AfterBattle';
 import { Battle, type BattleResult } from './Battle';
 import { Fishing } from './Fishing';
@@ -119,7 +119,7 @@ export function App() {
       body = <AfterBattle vp={vp} run={run!} result={screen.result} onDone={() => {
         if (boss && screen.result.outcome === 'win' && run!.returnTo) { leaveSpecial(run!); saveRun(run); go({ k: 'voyage' }); return; }
         if (boss && screen.result.outcome === 'win') {
-          if (run!.zoneNo === 0) { run!.pendingZone = true; saveRun(run); go({ k: 'zonepick' }); } else finishRun(true);
+          if (run!.zoneNo < FINAL_ZONE) { run!.pendingZone = true; saveRun(run); go({ k: 'zonepick' }); } else finishRun(true);
           return;
         }
         healParty(run!, 0.15 + boon(run!, 'breeze') * 0.15);

@@ -42,7 +42,7 @@ function pxEllipse(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: nu
 }
 
 // ── 海景主題 ──
-export type ThemeId = 'day' | 'sunset' | 'ice' | 'lava' | 'forest' | 'void' | 'core';
+export type ThemeId = 'day' | 'sunset' | 'ice' | 'lava' | 'forest' | 'void' | 'core' | 'cyber' | 'abyss';
 interface Theme { sky: string[]; sea: string[]; far: string; near: string; sun: string; glow: string; cloud: [string, string]; foam: string; glint: string; horizon: number; sunX: number; sunY: number; sunR: number }
 const THEMES: Record<ThemeId, Theme> = {
   day: { sky: ['#2f7fd8', '#5fb0f0', '#c8f0ff'], sea: ['#7fd8f0', '#2fa4d6', '#0d5f9e', '#073a6e'], far: '#8cc4dc', near: '#5f9fc0', sun: '#fffbe0', glow: '#fff1a8', cloud: ['#ffffff', '#cfe4fa'], foam: '#f2fdff', glint: '#ffffff', horizon: 46, sunX: 206, sunY: 14, sunR: 7 },
@@ -51,6 +51,8 @@ const THEMES: Record<ThemeId, Theme> = {
   forest: { sky: ['#2a6a4a', '#5aa86a', '#c8ecb0'], sea: ['#7ad8b0', '#2a9a7a', '#0e5a4a', '#063028'], far: '#3a7a4a', near: '#245a34', sun: '#fffbd0', glow: '#e8ffb0', cloud: ['#f4fff0', '#c8e8c0'], foam: '#e8fff0', glint: '#fffbd0', horizon: 50, sunX: 70, sunY: 18, sunR: 7 },
   void: { sky: ['#06020e', '#1e0a34', '#4a1a6a', '#8a4ab0'], sea: ['#6a3a9a', '#2a1050', '#12062a', '#06020e'], far: '#1a0a2a', near: '#0e0418', sun: '#e8d8ff', glow: '#a86aff', cloud: ['#4a2a6a', '#2a1440'], foam: '#c89aff', glint: '#e8d8ff', horizon: 52, sunX: 200, sunY: 22, sunR: 8 },
   core: { sky: ['#020a1a', '#062a4a', '#0a5a7a', '#2ab0c8'], sea: ['#2ac8d8', '#0a6a8a', '#04304a', '#020e1e'], far: '#0a3a5a', near: '#062440', sun: '#e8ffff', glow: '#5ff1ff', cloud: ['#1a4a6a', '#0e2a44'], foam: '#8affff', glint: '#e8ffff', horizon: 50, sunX: 128, sunY: 20, sunR: 7 },
+  cyber: { sky: ['#050318', '#14104a', '#3a1a7a', '#e040a0'], sea: ['#ff4ac8', '#3a1a8a', '#120a3a', '#04021a'], far: '#1a1050', near: '#0e0830', sun: '#ffe0ff', glow: '#ff4ac8', cloud: ['#3a2a7a', '#1e1450'], foam: '#5ff1ff', glint: '#ffb0f0', horizon: 54, sunX: 128, sunY: 40, sunR: 12 },
+  abyss: { sky: ['#000003', '#02040c', '#060a1c', '#0c1430'], sea: ['#1a2a5a', '#0a1230', '#04081a', '#010208'], far: '#060a18', near: '#03060e', sun: '#d8f4ff', glow: '#4a8aff', cloud: ['#0e1430', '#080c20'], foam: '#3a5a9a', glint: '#9ad8ff', horizon: 46, sunX: 64, sunY: 8, sunR: 4 },
   sunset: { sky: ['#1d1d5c', '#6a2f7a', '#e0607a', '#ffb070'], sea: ['#f0a07a', '#a84e78', '#3a2a6a', '#141640'], far: '#8a4a7a', near: '#5a2f62', sun: '#fff0b0', glow: '#ffb070', cloud: ['#ffc4a8', '#c8708a'], foam: '#ffe0c8', glint: '#fff6c8', horizon: 74, sunX: 128, sunY: 70, sunR: 14 },
 };
 
@@ -138,6 +140,37 @@ function backdrop(id: ThemeId) {
       for (let k = 0; k < 8; k++) { const y = Math.round(hz + 2 + Math.pow(k / 8, 1.6) * (H - hz)); x.fillRect(0, y, W, 1); }
       for (let k = -12; k <= 12; k++) for (let y = hz; y < H; y += 2) x.fillRect(Math.round(W / 2 + k * 6 * (1 + (y - hz) / 12)), y, 1, 1);
     }
+    if (id === 'cyber') {
+      // 夕陽般的電子太陽：橫向切開的條紋
+      for (let k = 0; k < 5; k++) { x.fillStyle = th.sky[0]; x.fillRect(th.sunX - 14, th.sunY + 2 + k * 2 + Math.floor(k / 2), 28, 1); }
+      // 資料高塔的剪影，窗戶亮著燈
+      const r = seeded(57);
+      for (let i = 0; i < 16; i++) {
+        const w = 6 + Math.floor(r() * 10), h = 8 + Math.floor(r() * 22), cx = Math.floor(r() * W);
+        if (Math.abs(cx - th.sunX) < 20 && h > 14) continue;
+        x.fillStyle = '#0a0628'; x.fillRect(cx, hz - h, w, h);
+        x.fillStyle = '#5ff1ff'; x.fillRect(cx, hz - h, w, 1);
+        for (let yy = hz - h + 3; yy < hz - 2; yy += 3) for (let xx = cx + 1; xx < cx + w - 1; xx += 2) if (r() < 0.35) { x.fillStyle = r() < 0.5 ? '#ff4ac8' : '#5ff1ff'; x.fillRect(xx, yy, 1, 1); }
+      }
+      // 霓虹網格海面
+      for (let k = 0; k < 10; k++) { const y = Math.round(hz + 1 + Math.pow(k / 10, 1.7) * (H - hz)); x.fillStyle = k % 2 ? 'rgba(255,74,200,0.45)' : 'rgba(95,241,255,0.35)'; x.fillRect(0, y, W, 1); }
+      x.fillStyle = 'rgba(95,241,255,0.35)';
+      for (let k = -16; k <= 16; k++) for (let y = hz + 1; y < H; y++) x.fillRect(Math.round(W / 2 + k * 4 * (1 + (y - hz) / 6)), y, 1, 1);
+    }
+    if (id === 'abyss') {
+      // 從上方照下來的微弱光束
+      for (let k = 0; k < 4; k++) {
+        const bx = 40 + k * 58;
+        for (let y = 0; y < H; y++) { const w = 3 + y * 0.12, a = 0.07 * (1 - y / H); x.fillStyle = `rgba(120,170,255,${a})`; x.fillRect(Math.round(bx + y * 0.25 - w / 2), y, Math.round(w), 1); }
+      }
+      // 海底岩柱
+      const r = seeded(77);
+      for (let i = 0; i < 7; i++) { const cx = Math.floor(r() * W), w = 4 + Math.floor(r() * 8), h = 10 + Math.floor(r() * 24); for (let yy = 0; yy < h; yy++) { const hw = Math.max(1, Math.round(w * (0.4 + yy / h * 0.6) / 2)); x.fillStyle = '#04070f'; x.fillRect(cx - hw, hz - h + yy, hw * 2, 1); } }
+      // 遠方巨大的鯨魚影子
+      for (let i = 0; i < 70; i++) { const yy = Math.round(Math.sin((i / 70) * Math.PI) * 7); x.fillStyle = '#05091a'; x.fillRect(150 + i, 26 - yy, 1, yy * 2 + 2); }
+      x.fillStyle = '#05091a'; x.fillRect(146, 22, 5, 4); x.fillRect(142, 18, 4, 4); x.fillRect(142, 28, 4, 4);
+      x.fillStyle = '#9ad8ff'; x.fillRect(208, 25, 1, 1);
+    }
     // 地平線亮線
     x.fillStyle = th.foam; x.globalAlpha = 0.6; x.fillRect(0, hz, W, 1); x.globalAlpha = 1;
   });
@@ -162,7 +195,7 @@ function cloudSprite(id: ThemeId, k: number) {
 export function drawSea(ctx: CanvasRenderingContext2D, t: number, id: ThemeId = 'day') {
   const th = THEMES[id], hz = th.horizon;
   ctx.drawImage(backdrop(id), 0, 0);
-  for (let k = 0; k < 5; k++) {
+  for (let k = 0; k < (id === 'abyss' ? 0 : 5); k++) {
     const sp = 2 + k * 0.7, cx = ((k * 71 + t * sp) % (W + 70)) - 64, cy = 4 + ((k * 13) % (hz - 26));
     ctx.drawImage(cloudSprite(id, k), Math.round(cx), cy);
   }
@@ -211,6 +244,18 @@ export function drawSea(ctx: CanvasRenderingContext2D, t: number, id: ThemeId = 
     for (let i = 0; i < 32; i++) { const x = (i * 29) % W, y = H - ((i * 17 + t * (12 + (i % 4) * 4)) % H); ctx.fillStyle = i % 4 ? 'rgba(95,241,255,0.75)' : 'rgba(255,255,255,0.9)'; ctx.fillRect(x, Math.round(y), 1, i % 3 ? 2 : 1); }
     return;
   }
+  if (id === 'cyber') {
+    // 掃描線與往上飄的位元
+    const sy = Math.floor((t * 30) % H); ctx.fillStyle = 'rgba(95,241,255,0.12)'; ctx.fillRect(0, sy, W, 2);
+    for (let i = 0; i < 28; i++) { const x = (i * 37) % W, y = H - ((i * 19 + t * (10 + (i % 4) * 5)) % H); if ((Math.floor(t * 4) + i) % 6 === 0) continue; ctx.fillStyle = i % 3 ? 'rgba(95,241,255,0.8)' : 'rgba(255,74,200,0.85)'; ctx.fillRect(x, Math.round(y), i % 4 ? 1 : 2, 1); }
+    return;
+  }
+  if (id === 'abyss') {
+    // 海雪往下飄、生物光一閃一閃
+    for (let i = 0; i < 40; i++) { const x = (i * 43 + Math.sin(t * 0.5 + i) * 5) % W, y = (i * 23 + t * (3 + (i % 4))) % H; ctx.fillStyle = 'rgba(200,220,255,0.35)'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }
+    for (let i = 0; i < 12; i++) { const a = Math.sin(t * 1.5 + i * 2.3); if (a < 0.3) continue; const x = (i * 71) % W, y = 50 + ((i * 29) % (H - 60)); ctx.fillStyle = i % 2 ? `rgba(95,241,255,${a})` : `rgba(160,120,255,${a})`; ctx.fillRect(x, y, 1, 1); }
+    return;
+  }
   if (id === 'lava') {
     // 往上飄的火星
     for (let i = 0; i < 30; i++) { const x = (i * 53 + Math.sin(t * 1.5 + i) * 4) % W, y = H - ((i * 31 + t * (8 + (i % 5) * 3)) % H); ctx.fillStyle = i % 3 ? 'rgba(255,140,40,0.8)' : 'rgba(255,220,120,0.9)'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }
@@ -234,6 +279,8 @@ const PLAT: Record<string, { rim: [string, string]; top: [string, string]; side:
   forest: { rim: ['#c8f4d8', '#9ae4b8'], top: ['#7ac85a', '#6ab84a'], side: ['#5a3a20', '#6a4a28'], mid: ['#5aa84a', '#4c9a40'], deco: ['#ffe08a', '#ff9ab0'], grass: '#2a7a3a', rtop: ['#4c9a40', '#3a8a34'], rtop2: ['#7ac85a', '#6ab84a'], rbot: ['#3a2a1a', '#4a3420'], rmid: ['#6a5a3a', '#5a4a30'] },
   void: { rim: ['#c89aff', '#8a5ad0'], top: ['#3a2a5a', '#2e2048'], side: ['#140a24', '#1c0e30'], mid: ['#24163c', '#2a1a44'], deco: ['#c89aff', '#5ff1ff'], grass: null, rtop: ['#4a2a7a', '#3a1a6a'], rtop2: ['#2a1a44', '#24163c'], rbot: ['#0a0414', '#120820'], rmid: ['#1e1034', '#18102c'] },
   core: { rim: ['#8affff', '#5ff1ff'], top: ['#1a4a6a', '#164060'], side: ['#062440', '#0a2a48'], mid: ['#0e3a5a', '#103e60'], deco: ['#5ff1ff', '#ffffff'], grass: null, rtop: ['#2ab0c8', '#1a90b0'], rtop2: ['#164060', '#1a4a6a'], rbot: ['#041828', '#062030'], rmid: ['#0a2a48', '#0e3050'] },
+  cyber: { rim: ['#5ff1ff', '#ff4ac8'], top: ['#2a1a5a', '#24164e'], side: ['#0a0628', '#120a36'], mid: ['#1a1044', '#1e1250'], deco: ['#5ff1ff', '#ff4ac8'], grass: null, rtop: ['#3a2a7a', '#2e2068'], rtop2: ['#1a1044', '#24164e'], rbot: ['#06041a', '#0a0628'], rmid: ['#120a36', '#160c40'] },
+  abyss: { rim: ['#3a5a9a', '#5f8ad0'], top: ['#1a2440', '#162036'], side: ['#05080f', '#0a0e1a'], mid: ['#0e1426', '#121a30'], deco: ['#5ff1ff', '#a87aff'], grass: null, rtop: ['#2a3456', '#222c4a'], rtop2: ['#121a30', '#162036'], rbot: ['#030509', '#05080f'], rmid: ['#0e1426', '#0a101e'] },
   lava: { rim: ['#ff8a3a', '#ffb070'], top: ['#5a4a4a', '#4a3a3a'], side: ['#2a1a1a', '#1a1010'], mid: ['#3a2a2a', '#443232'], deco: ['#ff7a1a', '#ffd04a'], grass: null, rtop: ['#ff6a1a', '#c84a1a'], rtop2: ['#3a2a2a', '#4a3434'], rbot: ['#1a0e0e', '#24140e'], rmid: ['#3a2a2a', '#2e2020'] },
 };
 function shoal(th = 'day') {
@@ -266,7 +313,7 @@ function reef(th = 'day') {
       return b > 11 ? P.rmid[0] : P.rmid[1];
     });
     const r = seeded(33);
-    const deco = th === 'day' ? ['#ff6b8a', '#ffb05a', '#c87ae0', '#fffbe8'] : th === 'ice' ? ['#ffffff', '#9ad8ff', '#c8f4ff', '#ffffff'] : ['#ff7a1a', '#ffd04a', '#ff4a1a', '#ffb04a'];
+    const deco = th === 'day' ? ['#ff6b8a', '#ffb05a', '#c87ae0', '#fffbe8'] : th === 'ice' ? ['#ffffff', '#9ad8ff', '#c8f4ff', '#ffffff'] : th === 'cyber' ? ['#5ff1ff', '#ff4ac8', '#ffffff', '#5ff1ff'] : th === 'abyss' ? ['#5ff1ff', '#a87aff', '#3a5a9a', '#9ad8ff'] : ['#ff7a1a', '#ffd04a', '#ff4a1a', '#ffb04a'];
     for (let i = 0; i < 7; i++) { const cx = 12 + r() * 56; x.fillStyle = deco[i % 4]; x.fillRect(Math.round(cx), 8 + Math.round(r() * 4), 2, 1); x.fillRect(Math.round(cx), 7, 1, 1); }
   });
 }
@@ -539,6 +586,8 @@ const CHART_COL: Record<string, { sea: string[]; land: [string, string]; sand: s
   forest: { sea: ['#063028', '#0e5a4a', '#2a9a7a', '#7ad8b0'], land: ['#2a7a3a', '#1e6a30'], sand: '#a8d890', foam: '#e8fff0' },
   void: { sea: ['#06020e', '#12062a', '#2a1050', '#6a3a9a'], land: ['#2a1a44', '#1e1034'], sand: '#8a5ad0', foam: '#c89aff' },
   core: { sea: ['#020e1e', '#04304a', '#0a6a8a', '#2ac8d8'], land: ['#164060', '#1a4a6a'], sand: '#5ff1ff', foam: '#8affff' },
+  cyber: { sea: ['#04021a', '#120a3a', '#3a1a8a', '#ff4ac8'], land: ['#1a1044', '#24164e'], sand: '#5ff1ff', foam: '#ffb0f0' },
+  abyss: { sea: ['#010208', '#04081a', '#0a1230', '#1a2a5a'], land: ['#0e1426', '#121a30'], sand: '#3a5a9a', foam: '#5f8ad0' },
 };
 function chartBase(route: ChartNode[][], seed: number, theme = 'day') {
   const C = CHART_COL[theme] ?? CHART_COL.day;
@@ -578,8 +627,8 @@ function nodeIcon(ctx: CanvasRenderingContext2D, k: NodeKind, x: number, y: numb
   if (k === 'boss') { ctx.fillRect(x - 3, y - 11, 7, 4); ctx.fillStyle = '#e8304a'; ctx.fillRect(x - 2, y - 10, 2, 2); ctx.fillRect(x + 1, y - 10, 2, 2); ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 2, y - 7, 1, 2); ctx.fillRect(x, y - 7, 1, 2); ctx.fillRect(x + 2, y - 7, 1, 2); }
 }
 function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number, theme = 'day') {
-  const dark = theme === 'lava' || theme === 'void' || theme === 'core';
-  const FOG: Record<string, [string, string]> = { lava: ['#3a2622', '#2a1a18'], void: ['#1e1030', '#140a22'], core: ['#0a2a40', '#061c30'], forest: ['#e0f0e0', '#c4dcc4'] };
+  const dark = theme === 'lava' || theme === 'void' || theme === 'core' || theme === 'cyber' || theme === 'abyss';
+  const FOG: Record<string, [string, string]> = { cyber: ['#1a1040', '#120a30'], abyss: ['#080c1a', '#04060e'], lava: ['#3a2622', '#2a1a18'], void: ['#1e1030', '#140a22'], core: ['#0a2a40', '#061c30'], forest: ['#e0f0e0', '#c4dcc4'] };
   const [f1, f2] = FOG[theme] ?? ['#e4edf8', '#c6d4e8'];
   const fog = hex(f1), fog2 = hex(f2);
   for (let y = 0; y < H; y++) {

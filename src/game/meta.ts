@@ -68,7 +68,7 @@ export function buyRecruit(m: Meta, form: string): boolean {
 // ── 冒險結算 ──
 export interface RunSummary { station: number; battlesWon: number; caught: number; win: boolean }
 export function pearlsFor(s: RunSummary) {
-  return s.station * 4 + s.battlesWon * 2 + s.caught * 4 + (s.win ? 40 : 0);
+  return s.station * 4 + s.battlesWon * 2 + s.caught * 4 + (s.win ? 60 : 0);
 }
 
 const rootOf = (form: string) => ancestryOf(form)[0].id;
