@@ -216,11 +216,37 @@ export function spriteCells(id: string, f = 0): Cell[] {
   return c;
 }
 
+// 換色：色相旋轉 h 度、飽和度 ×s、亮度 +l（深色外框不變）。環境形態與異變個體使用
+export interface Recolor { h: number; s?: number; l?: number }
+const recolorKey = (r?: Recolor) => (r ? `${r.h},${r.s ?? 1},${r.l ?? 0}` : '');
+function applyRecolor(x: CanvasRenderingContext2D, n: number, r: Recolor) {
+  const img = x.getImageData(0, 0, n, n), d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 10) continue;
+    const R = d[i] / 255, G = d[i + 1] / 255, B = d[i + 2] / 255;
+    const mx = Math.max(R, G, B), mn = Math.min(R, G, B), L = (mx + mn) / 2;
+    if (L < 0.14) continue; // 外框
+    let H = 0, S = 0;
+    if (mx !== mn) {
+      const dd = mx - mn;
+      S = L > 0.5 ? dd / (2 - mx - mn) : dd / (mx + mn);
+      H = mx === R ? (G - B) / dd + (G < B ? 6 : 0) : mx === G ? (B - R) / dd + 2 : (R - G) / dd + 4;
+      H *= 60;
+    }
+    H = (H + r.h + 360) % 360; S = Math.min(1, S * (r.s ?? 1)); const L2 = Math.max(0, Math.min(1, L + (r.l ?? 0)));
+    const q = L2 < 0.5 ? L2 * (1 + S) : L2 + S - L2 * S, p = 2 * L2 - q;
+    const hue = (t: number) => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+    const h = H / 360;
+    d[i] = Math.round(hue(h + 1 / 3) * 255); d[i + 1] = Math.round(hue(h) * 255); d[i + 2] = Math.round(hue(h - 1 / 3) * 255);
+  }
+  x.putImageData(img, 0, 0);
+}
+
 const bakedCache = new WeakMap<Palette, Map<string, HTMLCanvasElement>>();
-function baked(id: string, f: number, pal: Palette, tint?: string): HTMLCanvasElement {
+function baked(id: string, f: number, pal: Palette, tint?: string, rc?: Recolor): HTMLCanvasElement {
   let m = bakedCache.get(pal);
   if (!m) { m = new Map(); bakedCache.set(pal, m); }
-  const key = `${id}:${f}:${tint ?? ''}`;
+  const key = `${id}:${f}:${tint ?? ''}:${recolorKey(rc)}`;
   let cv = m.get(key);
   if (!cv) {
     const n = spriteSize(id);
@@ -229,6 +255,7 @@ function baked(id: string, f: number, pal: Palette, tint?: string): HTMLCanvasEl
     const art = spriteArt(id);
     if (art) { x.imageSmoothingEnabled = false; x.drawImage(art.img, (f % art.frames) * art.size, 0, art.size, art.size, 0, 0, n, n); }
     else x.putImageData(bake(spriteCells(id, f), pal, n), 0, 0);
+    if (rc && !tint) applyRecolor(x, n, rc);
     if (tint) { x.globalCompositeOperation = 'source-in'; x.fillStyle = tint; x.fillRect(0, 0, n, n); }
     m.set(key, cv);
   }
@@ -237,10 +264,10 @@ function baked(id: string, f: number, pal: Palette, tint?: string): HTMLCanvasEl
 
 export function drawSprite(
   ctx: CanvasRenderingContext2D, id: string, pal: Palette, x: number, y: number,
-  opt: { f?: number; flip?: boolean; alpha?: number; scale?: number; tint?: string } = {},
+  opt: { f?: number; flip?: boolean; alpha?: number; scale?: number; tint?: string; recolor?: Recolor } = {},
 ) {
-  const { f = 0, flip = false, alpha = 1, scale = 1, tint } = opt;
-  const cv = baked(id, f, pal, tint);
+  const { f = 0, flip = false, alpha = 1, scale = 1, tint, recolor } = opt;
+  const cv = baked(id, f, pal, tint, recolor);
   const w = Math.round(cv.width * scale);
   ctx.save();
   ctx.imageSmoothingEnabled = false;

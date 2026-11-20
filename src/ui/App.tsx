@@ -7,7 +7,7 @@ import { Dex, End, EventScreen, Help, Port, StarterPick, Title, Voyage, ZonePick
 import { pickEvent, type GameEvent } from '../game/events';
 import { loadMeta, pearlsFor, returnFromRun, saveMeta } from '../game/meta';
 import { useViewport } from './layout';
-import { makeMon } from '../game/creature';
+import { makeMon, makeMutant } from '../game/creature';
 import { FORMS } from '../data/creatures';
 import { APP_VERSION, fetchLatestVersion } from '../game/version';
 
@@ -51,7 +51,9 @@ function devEncounter(): Encounter | null {
   if (!import.meta.env.DEV) return null;
   const q = new URLSearchParams(location.search), id = q.get('enc');
   if (!id || !FORMS[id]) return null;
-  return { mon: makeMon(id, Number(q.get('lv')) || 5, false, true), rarity: FORMS[id].rarity };
+  const mon = makeMon(id, Number(q.get('lv')) || 5, false, true);
+  if (q.get('mutant')) makeMutant(mon);
+  return { mon, rarity: FORMS[id].rarity };
 }
 
 type Screen =

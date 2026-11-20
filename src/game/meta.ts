@@ -29,6 +29,7 @@ export interface BayMon {
   legacy: string | null; // 傳承技能
   evoMemory: string[]; // 曾經到達過的型態
   iv?: number[]; // 個體值（帶回港時保留）
+  mutant?: boolean; // 異變個體
 }
 
 export interface Meta {
@@ -80,7 +81,7 @@ export function bringBack(m: Meta, mon: Mon, replaceId?: string): BayMon {
   const legacyCand = mon.skills.filter((s) => !rootLearn.has(s)).sort((a, b) => (SKILLS[b]?.power ?? 0) - (SKILLS[a]?.power ?? 0));
   const existing = mon.bayId ? m.bay.find((b) => b.id === mon.bayId) : undefined;
   if (existing) return existing; // 本來就住在棲息灣，結算時已經由 returnFromRun 更新
-  const rec: BayMon = { id: newUid(), form: mon.form, root: rootOf(mon.form), bond: 0, legacy: null, evoMemory: [], iv: mon.iv };
+  const rec: BayMon = { id: newUid(), form: mon.form, root: rootOf(mon.form), bond: 0, legacy: null, evoMemory: [], iv: mon.iv, mutant: mon.mutant };
   rec.form = mon.form;
   rec.bond += 1;
   rec.legacy = legacyCand[0] ?? rec.legacy;
@@ -99,6 +100,7 @@ export function monFromBay(b: BayMon): Mon {
   mon.bond = b.bond;
   mon.evoBonus = b.evoMemory.length ? 2 : 0;
   if (b.iv) { mon.iv = [...b.iv]; mon.hp = maxHp(mon); }
+  if (b.mutant) mon.mutant = true;
   if (b.legacy && !mon.skills.includes(b.legacy)) {
     const slots = STAGE_SLOTS[FORMS[mon.form].stage];
     if (mon.skills.length < slots) mon.skills.push(b.legacy); else mon.skills[mon.skills.length - 1] = b.legacy;

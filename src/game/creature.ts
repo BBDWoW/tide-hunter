@@ -18,7 +18,17 @@ export interface Mon {
   evoBonus?: number; // 進化記憶：提早幾級進化
   iv?: number[]; // 個體值：[HP, 攻擊, 防禦, 速度]，各 -10～+10（%）
   style?: { atk: number; guard: number }; // 戰鬥風格：用攻擊技／變化技的次數（決定分支進化）
+  mutant?: boolean; // 異變個體：顏色不同、個體值較好
 }
+
+export const MUTANT_CHANCE = 1 / 30;
+/** 變成異變個體：換色、每項個體值至少 +3 */
+export function makeMutant(m: Mon) {
+  m.mutant = true;
+  m.iv = (m.iv ?? [0, 0, 0, 0]).map((v) => Math.max(v, 3));
+  m.hp = maxHp(m);
+}
+export { recolorOf } from '../data/creatures';
 
 export const IV_RANGE = 10;
 /** 產生隨機個體值；rng 不給就用 Math.random */
@@ -104,7 +114,7 @@ export function xpReward(enemy: Mon): number {
 export interface LevelResult { levels: number; learnable: string[]; evolveTo: string | null }
 
 // 加經驗並升級；回傳本次升了幾級、可學的新技能、是否可進化
-export function gainXp(m: Mon, amount: number): LevelResult {
+export function gainXp(m: Mon, amount: number, zone?: string): LevelResult {
   const res: LevelResult = { levels: 0, learnable: [], evolveTo: null };
   m.xp += amount;
   while (m.xp >= xpToNext(m.lv) && m.lv < 50) {
@@ -115,16 +125,19 @@ export function gainXp(m: Mon, amount: number): LevelResult {
     if (m.hp > 0) m.hp += maxHp(m) - before;
     for (const [l, sk] of formOf(m).learn) if (l === m.lv && !m.skills.includes(sk)) res.learnable.push(sk);
   }
-  res.evolveTo = evolveTarget(m);
+  res.evolveTo = evolveTarget(m, zone);
   return res;
 }
 
-export function evolveTarget(m: Mon): string | null {
-  const ready = (formOf(m).evolve ?? []).filter((e) => m.lv >= e.level - (m.evoBonus ?? 0));
+export function evolveTarget(m: Mon, zone?: string): string | null {
+  const ready = (formOf(m).evolve ?? []).filter((e) => m.lv >= e.level - (m.evoBonus ?? 0) && (!e.zone || e.zone === zone));
   if (!ready.length) return null;
+  // 環境進化優先：在指定區域進化會變成地區形態
+  const env = ready.find((e) => e.zone);
+  if (env) return env.to;
   // 有分支時，依戰鬥風格選擇
   const st = styleOf(m);
-  return (ready.find((e) => e.style === st) ?? ready.find((e) => !e.style) ?? ready[0]).to;
+  return (ready.find((e) => e.style === st) ?? ready.find((e) => !e.style && !e.zone) ?? ready[0]).to;
 }
 
 // 進化：換形態、按比例保留 HP，回傳新形態可學的技能

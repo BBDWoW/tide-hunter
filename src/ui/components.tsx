@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import { ABILITIES, abilitiesOf, FORMS } from '../data/creatures';
+import { ABILITIES, abilitiesOf, FORMS, recolorOf } from '../data/creatures';
 import { ELEM, RARITY, STAGE_NAME, type Elem, type Rarity } from '../data/types';
 import { drawSprite, PAL, spriteSize } from '../render/pixel';
 import { SKILLS } from '../data/skills';
@@ -13,7 +13,7 @@ if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
   setInterval(() => { frame ^= 1; subs.forEach((fn) => fn(frame)); }, 330);
 }
 
-export function Sprite({ form, size = 96, flip = false, silhouette = false, still = false }: { form: string; size?: number; flip?: boolean; silhouette?: boolean; still?: boolean }) {
+export function Sprite({ form, size = 96, flip = false, silhouette = false, still = false, mutant = false }: { form: string; size?: number; flip?: boolean; silhouette?: boolean; still?: boolean; mutant?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = ref.current!, ctx = c.getContext('2d')!, f = FORMS[form];
@@ -21,13 +21,13 @@ export function Sprite({ form, size = 96, flip = false, silhouette = false, stil
     c.width = n; c.height = n;
     const draw = (fr: number) => {
       ctx.clearRect(0, 0, n, n);
-      if (f) drawSprite(ctx, f.sprite, PAL[f.pal], 0, 0, { f: fr, flip, tint: silhouette ? '#1d2a55' : undefined });
+      if (f) drawSprite(ctx, f.sprite, PAL[f.pal], 0, 0, { f: fr, flip, tint: silhouette ? '#1d2a55' : undefined, recolor: recolorOf(form, mutant) });
     };
     draw(frame);
     if (still || silhouette) return;
     subs.add(draw);
     return () => { subs.delete(draw); };
-  }, [form, flip, silhouette, still]);
+  }, [form, flip, silhouette, still, mutant]);
   return <canvas ref={ref} width={48} height={48} class="sprite" style={{ width: `calc(var(--u, 4px) * ${size / 4})`, height: `calc(var(--u, 4px) * ${size / 4})` }} />;
 }
 
@@ -95,6 +95,14 @@ export function IvStars({ iv, detail = false }: { iv?: number[]; detail?: boolea
     </span>
   );
 }
+
+/** 環境進化提示：在特定區域進化會變成地區形態 */
+export function EnvHint({ mon }: { mon: Mon }) {
+  const evo = FORMS[mon.form].evolve?.filter((e) => e.zone);
+  if (!evo?.length) return null;
+  return <p class="small env-hint">🌍 環境進化：{evo.map((e) => `在${ZONE_NAMES[e.zone!] ?? e.zone}進化會變成「${FORMS[e.to].name}」`).join('；')}</p>;
+}
+const ZONE_NAMES: Record<string, string> = { shallows: '碧藍淺灘', ice: '冰封峽灣', lava: '熔岩裂谷', forest: '聖林域', void: '無稽區', core: '域核區域' };
 
 /** 分支進化的傾向：只在接下來會分支進化時顯示 */
 export function StyleMeter({ mon }: { mon: Mon }) {

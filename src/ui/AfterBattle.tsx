@@ -4,11 +4,11 @@ import { FORMS } from '../data/creatures';
 import { SKILLS } from '../data/skills';
 import { RARITY, STAGE_NAME } from '../data/types';
 import { evolve, evolveTarget, formOf, gainXp, maxHp, skillSlots, xpReward, xpToNext, type Mon } from '../game/creature';
-import { applyBoon, boon, isBoss, markCaught, nodeOf, PARTY_MAX, rollBoons, type RunState } from '../game/run';
+import { applyBoon, boon, isBoss, markCaught, nodeOf, PARTY_MAX, rollBoons, ZONES, type RunState, type ZoneId } from '../game/run';
 import { BOON_TIER, BOONS } from '../data/boons';
 import { EVO_W, playEvolution } from '../render/evo';
 import type { BattleResult } from './Battle';
-import { AbilityLines, Bar, Elems, IvStars, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
+import { AbilityLines, Bar, Elems, IvStars, EnvHint, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
 import { drawDeep, drawSea } from '../render/scene';
@@ -53,7 +53,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
         if (m.hp <= 0 || m === enemy) continue;
         const bondMul = 1 + Math.min(10, m.bond ?? 0) * 0.05; // 羈絆經驗加成
         const share = Math.floor((result.participants.includes(m.uid) ? reward : reward / 2) * bondMul);
-        const r = gainXp(m, share);
+        const r = gainXp(m, share, run.zone);
         out.push({ uid: m.uid, text: `${formOf(m).name} 獲得 ${share} 經驗值${r.levels ? `，升到了 Lv${m.lv}！` : ''}` });
         // 先進化（技能上限會增加），再處理新技能
         if (r.evolveTo) q.push({ k: 'evolve', uid: m.uid, to: r.evolveTo });
@@ -97,10 +97,11 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
             <EvolveScene mon={find(cur.uid)!} to={cur.to}
               onDone={(learn) => {
                 const m = find(cur.uid)!;
-                const branch = Object.values(FORMS).flatMap((f) => f.evolve ?? []).find((e) => e.to === cur.to && e.style);
-                note(m.uid, `進化成了 ${formOf(m).name}！${branch ? `（依戰鬥風格走向${branch.style === 'guard' ? '守護型' : '攻擊型'}）` : ''}`);
+                const branch = Object.values(FORMS).flatMap((f) => f.evolve ?? []).find((e) => e.to === cur.to && (e.style || e.zone));
+                const why = branch?.zone ? `（受到${ZONES[branch.zone as ZoneId]?.name ?? ''}的環境影響）` : branch?.style ? `（依戰鬥風格走向${branch.style === 'guard' ? '守護型' : '攻擊型'}）` : '';
+                note(m.uid, `進化成了 ${formOf(m).name}！${why}`);
                 const extra: Task[] = learn.map((sk) => ({ k: 'learn', uid: m.uid, skill: sk }));
-                const nextEvo = evolveTarget(m);
+                const nextEvo = evolveTarget(m, run.zone);
                 if (nextEvo) extra.push({ k: 'evolve', uid: m.uid, to: nextEvo });
                 shift(extra);
               }} />
@@ -109,11 +110,11 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
             <div class="after-list">
               {run.party.map((m) => (
                 <div class="after-row" key={m.uid}>
-                  <Sprite form={m.form} size={48} />
+                  <Sprite form={m.form} size={48} mutant={m.mutant} />
                   <div class="grow">
                     <span class="row-gap"><b>{formOf(m).name}</b><span class="num">Lv{m.lv}</span></span>
                     <Bar value={m.xp} max={xpToNext(m.lv)} kind="xp" />
-                    <StyleMeter mon={m} />
+                    <StyleMeter mon={m} /><EnvHint mon={m} />
                     {lines.filter((l) => l.uid === m.uid).map((l, i) => <p class="small" key={i}>{l.text}</p>)}
                   </div>
                 </div>
@@ -143,9 +144,9 @@ function CaughtCard({ mon }: { mon: Mon }) {
   const f = formOf(mon);
   return (
     <div class="caught-card" style={{ '--rar': RARITY[f.rarity].color }}>
-      <Sprite form={mon.form} size={144} />
+      <Sprite form={mon.form} size={144} mutant={mon.mutant} />
       <div class="grow">
-        <div class="row-gap"><b class="big-name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={mon.form} /></div>
+        <div class="row-gap"><b class="big-name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={mon.form} />{mon.mutant && <span class="mutant-tag">✦ 異變</span>}</div>
         <div class="row-gap"><Elems list={f.elems} /><span class="muted">{f.category} · Lv{mon.lv}</span></div>
         <div class="row-gap"><span class="small">個體評價</span><IvStars iv={mon.iv} detail /></div>
         <AbilityLines form={f.id} />
@@ -182,7 +183,7 @@ function EvolveScene({ mon, to, onDone }: { mon: Mon; to: string; onDone: (learn
     return playEvolution(ref.current!, from, to, () => {
       learned.current = evolve(mon, to);
       setPhase('done');
-    }, (p) => { if (p === 'reveal') setLabel(FORMS[to].name); });
+    }, (p) => { if (p === 'reveal') setLabel(FORMS[to].name); }, mon.mutant);
   }, [phase]);
   return (
     <div class="evo-box">

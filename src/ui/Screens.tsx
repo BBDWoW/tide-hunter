@@ -11,7 +11,7 @@ import type { GameEvent } from '../game/events';
 import { APP_VERSION, CHANGELOG, hasUnreadNews, markNewsRead } from '../game/version';
 import { BOONS, LURES } from '../data/boons';
 import { chartPos, drawChart, drawDeep, drawPort, drawSea, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
-import { AbilityLines, Bar, Elems, IvStars, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
+import { AbilityLines, Bar, Elems, IvStars, EnvHint, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 
 export function MenuItem({ children, onClick, disabled, hot, sel, sub, onHover }: { children: ComponentChildren; onClick: () => void; disabled?: boolean; hot?: boolean; sel?: boolean; sub?: ComponentChildren; onHover?: () => void }) {
@@ -172,7 +172,7 @@ export function Port({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
             <div class="pick-grid">
               {meta.bay.map((b) => (
                 <div class="pick" key={b.id}>
-                  <Sprite form={b.form} size={48} />
+                  <Sprite form={b.form} size={48} mutant={b.mutant} />
                   <span class="grow">
                     <span class="row-gap"><b>{FORMS[b.form].name}</b>{b.iv && <IvStars iv={b.iv} />}</span>
                     <span class="small">羈絆 <span class="hearts">{'❤'.repeat(Math.min(10, b.bond))}</span> {b.bond}</span>
@@ -249,7 +249,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
             <div class="party-strip">
               {run.party.map((m) => (
                 <div class={`slot ${m.hp <= 0 ? 'ko' : ''}`} key={m.uid} title={formOf(m).name}>
-                  <Sprite form={m.form} size={48} />
+                  <Sprite form={m.form} size={48} mutant={m.mutant} />
                   <Bar value={m.hp} max={maxHp(m)} />
                   <span class="slot-lv">Lv{m.lv}</span>
                 </div>
@@ -290,11 +290,11 @@ function PartyList({ run, onChange }: { run: RunState; onChange: () => void }) {
         const f = formOf(m), mx = maxHp(m);
         return (
           <div class={`pcard ${m.hp <= 0 ? 'ko' : ''}`} key={m.uid}>
-            <Sprite form={m.form} size={96} />
+            <Sprite form={m.form} size={96} mutant={m.mutant} />
             <div class="grow">
-              <div class="row-gap"><b class="name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={m.form} /><span class="num">Lv{m.lv}</span></div>
+              <div class="row-gap"><b class="name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={m.form} />{m.mutant && <span class="mutant-tag">✦ 異變</span>}<span class="num">Lv{m.lv}</span></div>
               <div class="row-gap"><Elems list={f.elems} /><span class="small dim">{f.category}</span><IvStars iv={m.iv} detail /></div>
-              <StyleMeter mon={m} />
+              <StyleMeter mon={m} /><EnvHint mon={m} />
               <div class="hp-row"><Bar value={m.hp} max={mx} /><span class="num">{Math.max(0, m.hp)}/{mx}</span></div>
               <Bar value={m.xp} max={xpToNext(m.lv)} kind="xp" />
               <AbilityLines form={f.id} label={false} />
@@ -321,7 +321,7 @@ function ItemList({ run, onChange }: { run: RunState; onChange: () => void }) {
         {run.party.map((m, i) => (
           <button class="pick" key={m.uid} disabled={!canUseOutside(m, using)}
             onClick={() => { setMsg(applyItemOutside(run, using, i)); setUsing(null); onChange(); }}>
-            <Sprite form={m.form} size={48} />
+            <Sprite form={m.form} size={48} mutant={m.mutant} />
             <span class="grow">
               <span class="row-gap"><b>{formOf(m).name}</b><span class="num">Lv{m.lv}</span></span>
               <Bar value={m.hp} max={maxHp(m)} />
@@ -414,6 +414,8 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
           <h3>個體值與分支進化</h3>
           <p class="small">每隻生物的 HP、攻擊、防禦、速度都有 ±10% 的個體差異，用 ★1～5 表示（霸主固定）。帶回棲息灣的夥伴會保留個體值。</p>
           <p class="small">初始三隻在 Lv18 進化時會分成兩種：戰鬥中常用攻擊技會成為<b>攻擊型</b>；變化技（強化、回復、護盾、場地、異常）用得夠多（35% 以上）會成為<b>守護型</b>。在隊伍畫面可以看到目前的傾向。</p>
+          <p class="small"><b>環境進化</b>：有些生物在特定區域進化時會變成地區形態，例如潮汐胞體在冰封峽灣進化會變成冰晶星渦。隊伍畫面會顯示提示。</p>
+          <p class="small"><b>✦ 異變個體</b>：野生生物有很小的機率是異變個體，顏色跟一般的不同，個體值也比較好。</p>
           <h3>異常狀態</h3>
           <ul class="small">
             <li><b>灼傷</b>：每回合扣 1/16 HP，攻擊力下降。<b>中毒</b>：每回合扣 1/10 HP。<b>流血</b>：每回合扣 1/12 HP（岩、數碼、骷髏不會流血）。</li>
@@ -472,7 +474,7 @@ export function End({ vp, run, win, pearls, onTitle }: { vp: Viewport; run: RunS
               <div class="pick-grid">
                 {candidates.map((m) => (
                   <button class="pick" key={m.uid} onClick={() => (full ? setPicked(m) : keep(m))}>
-                    <Sprite form={m.form} size={48} />
+                    <Sprite form={m.form} size={48} mutant={m.mutant} />
                     <span class="grow"><b>{formOf(m).name}</b><span class="small dim">Lv{m.lv}・回港後以 {FORMS[ancestryOf(m.form)[0].id].name} 的樣子重新出發</span></span>
                   </button>
                 ))}
@@ -483,7 +485,7 @@ export function End({ vp, run, win, pearls, onTitle }: { vp: Viewport; run: RunS
                 <div class="pick-grid">
                   {meta.bay.map((b) => (
                     <button class="pick" key={b.id} onClick={() => keep(picked, b.id)}>
-                      <Sprite form={b.form} size={48} /><span class="grow"><b>{FORMS[b.form].name}</b><span class="small">羈絆 {b.bond}</span></span>
+                      <Sprite form={b.form} size={48} mutant={b.mutant} /><span class="grow"><b>{FORMS[b.form].name}</b><span class="small">羈絆 {b.bond}</span></span>
                     </button>
                   ))}
                 </div>
@@ -513,7 +515,7 @@ export function EventScreen({ vp, run, ev, onDone }: { vp: Viewport; run: RunSta
             const ok = o.can ? o.can(run) : true;
             return <MenuItem key={i} disabled={!ok} onClick={() => { setResult(o.act(run)); saveRun(run); }} sub={o.hint}>{o.label}</MenuItem>;
           })}
-          <div class="party-strip">{run.party.map((m) => <div class={`slot ${m.hp <= 0 ? 'ko' : ''}`} key={m.uid}><Sprite form={m.form} size={48} /><Bar value={m.hp} max={maxHp(m)} /><span class="slot-lv">Lv{m.lv}</span></div>)}</div>
+          <div class="party-strip">{run.party.map((m) => <div class={`slot ${m.hp <= 0 ? 'ko' : ''}`} key={m.uid}><Sprite form={m.form} size={48} mutant={m.mutant} /><Bar value={m.hp} max={maxHp(m)} /><span class="slot-lv">Lv{m.lv}</span></div>)}</div>
         </Win>
       } />
   );

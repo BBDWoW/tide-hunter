@@ -1,7 +1,7 @@
 // 一局冒險的狀態：隊伍、道具、航程站點、存檔
 import { CORE_POOL, FOREST_POOL, FORMS, ICE_POOL, LAVA_POOL, VOID_POOL, ZONE1_POOL } from '../data/creatures';
 import { effectiveness, RARITY_ORDER, type Rarity } from '../data/types';
-import { formOf, makeMon, maxHp, type Mon } from './creature';
+import { formOf, makeMon, makeMutant, maxHp, MUTANT_CHANCE, type Mon } from './creature';
 import { int, makeRng, newSeed, next, weighted, type Rng } from './rng';
 import type { ItemId } from './battle';
 import { BOON_LIST, BOON_TIER, BOONS, type LureId } from '../data/boons';
@@ -281,7 +281,9 @@ export function rollEncounter(run: RunState, q: number, shadow: Shadow): Encount
   const lv = firstStop(run) ? 3 : Math.max(2, Math.round((zoneOf(run).special ? (run.specialLv ?? 10) : zoneOf(run).lvBase) + run.station * 0.8 + int(run.rng, 0, 2)) - ({ N: 0, B: 0, A: 1, S: 2, SSR: 2 } as const)[rarity] + elite);
   const ev = FORMS[formId].evolve?.find((e) => lv >= e.level);
   if (ev) formId = ev.to;
-  return { mon: makeMon(formId, lv, false, true, () => next(run.rng)), rarity };
+  const mon = makeMon(formId, lv, false, true, () => next(run.rng));
+  if (next(run.rng) < MUTANT_CHANCE * (1 + boon(run, 'lucky') * 0.5)) makeMutant(mon);
+  return { mon, rarity };
 }
 
 export const perfectAt = (run: RunState) => 0.92 - boon(run, 'steady') * 0.05;

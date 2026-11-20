@@ -1,5 +1,5 @@
 // 場景繪製（256×144 像素）：海景全景、戰鬥地形、釣魚、標題、海圖、海底
-import { FORMS } from '../data/creatures';
+import { FORMS, recolorOf } from '../data/creatures';
 import { ELEM, type Elem } from '../data/types';
 import { drawSprite, PAL, spriteSize } from './pixel';
 import { sceneArt } from './art';
@@ -281,7 +281,7 @@ function foamRing(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: num
   }
 }
 
-export interface MonView { form: string; x: number; y: number; flip: boolean; flash: number; shake: number; lunge: number; alpha: number; scale: number; tint?: string; aura?: string }
+export interface MonView { form: string; x: number; y: number; flip: boolean; flash: number; shake: number; lunge: number; alpha: number; scale: number; tint?: string; aura?: string; mutant?: boolean }
 export interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; g?: number }
 export interface Beam { x0: number; y0: number; x1: number; y1: number; life: number; color: string }
 
@@ -320,6 +320,7 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
     const sx = m.x + m.lunge * (m.flip ? -1 : 1) + (m.shake ? Math.round(Math.sin(t * 60) * 2) : 0);
     const sy = m.y + Math.round(Math.sin(t * 2.4 + i) * 1.2);
     const white = m.flash > 0 && Math.floor(m.flash * 20) % 2 === 0;
+    const rc = recolorOf(m.form, m.mutant);
     if (m.aura) {
       // 光環：脈動的發光外框＋上升的能量粒子
       const n = spriteSize(f.sprite) * m.scale, pulse = 0.6 + 0.3 * Math.sin(t * 4 + i);
@@ -328,7 +329,7 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
       }
       if (Math.random() < dt * 14) parts.push({ x: sx + n * (0.15 + Math.random() * 0.7), y: sy + n * (0.5 + Math.random() * 0.4), vx: (Math.random() - 0.5) * 6, vy: -18 - Math.random() * 16, life: 0.9, max: 0.9, color: Math.random() < 0.5 ? m.aura : '#ffffff', size: Math.random() < 0.3 ? 2 : 1 });
     }
-    drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(sx), Math.round(sy), { f: fr, flip: m.flip, alpha: m.alpha, scale: m.scale, tint: white ? '#ffffff' : m.tint });
+    drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(sx), Math.round(sy), { f: fr, flip: m.flip, alpha: m.alpha, scale: m.scale, tint: white ? '#ffffff' : m.tint, recolor: rc });
   }
   for (const b of beams) {
     ctx.globalAlpha = Math.min(1, b.life * 4);
@@ -495,7 +496,7 @@ export function drawStarterScene(ctx: CanvasRenderingContext2D, t: number, forms
     const f = FORMS[id], n = spriteSize(f.sprite);
     const jump = i === sel ? Math.round(Math.abs(Math.sin(t * 3)) * -4) : 0;
     shadow(ctx, p.x, p.y, 13);
-    drawSprite(ctx, f.sprite, PAL[f.pal], p.x - n / 2, p.y - n + 3 + jump, { f: Math.floor(t * 3 + i) % 2, alpha: i === sel ? 1 : 0.85 });
+    drawSprite(ctx, f.sprite, PAL[f.pal], p.x - n / 2, p.y - n + 3 + jump, { f: Math.floor(t * 3 + i) % 2, alpha: i === sel ? 1 : 0.85, recolor: recolorOf(id) });
   });
 }
 
@@ -520,7 +521,7 @@ export function drawPort(ctx: CanvasRenderingContext2D, t: number, bay: string[]
     const f = FORMS[id]; if (!f) return;
     const n = spriteSize(f.sprite), sp = 0, x = 40 + i * 34 + Math.sin(t * 0.5 + i * 1.7) * 8, y = 62 + (i % 2) * 18 + Math.sin(t * 1.3 + i) * 2;
     const flip = Math.cos(t * 0.5 + i * 1.7) < 0;
-    drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(x - n / 2), Math.round(y - n / 2 + sp * 0), { f: Math.floor(t * 3 + i) % 2, flip });
+    drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(x - n / 2), Math.round(y - n / 2 + sp * 0), { f: Math.floor(t * 3 + i) % 2, flip, recolor: recolorOf(id) });
   });
 }
 

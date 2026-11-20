@@ -1,12 +1,12 @@
 // 進化演出：閃爍 → 光柱 → 像素碎裂 → 重組 → 光環。華麗但元素不多。
-import { FORMS } from '../data/creatures';
+import { FORMS, recolorOf } from '../data/creatures';
 import { drawSprite, PAL, spritePixels, spriteSize } from './pixel';
 
 export const EVO_W = 96;
 const off = (id: string) => { const n = spriteSize(id); return { x: (EVO_W - n) / 2, y: EVO_W - n - 18 }; };
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 
-export function playEvolution(canvas: HTMLCanvasElement, from: string, to: string, onDone: () => void, onPhase?: (p: 'start' | 'reveal') => void) {
+export function playEvolution(canvas: HTMLCanvasElement, from: string, to: string, onDone: () => void, onPhase?: (p: 'start' | 'reveal') => void, mutant?: boolean) {
   const ctx = canvas.getContext('2d')!;
   const ff = FORMS[from], ft = FORMS[to];
   const oa = off(ff.sprite), ob = off(ft.sprite);
@@ -49,7 +49,7 @@ export function playEvolution(canvas: HTMLCanvasElement, from: string, to: strin
       const k = t / T.fl;
       pillar(k, 2 + k * 10);
       const white = Math.floor(t * (5 + t * 12)) % 2 === 0;
-      drawSprite(ctx, ff.sprite, PAL[ff.pal], oa.x, oa.y, { tint: white ? '#ffffff' : undefined });
+      drawSprite(ctx, ff.sprite, PAL[ff.pal], oa.x, oa.y, { tint: white ? '#ffffff' : undefined, recolor: recolorOf(from, mutant) });
     } else if (t < T.sc) {
       const k = t - T.fl;
       pillar(1, 12); stream(k);
@@ -69,14 +69,14 @@ export function playEvolution(canvas: HTMLCanvasElement, from: string, to: strin
       if (!revealed) { revealed = true; onPhase?.('reveal'); }
       const k = (t - T.as) / (T.end - T.as);
       pillar(1 - k, 8 * (1 - k));
-      drawSprite(ctx, ft.sprite, PAL[ft.pal], ob.x, ob.y);
+      drawSprite(ctx, ft.sprite, PAL[ft.pal], ob.x, ob.y, { recolor: recolorOf(to, mutant) });
       ctx.globalAlpha = Math.max(0, 0.9 - k * 1.3); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, EVO_W, EVO_W); ctx.globalAlpha = 1;
       const r = Math.round(8 + k * 44);
       ctx.fillStyle = '#ffcf4a';
       for (let a = 0; a < 90; a++) { const an = (a / 90) * Math.PI * 2; ctx.fillRect(Math.round(EVO_W / 2 + Math.cos(an) * r), Math.round(ob.y + 26 + Math.sin(an) * r * 0.75), 1, 1); }
     } else {
       done = true;
-      drawSprite(ctx, ft.sprite, PAL[ft.pal], ob.x, ob.y);
+      drawSprite(ctx, ft.sprite, PAL[ft.pal], ob.x, ob.y, { recolor: recolorOf(to, mutant) });
       if (!revealed) onPhase?.('reveal');
       onDone();
       return;

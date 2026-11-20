@@ -21,7 +21,7 @@ import { Reel } from './Reel';
 export interface BattleResult { outcome: 'win' | 'lose' | 'caught' | 'fled'; enemy: Mon; participants: string[] }
 
 type Mode = 'busy' | 'main' | 'skills' | 'switch' | 'force' | 'items' | 'itemTarget' | 'reel' | 'lifestone';
-interface Disp { form: string; lv: number; hp: number; max: number; energy: number; status: StatusId | null; shield: number; trap?: number }
+interface Disp { form: string; lv: number; hp: number; max: number; energy: number; status: StatusId | null; shield: number; trap?: number; mutant?: boolean }
 interface Popup { id: number; side: SideId; text: string; cls: string }
 
 const SPEED_KEY = 'tidehunter.speed';
@@ -35,7 +35,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const bs = bsRef.current;
   const snap = (side: SideId): Disp => {
     const m = active(bs, side);
-    return { form: m.form, lv: m.lv, hp: m.hp, max: maxHp(m), energy: volOf(bs, side).energy, status: m.status, shield: volOf(bs, side).shield };
+    return { form: m.form, lv: m.lv, hp: m.hp, max: maxHp(m), energy: volOf(bs, side).energy, status: m.status, shield: volOf(bs, side).shield, mutant: m.mutant };
   };
   const disp = useRef<[Disp, Disp]>([snap(0), snap(1)]);
   const [, setTick] = useState(0);
@@ -53,7 +53,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
 
   const mkView = (side: SideId, form: string): MonView => {
     const p = monSlot(side, form);
-    return { form, x: p.x, y: p.y, flip: side === 1, flash: 0, shake: 0, lunge: 0, alpha: 0, scale: p.scale, aura: auraColor(form, side === 1 && boss) };
+    return { form, x: p.x, y: p.y, flip: side === 1, flash: 0, shake: 0, lunge: 0, alpha: 0, scale: p.scale, aura: auraColor(form, side === 1 && boss), mutant: active(bs, side).mutant };
   };
   const anim = useRef({
     mons: [mkView(0, disp.current[0].form), mkView(1, disp.current[1].form)] as MonView[],
@@ -96,6 +96,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       say(boss ? `霸主「${ef.name}」擋住了去路！` : `野生的 ${ef.name} 出現了！`);
       if (enc.rarity === 'SSR') say('★ 傳說級的氣息！這可能是唯一的機會！');
       else if (enc.rarity === 'S') say('☆ 史詩級的稀有生物！');
+      if (enc.mon.mutant) say('✦ 是異變個體！牠的顏色跟一般的不一樣！');
       await wait(700);
       say(`上吧，${formOf(active(bs, 0)).name}！`);
       await wait(500);
@@ -145,9 +146,9 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       case 'switch': {
         if (e.side === 0) participants.current.add(bs.sides[0].team[e.index].uid);
         a.fade[e.side] = 1; a.enter[e.side] = 0;
-        a.mons[e.side] = { ...a.mons[e.side], form: e.form, scale: monSlot(e.side, e.form).scale, y: monSlot(e.side, e.form).y, aura: auraColor(e.form) };
+        a.mons[e.side] = { ...a.mons[e.side], form: e.form, scale: monSlot(e.side, e.form).scale, y: monSlot(e.side, e.form).y, aura: auraColor(e.form), mutant: bs.sides[e.side].team[e.index].mutant };
         const m = bs.sides[e.side].team[e.index];
-        d[e.side] = { form: e.form, lv: m.lv, hp: e.hp, max: maxHp(m), energy: e.energy, status: e.status, shield: 0 };
+        d[e.side] = { form: e.form, lv: m.lv, hp: e.hp, max: maxHp(m), energy: e.energy, status: e.status, shield: 0, mutant: m.mutant };
         rerender(); await wait(350); break;
       }
       case 'field': setField(e.id ? { id: e.id, turns: e.turns } : null); break;
@@ -294,7 +295,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
               return (
                 <button class="pick" disabled={disabled} key={m.uid}
                   onClick={() => (mode === 'itemTarget' ? submit({ type: 'item', item: itemPick!, target: i }) : chooseSwitch(i))}>
-                  <Sprite form={m.form} size={48} />
+                  <Sprite form={m.form} size={48} mutant={m.mutant} />
                   <span class="grow">
                     <span class="row-gap"><b>{FORMS[m.form].name}</b><span class="num">Lv{m.lv}</span>{isActive && <span class="small dim">出場中</span>}</span>
                     <Bar value={m.hp} max={maxHp(m)} />
@@ -379,7 +380,7 @@ function HudBox({ side, d, rarity, boss, charged, locked }: { side: SideId; d: D
   return (
     <div class={`hud hud-${side}`}>
       <div class="hud-top">
-        <b class="hud-name">{f.name}</b>
+        <b class="hud-name">{f.name}</b>{d.mutant && <span class="mutant-tag">✦</span>}
         {rarity && <RarityTag r={rarity} />}
         {boss && <span class="boss-tag">霸主</span>}
         <span class="lv">Lv{d.lv}</span>
