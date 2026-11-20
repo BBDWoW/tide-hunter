@@ -18,6 +18,13 @@ npm run preview  # 預覽打包結果
 推到 `main` 分支時，GitHub Actions 會自動打包並部署到 GitHub Pages（設定在 `.github/workflows/deploy.yml`）。
 第一次使用前，要在儲存庫的 **Settings → Pages → Build and deployment → Source** 選 **GitHub Actions**。
 
+## 版本與更新通知
+
+- 每次更新都要在 `src/data/changelog.json` **最上面**加一筆（版本號、日期、更新項目）。主畫面的「📢 通知」會列出這些內容，右下角顯示目前版本
+- 打包時會輸出 `version.json`。正在玩的人每分鐘檢查一次，發現新版本時：
+  - 在主畫面、港口、圖鑑、玩法說明：倒數 5 秒後自動更新
+  - 冒險途中：只在下方顯示「新版本已就緒」，不會打斷，回到主畫面才倒數更新
+
 ## 技術架構
 
 | 部分 | 技術 |

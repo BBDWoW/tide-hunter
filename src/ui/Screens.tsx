@@ -8,6 +8,7 @@ import { bayCap, bayStartLevel, bringBack, buyRecruit, buyUpgrade, loadMeta, mon
 import { SKILLS } from '../data/skills';
 import { canUseOutside, enterSpecial, healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
+import { APP_VERSION, CHANGELOG, hasUnreadNews, markNewsRead } from '../game/version';
 import { BOONS, LURES } from '../data/boons';
 import { chartPos, drawChart, drawDeep, drawPort, drawSea, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
 import { AbilityLines, Bar, Elems, RarityTag, SkillLine, Sprite, StageTag } from './components';
@@ -24,10 +25,30 @@ export function MenuItem({ children, onClick, disabled, hot, sub, onHover }: { c
 // ── 標題 ──
 export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp, onPort }: { vp: Viewport; hasSave: boolean; onNew: () => void; onContinue: () => void; onDex: () => void; onHelp: () => void; onPort: () => void }) {
   const dex = loadDex(), meta = loadMeta();
+  const [news, setNews] = useState(false);
+  const [unread, setUnread] = useState(hasUnreadNews);
+  const openNews = () => { setNews(true); setUnread(false); markNewsRead(); };
   return (
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={drawTitle} label="夕陽下的海面，潮靈躍出水面" />}
-      overlay={<div class="title-logo"><span class="title-en">TIDE HUNTER</span><h1>潮汐獵手</h1><span class="title-sub">釣起潮靈 · 收服 · 進化 · 挑戰霸主</span></div>}
+      overlay={<>
+        <div class="title-logo"><span class="title-en">TIDE HUNTER</span><h1>潮汐獵手</h1><span class="title-sub">釣起潮靈 · 收服 · 進化 · 挑戰霸主</span></div>
+        <button class="news-btn" onClick={() => (news ? setNews(false) : openNews())} aria-label="更新通知">📢 通知{unread && <i class="news-dot" aria-label="有新消息" />}</button>
+        <span class="app-version">v{APP_VERSION}</span>
+      </>}
+      panel={news && (
+        <Win class="big-panel" title={`更新通知　目前版本 v${APP_VERSION}`}>
+          <div class="item-list">
+            {CHANGELOG.map((c, i) => (
+              <div class="news-entry" key={c.version}>
+                <h3 class="sub-h">v{c.version}<span class="small dim">　{c.date}{i === 0 ? '　最新' : ''}</span></h3>
+                <ul>{c.items.map((t) => <li key={t}>{t}</li>)}</ul>
+              </div>
+            ))}
+          </div>
+          <MenuItem onClick={() => setNews(false)} hot>關閉</MenuItem>
+        </Win>
+      )}
       dock={
         <div class="dock-center">
           <Win class="title-menu">

@@ -283,3 +283,14 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .zone-card:hover, .zone-card:focus-visible { border-color: var(--amber); outline: none; transform: translateY(calc(var(--u) * -1)); }
 .zone-ice { background: linear-gradient(180deg, rgba(160, 220, 255, 0.25), rgba(60, 120, 200, 0.15)); }
 .zone-lava { background: linear-gradient(180deg, rgba(255, 120, 50, 0.25), rgba(120, 30, 20, 0.2)); }
+
+/* ── 更新通知與版本 ── */
+.news-btn { position: absolute; top: calc(var(--u) * 3); right: calc(var(--u) * 3); background: rgba(5, 10, 32, 0.6); border: 1px solid var(--bevel); color: var(--ink); font-size: max(11px, calc(var(--u) * 3.6)); padding: 0.25em 0.7em; cursor: pointer; pointer-events: auto; }
+.news-btn:hover { background: rgba(5, 10, 32, 0.85); }
+.news-dot { position: absolute; top: 2px; right: 2px; width: 9px; height: 9px; border-radius: 50%; background: #ff4a5a; box-shadow: 0 0 0 2px rgba(5, 10, 32, 0.8); }
+.app-version { position: absolute; right: calc(var(--u) * 2); bottom: calc(var(--u) * 1.5); font-size: max(9px, calc(var(--u) * 2.6)); color: rgba(255, 255, 255, 0.55); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6); pointer-events: none; }
+.news-entry ul { margin: 0.2em 0 0.6em; padding-left: 1.3em; }
+.news-entry li { margin: 0.2em 0; line-height: 1.45; }
+.update-toast { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 50; background: rgba(5, 10, 32, 0.92); border: 1px solid #ffcf4a; color: #fff; padding: 6px 14px; font-size: 14px; pointer-events: none; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; }
+.update-toast b { color: #ffcf4a; }
+.update-toast.quiet { border-color: var(--bevel); opacity: 0.85; font-size: 12px; top: auto; bottom: 8px; }
