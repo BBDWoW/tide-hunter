@@ -70,8 +70,18 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 /* 選單項目：遊戲式的 ▶ 游標 */
 .mi { display: flex; align-items: center; gap: calc(var(--u) * 1.5); width: 100%; background: none; border: 0; padding: calc(var(--u) * 1) calc(var(--u) * 1.5); cursor: pointer; text-align: left; text-shadow: 0 calc(var(--u) * 0.5) 0 rgba(0, 0, 0, 0.6); touch-action: manipulation; }
 .mi .cursor { color: var(--amber); visibility: hidden; font-size: 0.8em; }
-.mi:hover:not(:disabled) .cursor, .mi:focus-visible .cursor { visibility: visible; }
-.mi:hover:not(:disabled), .mi:focus-visible { color: var(--amber); outline: none; }
+/* 只有真的有滑鼠的裝置才顯示 hover（手機點過的按鈕不會殘留 ▶） */
+@media (hover: hover) {
+  .mi:hover:not(:disabled) .cursor { visibility: visible; }
+  .mi:hover:not(:disabled) { color: var(--amber); }
+}
+.mi:focus-visible .cursor { visibility: visible; }
+.mi:focus-visible { color: var(--amber); outline: none; }
+.mi:focus { outline: none; }
+/* 「已選取」：跟 ▶（下一步）分開 */
+.mi.sel { color: var(--amber); background: rgba(255, 207, 74, 0.12); box-shadow: inset 0 0 0 1px rgba(255, 207, 74, 0.7); }
+.mi.sel .cursor { visibility: hidden; animation: none; }
+.mi .check { color: var(--amber); }
 .mi.hot { color: var(--amber); }
 .mi.hot .cursor { visibility: visible; animation: nudge 0.8s steps(2) infinite; }
 .mi:disabled { opacity: 0.38; cursor: not-allowed; }

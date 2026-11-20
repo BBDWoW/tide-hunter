@@ -14,9 +14,9 @@ import { chartPos, drawChart, drawDeep, drawPort, drawSea, drawStarterScene, dra
 import { AbilityLines, Bar, Elems, IvStars, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 
-export function MenuItem({ children, onClick, disabled, hot, sub, onHover }: { children: ComponentChildren; onClick: () => void; disabled?: boolean; hot?: boolean; sub?: ComponentChildren; onHover?: () => void }) {
+export function MenuItem({ children, onClick, disabled, hot, sel, sub, onHover }: { children: ComponentChildren; onClick: () => void; disabled?: boolean; hot?: boolean; sel?: boolean; sub?: ComponentChildren; onHover?: () => void }) {
   return (
-    <button class={`mi ${hot ? 'hot' : ''}`} onClick={onClick} disabled={disabled} onMouseEnter={onHover} onFocus={onHover}>
+    <button class={`mi ${hot ? 'hot' : ''} ${sel ? 'sel' : ''}`} onClick={onClick} disabled={disabled} onMouseEnter={onHover} onFocus={onHover} aria-pressed={sel}>
       <span class="cursor">▶</span><span class="mi-main">{children}</span>{sub && <span class="mi-sub">{sub}</span>}
     </button>
   );

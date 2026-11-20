@@ -126,7 +126,7 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
               <MenuItem onClick={() => pickLure('legend')} disabled={!run.lures.legend} sub={`×${run.lures.legend}`}>傳說餌</MenuItem>
             </div>}
             {phase === 'choose' && <div class="cmd-grid">
-              {shadows.map((sh, i) => <MenuItem key={i} onClick={() => { lastTap.current = i; setSel(i); }} hot={i === sel}>{['左', '中', '右'][[...shadows].sort((a, b) => a.x - b.x).indexOf(sh)] ?? ''}・{SIZE_NAME[sh.size]}魚影</MenuItem>)}
+              {shadows.map((sh, i) => ({ sh, i })).sort((a, b) => a.sh.x - b.sh.x).map(({ sh, i }, k) => <MenuItem key={i} onClick={() => { lastTap.current = i; setSel(i); }} sel={i === sel} sub={i === sel ? <span class="check">✓ 已選</span> : undefined}>{shadows.length > 1 ? `${['左', '中', '右'][k]}・` : ''}{SIZE_NAME[sh.size]}魚影</MenuItem>)}
               <MenuItem onClick={startCast} hot>🎣 拋竿！</MenuItem>
             </div>}
             {phase === 'loot' && (treasureNode ? <MenuItem onClick={onDone} hot>繼續航行</MenuItem> : <div class="cmd-grid">
