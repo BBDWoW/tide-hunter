@@ -16,15 +16,22 @@ const load = (url: string) => new Promise<HTMLImageElement | null>((res) => {
   img.src = url;
 });
 
+// 載入進度（給啟動畫面的進度條）
+const total = Object.keys(spriteUrls).length + Object.keys(sceneUrls).length;
+let loaded = 0;
+const tick = () => { loaded++; (window as unknown as { __splash?: (p: number) => void }).__splash?.(loaded / Math.max(1, total)); };
+
 export const artReady: Promise<void> = Promise.all([
   ...Object.entries(spriteUrls).map(async ([p, url]) => {
     const img = await load(url);
+    tick();
     if (!img) return;
     const size = img.height;
     sprites.set(nameOf(p), { img, size, frames: Math.max(1, Math.round(img.width / size)) });
   }),
   ...Object.entries(sceneUrls).map(async ([p, url]) => {
     const img = await load(url);
+    tick();
     if (img) scenes.set(nameOf(p), img);
   }),
 ]).then(() => undefined);

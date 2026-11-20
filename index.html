@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#03050d" />
+    <meta name="theme-color" content="#1d1d5c" />
     <title>潮汐獵手</title>
     <!-- 加到主畫面：全螢幕與圖標 -->
     <link rel="manifest" href="./manifest.webmanifest" />
@@ -15,9 +15,37 @@
     <meta name="apple-mobile-web-app-title" content="潮汐獵手" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Noto+Sans+TC:wght@400;700&family=Press+Start+2P&display=swap" />
+    <!-- 字型在背景載入，不要擋住畫面 -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Noto+Sans+TC:wght@400;700&family=Press+Start+2P&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <link rel="preload" as="image" href="./icon-512.png" />
+    <style>
+      /* 啟動畫面：網頁一打開就顯示，遊戲載入完成後淡出 */
+      html, body { margin: 0; height: 100%; background: #1d1d5c; }
+      #splash {
+        position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.4vmin;
+        background: linear-gradient(180deg, #1d1d5c 0%, #3d2470 30%, #7e3584 55%, #d05a6e 78%, #f8a058 100%);
+        color: #fff; font-family: 'DotGothic16', 'Noto Sans TC', sans-serif; transition: opacity 0.5s ease; user-select: none; -webkit-user-select: none;
+      }
+      #splash.hide { opacity: 0; pointer-events: none; }
+      #splash img { width: min(34vmin, 180px); height: auto; image-rendering: pixelated; border-radius: 22%; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45); animation: splash-bob 2.4s ease-in-out infinite; }
+      #splash .en { font-family: 'Press Start 2P', monospace; font-size: min(2.6vmin, 13px); letter-spacing: 0.35em; color: #ffd98a; margin-top: 1vmin; }
+      #splash h1 { margin: 0; font-size: min(9vmin, 46px); font-weight: 400; letter-spacing: 0.08em; text-shadow: 0 3px 0 #a8437e, 0 6px 0 rgba(0, 0, 0, 0.35); }
+      #splash .bar { width: min(52vmin, 260px); height: 8px; margin-top: 3vmin; background: rgba(0, 0, 0, 0.35); border: 2px solid rgba(255, 255, 255, 0.85); box-sizing: content-box; }
+      #splash .bar i { display: block; height: 100%; width: 4%; background: repeating-linear-gradient(90deg, #ffe9a0 0 6px, #ffc66a 6px 12px); transition: width 0.25s steps(8); animation: splash-creep 10s cubic-bezier(0.1, 0.6, 0.3, 1) forwards; }
+      @keyframes splash-creep { from { width: 4%; } to { width: 30%; } }
+      #splash .tip { font-size: min(3.2vmin, 15px); opacity: 0.85; min-height: 1.4em; }
+      @keyframes splash-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+      @media (prefers-reduced-motion: reduce) { #splash img { animation: none; } }
+    </style>
   </head>
   <body>
+    <div id="splash" role="status" aria-label="遊戲載入中">
+      <img src="./icon-512.png" alt="" width="180" height="180" />
+      <div class="en">TIDE HUNTER</div>
+      <h1>潮汐獵手</h1>
+      <div class="bar"><i></i></div>
+      <div class="tip">正在準備釣具……</div>
+    </div>
     <div id="app"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
