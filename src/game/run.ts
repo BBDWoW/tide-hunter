@@ -281,7 +281,7 @@ export function rollEncounter(run: RunState, q: number, shadow: Shadow): Encount
   const lv = firstStop(run) ? 3 : Math.max(2, Math.round((zoneOf(run).special ? (run.specialLv ?? 10) : zoneOf(run).lvBase) + run.station * 0.8 + int(run.rng, 0, 2)) - ({ N: 0, B: 0, A: 1, S: 2, SSR: 2 } as const)[rarity] + elite);
   const ev = FORMS[formId].evolve?.find((e) => lv >= e.level);
   if (ev) formId = ev.to;
-  return { mon: makeMon(formId, lv, false, true), rarity };
+  return { mon: makeMon(formId, lv, false, true, () => next(run.rng)), rarity };
 }
 
 export const perfectAt = (run: RunState) => 0.92 - boon(run, 'steady') * 0.05;

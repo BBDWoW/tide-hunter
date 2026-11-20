@@ -301,3 +301,15 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .field-chip i { width: 0.7em; height: 0.7em; display: inline-block; }
 .field-chip span { opacity: 0.75; font-size: 0.85em; }
 .portrait .field-chip { top: auto; bottom: calc(var(--u) * 26); }
+
+/* ── 個體值與分支進化 ── */
+.iv-stars { color: #ffcf4a; letter-spacing: 1px; font-size: 0.9em; white-space: nowrap; }
+.iv-stars i { font-style: normal; color: rgba(255, 255, 255, 0.18); }
+.iv-stars.s5 { text-shadow: 0 0 6px rgba(255, 207, 74, 0.7); }
+.iv-detail { display: inline-flex; gap: 0.6em; margin-left: 0.6em; color: var(--ink); letter-spacing: 0; font-size: 0.85em; opacity: 0.85; flex-wrap: wrap; }
+.iv-detail .up { color: #7ee36a; } .iv-detail .down { color: #ff8a8a; }
+.style-meter { display: grid; gap: 2px; margin: 3px 0; }
+.style-meter b.atk { color: #ff9a5a; } .style-meter b.guard { color: #6ab8ff; }
+.sm-bar { position: relative; height: 6px; background: rgba(255, 154, 90, 0.5); border: 1px solid rgba(0, 0, 0, 0.4); }
+.sm-bar i { position: absolute; left: 0; top: 0; bottom: 0; background: #6ab8ff; }
+.sm-bar em { position: absolute; top: -3px; bottom: -3px; width: 2px; background: #fff; }

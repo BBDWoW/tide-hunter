@@ -277,6 +277,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
   }
   v.energy -= sk.cost;
   ev.push({ t: 'energy', side, value: v.energy });
+  if (sk !== STRUGGLE) { me.style ??= { atk: 0, guard: 0 }; if (sk.power > 0) me.style.atk++; else me.style.guard++; }
   ev.push({ t: 'use', side, skill: sk.id });
   ev.push({ t: 'msg', text: `${myName} 使用了 ${sk.name}！` });
 

@@ -4,6 +4,7 @@ import { ABILITIES, abilitiesOf, FORMS } from '../data/creatures';
 import { ELEM, RARITY, STAGE_NAME, type Elem, type Rarity } from '../data/types';
 import { drawSprite, PAL, spriteSize } from '../render/pixel';
 import { SKILLS } from '../data/skills';
+import { GUARD_THRESHOLD, IV_LABELS, ivStars as ivStarsOf, styleRatio, type Mon } from '../game/creature';
 
 // 所有小圖共用一個動畫節拍
 let frame = 0;
@@ -81,5 +82,32 @@ export function AbilityLines({ form, label = true }: { form: string; label?: boo
         <p class="small" key={a}>{label ? '特性' : ''}「{ABILITIES[a].name}」{ABILITIES[a].desc}</p>
       ))}
     </>
+  );
+}
+
+/** 個體評價星等；detail 時顯示四項個體值 */
+export function IvStars({ iv, detail = false }: { iv?: number[]; detail?: boolean }) {
+  const n = ivStarsOf(iv);
+  return (
+    <span class={`iv-stars s${n}`} title={iv ? IV_LABELS.map((l, i) => `${l} ${iv[i] >= 0 ? '+' : ''}${iv[i]}%`).join('　') : '個體值未知'}>
+      {'★'.repeat(n)}<i>{'★'.repeat(5 - n)}</i>
+      {detail && iv && <span class="iv-detail">{IV_LABELS.map((l, i) => <span key={l} class={iv[i] > 3 ? 'up' : iv[i] < -3 ? 'down' : ''}>{l}{iv[i] >= 0 ? '+' : ''}{iv[i]}%</span>)}</span>}
+    </span>
+  );
+}
+
+/** 分支進化的傾向：只在接下來會分支進化時顯示 */
+export function StyleMeter({ mon }: { mon: Mon }) {
+  const evo = FORMS[mon.form].evolve;
+  if (!evo?.some((e) => e.style)) return null;
+  const r = styleRatio(mon), lv = evo[0].level - (mon.evoBonus ?? 0);
+  const guard = r >= GUARD_THRESHOLD;
+  const name = (st: 'atk' | 'guard') => FORMS[evo.find((e) => e.style === st)!.to].name;
+  return (
+    <div class="style-meter">
+      <span class="small">Lv{lv} 進化傾向：<b class={guard ? 'guard' : 'atk'}>{guard ? `守護型（${name('guard')}）` : `攻擊型（${name('atk')}）`}</b></span>
+      <div class="sm-bar"><i style={{ width: `${Math.round(r * 100)}%` }} /><em style={{ left: `${GUARD_THRESHOLD * 100}%` }} /></div>
+      <span class="small dim">變化技使用比例 {Math.round(r * 100)}%（達 {GUARD_THRESHOLD * 100}% 走守護型）</span>
+    </div>
   );
 }

@@ -11,7 +11,7 @@ import type { GameEvent } from '../game/events';
 import { APP_VERSION, CHANGELOG, hasUnreadNews, markNewsRead } from '../game/version';
 import { BOONS, LURES } from '../data/boons';
 import { chartPos, drawChart, drawDeep, drawPort, drawSea, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
-import { AbilityLines, Bar, Elems, RarityTag, SkillLine, Sprite, StageTag } from './components';
+import { AbilityLines, Bar, Elems, IvStars, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 
 export function MenuItem({ children, onClick, disabled, hot, sub, onHover }: { children: ComponentChildren; onClick: () => void; disabled?: boolean; hot?: boolean; sub?: ComponentChildren; onHover?: () => void }) {
@@ -174,7 +174,7 @@ export function Port({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
                 <div class="pick" key={b.id}>
                   <Sprite form={b.form} size={48} />
                   <span class="grow">
-                    <b>{FORMS[b.form].name}</b>
+                    <span class="row-gap"><b>{FORMS[b.form].name}</b>{b.iv && <IvStars iv={b.iv} />}</span>
                     <span class="small">羈絆 <span class="hearts">{'❤'.repeat(Math.min(10, b.bond))}</span> {b.bond}</span>
                     <span class="small dim">出海時：{FORMS[b.root].name} Lv{bayStartLevel(b)}{b.legacy ? `・傳承「${SKILLS[b.legacy]?.name}」` : ''}</span>
                     <button class="chip-btn" onClick={() => { meta.bay = meta.bay.filter((x) => x.id !== b.id); saveMeta(meta); refresh(); }}>放生</button>
@@ -293,7 +293,8 @@ function PartyList({ run, onChange }: { run: RunState; onChange: () => void }) {
             <Sprite form={m.form} size={96} />
             <div class="grow">
               <div class="row-gap"><b class="name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={m.form} /><span class="num">Lv{m.lv}</span></div>
-              <div class="row-gap"><Elems list={f.elems} /><span class="small dim">{f.category}</span></div>
+              <div class="row-gap"><Elems list={f.elems} /><span class="small dim">{f.category}</span><IvStars iv={m.iv} detail /></div>
+              <StyleMeter mon={m} />
               <div class="hp-row"><Bar value={m.hp} max={mx} /><span class="num">{Math.max(0, m.hp)}/{mx}</span></div>
               <Bar value={m.xp} max={xpToNext(m.lv)} kind="xp" />
               <AbilityLines form={f.id} label={false} />
@@ -410,6 +411,9 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
           </ol>
           <h3>技能數量</h3>
           <p>幼體最多 2 招、成長體 3 招、完全體 4 招。有些生物會跳過成長體，也有些天生就是完全體。</p>
+          <h3>個體值與分支進化</h3>
+          <p class="small">每隻生物的 HP、攻擊、防禦、速度都有 ±10% 的個體差異，用 ★1～5 表示（霸主固定）。帶回棲息灣的夥伴會保留個體值。</p>
+          <p class="small">初始三隻在 Lv18 進化時會分成兩種：戰鬥中常用攻擊技會成為<b>攻擊型</b>；變化技（強化、回復、護盾、場地、異常）用得夠多（35% 以上）會成為<b>守護型</b>。在隊伍畫面可以看到目前的傾向。</p>
           <h3>異常狀態</h3>
           <ul class="small">
             <li><b>灼傷</b>：每回合扣 1/16 HP，攻擊力下降。<b>中毒</b>：每回合扣 1/10 HP。<b>流血</b>：每回合扣 1/12 HP（岩、數碼、骷髏不會流血）。</li>

@@ -51,7 +51,7 @@ export interface Form {
   ability: AbilityId;
   extra?: AbilityId[]; // 傳說級可以有多個特性
   learn: [number, string][]; // [等級, 技能]
-  evolve?: { to: string; level: number }[];
+  evolve?: { to: string; level: number; style?: 'atk' | 'guard' }[]; // style：分支進化的條件
   desc: string;
   scale?: number; // 戰鬥畫面中的放大倍率
   no?: number; // 圖鑑編號
@@ -70,7 +70,7 @@ const F: Form[] = [
     desc: '在淺灘出生的小魚，喜歡跟在船邊游泳。' },
   { id: 'water2', name: '浪鰭', family: 'water', stage: 2, rarity: 'N', category: '魚類', elems: ['water'], sprite: 'water2', pal: 'tide',
     base: { hp: 62, atk: 60, def: 60, spd: 64 }, ability: 'moist',
-    learn: [[9, 'tidewave'], [11, 'aquajet'], [13, 'surge'], [15, 'counterflow']], evolve: [{ to: 'water3a', level: 18 }],
+    learn: [[9, 'tidewave'], [11, 'aquajet'], [13, 'surge'], [15, 'counterflow']], evolve: [{ to: 'water3a', level: 18, style: 'atk' }, { to: 'water3b', level: 18, style: 'guard' }],
     desc: '背鰭能感應浪潮的方向，游得又快又穩。' },
   { id: 'water3a', name: '怒濤鯊', family: 'water', stage: 3, rarity: 'N', category: '魚類', elems: ['water'], sprite: 'water3a', pal: 'tide',
     base: { hp: 78, atk: 96, def: 70, spd: 90 }, ability: 'moist', learn: [[18, 'sharkrend'], [20, 'tidecharge'], [21, 'roar'], [24, 'whalecry']], desc: '攻擊型完全體。追著浪頭獵食的猛鯊。' },
@@ -83,7 +83,7 @@ const F: Form[] = [
     desc: '鬍鬚末端燃著小火苗，在水裡也不會熄滅。' },
   { id: 'fire2', name: '焰鯰', family: 'fire', stage: 2, rarity: 'N', category: '魚類', elems: ['fire'], sprite: 'fire2', pal: 'ember',
     base: { hp: 58, atk: 72, def: 54, spd: 62 }, ability: 'blazing',
-    learn: [[9, 'flamebite'], [11, 'scorch'], [13, 'roar'], [16, 'blaze']], evolve: [{ to: 'fire3a', level: 18 }],
+    learn: [[9, 'flamebite'], [11, 'scorch'], [13, 'roar'], [16, 'blaze']], evolve: [{ to: 'fire3a', level: 18, style: 'atk' }, { to: 'fire3b', level: 18, style: 'guard' }],
     desc: '背上的火焰越旺，代表心情越好。' },
   { id: 'fire3a', name: '爆炎龍鯰', family: 'fire', stage: 3, rarity: 'N', category: '魚類', elems: ['fire'], sprite: 'fire3a', pal: 'magma',
     base: { hp: 74, atk: 105, def: 66, spd: 85 }, ability: 'blazing', learn: [[18, 'flareblitz'], [22, 'lavafloor']], desc: '攻擊型完全體。頭上的角能噴出爆炎。' },
@@ -96,7 +96,7 @@ const F: Form[] = [
     desc: '頭上的嫩芽會朝著陽光的方向轉動。' },
   { id: 'grass2', name: '藻鬣魚', family: 'grass', stage: 2, rarity: 'N', category: '魚類', elems: ['grass'], sprite: 'grass2', pal: 'kelp',
     base: { hp: 68, atk: 58, def: 66, spd: 56 }, ability: 'photosyn',
-    learn: [[9, 'photosynth'], [11, 'sporecloud'], [13, 'seedleech'], [16, 'venomstrike']], evolve: [{ to: 'grass3a', level: 18 }],
+    learn: [[9, 'photosynth'], [11, 'sporecloud'], [13, 'seedleech'], [16, 'venomstrike']], evolve: [{ to: 'grass3a', level: 18, style: 'atk' }, { to: 'grass3b', level: 18, style: 'guard' }],
     desc: '海藻般的鬃毛能躲藏小魚。' },
   { id: 'grass3a', name: '棘藤魚龍', family: 'grass', stage: 3, rarity: 'N', category: '龍', elems: ['grass'], sprite: 'grass3a', pal: 'thornvine',
     base: { hp: 80, atk: 95, def: 75, spd: 80 }, ability: 'photosyn', learn: [[18, 'thornburst'], [22, 'sacredgrove']], desc: '攻擊型完全體。全身長滿荊棘。' },

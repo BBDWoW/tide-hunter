@@ -8,7 +8,7 @@ import { applyBoon, boon, isBoss, markCaught, nodeOf, PARTY_MAX, rollBoons, type
 import { BOON_TIER, BOONS } from '../data/boons';
 import { EVO_W, playEvolution } from '../render/evo';
 import type { BattleResult } from './Battle';
-import { AbilityLines, Bar, Elems, RarityTag, SkillLine, Sprite, StageTag } from './components';
+import { AbilityLines, Bar, Elems, IvStars, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
 import { drawDeep, drawSea } from '../render/scene';
@@ -97,7 +97,8 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
             <EvolveScene mon={find(cur.uid)!} to={cur.to}
               onDone={(learn) => {
                 const m = find(cur.uid)!;
-                note(m.uid, `進化成了 ${formOf(m).name}！`);
+                const branch = Object.values(FORMS).flatMap((f) => f.evolve ?? []).find((e) => e.to === cur.to && e.style);
+                note(m.uid, `進化成了 ${formOf(m).name}！${branch ? `（依戰鬥風格走向${branch.style === 'guard' ? '守護型' : '攻擊型'}）` : ''}`);
                 const extra: Task[] = learn.map((sk) => ({ k: 'learn', uid: m.uid, skill: sk }));
                 const nextEvo = evolveTarget(m);
                 if (nextEvo) extra.push({ k: 'evolve', uid: m.uid, to: nextEvo });
@@ -112,6 +113,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
                   <div class="grow">
                     <span class="row-gap"><b>{formOf(m).name}</b><span class="num">Lv{m.lv}</span></span>
                     <Bar value={m.xp} max={xpToNext(m.lv)} kind="xp" />
+                    <StyleMeter mon={m} />
                     {lines.filter((l) => l.uid === m.uid).map((l, i) => <p class="small" key={i}>{l.text}</p>)}
                   </div>
                 </div>
@@ -145,6 +147,7 @@ function CaughtCard({ mon }: { mon: Mon }) {
       <div class="grow">
         <div class="row-gap"><b class="big-name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={mon.form} /></div>
         <div class="row-gap"><Elems list={f.elems} /><span class="muted">{f.category} · Lv{mon.lv}</span></div>
+        <div class="row-gap"><span class="small">個體評價</span><IvStars iv={mon.iv} detail /></div>
         <AbilityLines form={f.id} />
         <p class="small muted">{f.desc}</p>
         <div class="skills-col">{mon.skills.map((s) => <SkillLine id={s} key={s} />)}</div>
@@ -172,7 +175,7 @@ function EvolveScene({ mon, to, onDone }: { mon: Mon; to: string; onDone: (learn
   const ref = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<'ask' | 'play' | 'done'>('ask');
   const [label, setLabel] = useState(formOf(mon).name);
-  const from = mon.form;
+  const [from] = useState(mon.form); // 進化前的型態（進化後 mon.form 會改變）
   const learned = useRef<string[]>([]);
   useEffect(() => {
     if (phase !== 'play') return;

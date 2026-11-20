@@ -16,7 +16,30 @@ export interface Mon {
   bayId?: string; // 從棲息灣帶出來的夥伴
   bond?: number; // 羈絆值（經驗加成）
   evoBonus?: number; // 進化記憶：提早幾級進化
+  iv?: number[]; // 個體值：[HP, 攻擊, 防禦, 速度]，各 -10～+10（%）
+  style?: { atk: number; guard: number }; // 戰鬥風格：用攻擊技／變化技的次數（決定分支進化）
 }
+
+export const IV_RANGE = 10;
+/** 產生隨機個體值；rng 不給就用 Math.random */
+export function rollIv(rnd: () => number = Math.random): number[] {
+  return [0, 1, 2, 3].map(() => Math.round(rnd() * IV_RANGE * 2 - IV_RANGE));
+}
+/** 個體評價：1～5 顆星 */
+export function ivStars(iv?: number[]): number {
+  if (!iv) return 3;
+  const avg = iv.reduce((a, b) => a + b, 0) / iv.length;
+  return Math.max(1, Math.min(5, Math.round(((avg + IV_RANGE) / (IV_RANGE * 2)) * 4) + 1));
+}
+export const IV_LABELS = ['HP', '攻擊', '防禦', '速度'];
+
+// 分支進化：變化技使用比例達到這個值就走守護型
+export const GUARD_THRESHOLD = 0.35;
+export function styleRatio(m: Mon): number {
+  const st = m.style; if (!st || st.atk + st.guard === 0) return 0;
+  return st.guard / (st.atk + st.guard);
+}
+export const styleOf = (m: Mon): 'atk' | 'guard' => (styleRatio(m) >= GUARD_THRESHOLD ? 'guard' : 'atk');
 
 let uidCounter = 0;
 export const newUid = () => `m${Date.now().toString(36)}${(uidCounter++).toString(36)}`;
@@ -28,10 +51,11 @@ export const formOf = (m: Mon): Form => FORMS[m.form];
 export function statsOf(m: Mon): Stats {
   const f = formOf(m), L = m.lv;
   const mult = RARITY[f.rarity].mult * (m.wild && !m.boss ? WILD_MULT : 1);
-  const s = (b: number) => Math.floor(((b * 2 * L) / 50 + 5) * mult);
-  let hp = Math.floor(((f.base.hp * 2 * L) / 50 + L + 10) * mult);
+  const iv = (i: number) => 1 + (m.iv?.[i] ?? 0) / 100;
+  const s = (b: number, i: number) => Math.floor(((b * 2 * L) / 50 + 5) * mult * iv(i));
+  let hp = Math.floor(((f.base.hp * 2 * L) / 50 + L + 10) * mult * iv(0));
   if (hasAb(f, 'colossal')) hp = Math.floor(hp * 1.6);
-  return { hp, atk: s(f.base.atk), def: s(f.base.def), spd: s(f.base.spd) };
+  return { hp, atk: s(f.base.atk, 1), def: s(f.base.def, 2), spd: s(f.base.spd, 3) };
 }
 export const maxHp = (m: Mon) => statsOf(m).hp;
 
@@ -48,7 +72,7 @@ export function ancestryOf(formId: string): Form[] {
   return chain;
 }
 
-export function makeMon(formId: string, lv: number, boss = false, wild = false): Mon {
+export function makeMon(formId: string, lv: number, boss = false, wild = false, rnd?: () => number): Mon {
   const f = FORMS[formId];
   const known: string[] = [];
   for (const anc of ancestryOf(formId)) for (const [l, sk] of anc.learn) if (l <= lv && !known.includes(sk)) known.push(sk);
@@ -66,7 +90,7 @@ export function makeMon(formId: string, lv: number, boss = false, wild = false):
     const a = [...known].reverse().find(atk);
     if (a) picked[0] = a;
   }
-  const m: Mon = { uid: newUid(), form: formId, lv, xp: 0, hp: 0, skills: picked, status: null, boss, wild };
+  const m: Mon = { uid: newUid(), form: formId, lv, xp: 0, hp: 0, skills: picked, status: null, boss, wild, iv: boss ? [0, 0, 0, 0] : rollIv(rnd) };
   m.hp = maxHp(m);
   return m;
 }
@@ -96,8 +120,11 @@ export function gainXp(m: Mon, amount: number): LevelResult {
 }
 
 export function evolveTarget(m: Mon): string | null {
-  const ev = formOf(m).evolve?.find((e) => m.lv >= e.level - (m.evoBonus ?? 0));
-  return ev ? ev.to : null;
+  const ready = (formOf(m).evolve ?? []).filter((e) => m.lv >= e.level - (m.evoBonus ?? 0));
+  if (!ready.length) return null;
+  // 有分支時，依戰鬥風格選擇
+  const st = styleOf(m);
+  return (ready.find((e) => e.style === st) ?? ready.find((e) => !e.style) ?? ready[0]).to;
 }
 
 // 進化：換形態、按比例保留 HP，回傳新形態可學的技能
