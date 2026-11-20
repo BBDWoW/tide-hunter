@@ -2,6 +2,7 @@
 // 直式手機則改成掌機的上下雙螢幕：上面是場景，下面放訊息與指令。
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
+import { view } from '../render/scene';
 
 export const SCENE_W = 256, SCENE_H = 144;
 
@@ -20,7 +21,8 @@ function measure(): Viewport {
   const de = document.documentElement;
   const W0 = de.clientWidth || window.innerWidth, H0 = window.innerHeight;
   const portraitRaw = H0 > W0 * 1.15;
-  const vw = W0 - (portraitRaw ? 0 : ins.l + ins.r), vh = H0 - (portraitRaw ? 0 : ins.t + ins.b);
+  // 橫向：高度用滿整個螢幕（Home 橫條只是一條細線，不需要讓出空間），左右避開瀏海
+  const vw = W0 - (portraitRaw ? 0 : ins.l + ins.r), vh = H0;
   const portrait = portraitRaw;
   if (portrait) {
     const w = vw, h = Math.round((w * 9) / 16);
@@ -44,7 +46,10 @@ export function useViewport() {
   return vp;
 }
 
-// 橫向時螢幕比 16:9 長，兩側用目前場景的模糊延伸填滿（不要黑邊）
+// 橫向時螢幕比 16:9 長：場景往左右延伸到螢幕邊緣（介面維持在 16:9 範圍內）
+// bleed = 每一側延伸幾個場景像素
+let bleed = 0;
+// 螢幕比 16:9 高（例如平板）時，上下用場景的模糊延伸填滿
 let ambient: HTMLCanvasElement | null = null;
 const setAmbient = (c: HTMLCanvasElement | null) => { ambient = c; };
 
@@ -62,7 +67,14 @@ export function SceneCanvas({ draw, label }: { draw: SceneDraw; label?: string }
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const loop = (now: number) => {
       const dt = Math.max(0, Math.min(0.05, (now - last) / 1000)); last = now; t += reduce ? dt * 0.25 : dt;
+      const c = ref.current!, want = SCENE_W + bleed * 2;
+      if (c.width !== want) { c.width = want; ctx.imageSmoothingEnabled = false; }
+      view.bleed = bleed; view.wide = false;
+      ctx.setTransform(1, 0, 0, 1, bleed, 0);
       fn.current(ctx, t, dt);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      // 有用海面背景的場景已經自己畫了延伸；其他場景（海圖、港口等）用鏡射補滿兩側
+      if (bleed > 0 && !view.wide) extendSides(ctx, c, bleed);
       if (ambient) ambient.getContext('2d')!.drawImage(ref.current!, 0, 0, ambient.width, ambient.height);
       raf = requestAnimationFrame(loop);
     };
@@ -70,6 +82,18 @@ export function SceneCanvas({ draw, label }: { draw: SceneDraw; label?: string }
     return () => cancelAnimationFrame(raf);
   }, []);
   return <canvas ref={ref} class="scene-canvas" width={SCENE_W} height={SCENE_H} aria-label={label} role={label ? 'img' : undefined} />;
+}
+
+/** 把場景左右邊緣鏡射延伸到螢幕兩側，外側稍微暗一點 */
+function extendSides(ctx: CanvasRenderingContext2D, c: HTMLCanvasElement, b: number) {
+  const H = SCENE_H, w = Math.min(b, SCENE_W);
+  ctx.save(); ctx.translate(b, 0); ctx.scale(-1, 1); ctx.drawImage(c, b, 0, w, H, 0, 0, w, H); ctx.restore();
+  ctx.save(); ctx.translate(SCENE_W + b * 2, 0); ctx.scale(-1, 1); ctx.drawImage(c, SCENE_W + b - w, 0, w, H, 0, 0, w, H); ctx.restore();
+  for (const [x0, x1] of [[b, 0], [SCENE_W + b, SCENE_W + b * 2]]) {
+    const g = ctx.createLinearGradient(x0, 0, x1, 0);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.28)');
+    ctx.fillStyle = g; ctx.fillRect(Math.min(x0, x1), 0, b, H);
+  }
 }
 
 /**
@@ -84,10 +108,13 @@ export function GameScreen({ vp, scene, overlay, dock, panel, dockTall, onScene,
   onScene?: Record<string, unknown>; tappable?: boolean;
 }) {
   const lower = (dock || panel) && vp.portrait;
+  // 橫向：算出左右要延伸多少（用整個螢幕寬，連瀏海兩側也鋪滿）
+  const full = typeof document !== 'undefined' ? document.documentElement.clientWidth || window.innerWidth : vp.w;
+  bleed = vp.portrait ? 0 : Math.max(0, Math.min(128, Math.ceil((full - vp.w) / 2 / vp.u)));
   return (
     <div class={`console ${vp.portrait ? 'portrait' : 'landscape'}`}>
       {!vp.portrait && <canvas class="ambient" width={32} height={18} ref={setAmbient} aria-hidden="true" />}
-      <div class={`frame ${tappable ? 'tappable' : ''}`} style={{ width: `${vp.w}px`, height: `${vp.h}px`, '--u': `${vp.u}px` }} {...onScene}>
+      <div class={`frame ${tappable ? 'tappable' : ''} ${bleed ? 'bleed' : ''}`} style={{ width: `${vp.w}px`, height: `${vp.h}px`, '--u': `${vp.u}px`, '--bleed': `${bleed * vp.u}px` }} {...onScene}>
         {scene}
         <div class="overlay">{overlay}</div>
         {!vp.portrait && panel && <div class={`panel-layer ${dock ? 'with-dock' : ''}`}>{panel}</div>}

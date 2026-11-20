@@ -5,6 +5,8 @@ import { drawSprite, PAL, spriteSize } from './pixel';
 import { sceneArt } from './art';
 
 export const W = 256, H = 144;
+/** 橫向延伸：bleed = 左右各多畫幾個像素；wide = 這一格已經畫了延伸的背景 */
+export const view = { bleed: 0, wide: false };
 
 // ── 小工具 ──
 type RGB = [number, number, number];
@@ -192,11 +194,23 @@ function cloudSprite(id: ThemeId, k: number) {
 }
 
 // 全景海面：背景、雲、波浪、太陽倒影
+/** 畫背景圖，並往左右鏡射延伸（只有背景，前景的船和角色不會重複） */
+function drawWideBg(ctx: CanvasRenderingContext2D, bg: CanvasImageSource) {
+  ctx.drawImage(bg, 0, 0);
+  const b = view.bleed;
+  view.wide = true;
+  if (b <= 0) return;
+  const w = Math.min(b, W);
+  ctx.save(); ctx.scale(-1, 1); ctx.drawImage(bg, 0, 0, w, H, 0, 0, w, H); ctx.restore();
+  ctx.save(); ctx.translate(W * 2, 0); ctx.scale(-1, 1); ctx.drawImage(bg, W - w, 0, w, H, W - w, 0, w, H); ctx.restore();
+}
+
 export function drawSea(ctx: CanvasRenderingContext2D, t: number, id: ThemeId = 'day') {
   const th = THEMES[id], hz = th.horizon;
-  ctx.drawImage(backdrop(id), 0, 0);
+  const b = view.bleed, WW = W + b * 2;
+  drawWideBg(ctx, backdrop(id));
   for (let k = 0; k < (id === 'abyss' ? 0 : 5); k++) {
-    const sp = 2 + k * 0.7, cx = ((k * 71 + t * sp) % (W + 70)) - 64, cy = 4 + ((k * 13) % (hz - 26));
+    const sp = 2 + k * 0.7, cx = ((k * 71 + t * sp) % (WW + 70)) - 64 - b, cy = 4 + ((k * 13) % (hz - 26));
     ctx.drawImage(cloudSprite(id, k), Math.round(cx), cy);
   }
   // 波浪：越近越粗、越快
@@ -207,7 +221,7 @@ export function drawSea(ctx: CanvasRenderingContext2D, t: number, id: ThemeId = 
     const len = 2 + Math.round(p * 7), gap = 14 + Math.round(p * 18), speed = 4 + p * 14;
     ctx.fillStyle = css(foam, 0.18 + p * 0.45);
     const off = (t * speed + k * 37) % gap;
-    for (let x = -gap + off; x < W; x += gap) {
+    for (let x = -gap + off - b; x < W + b; x += gap) {
       const wob = Math.round(Math.sin(x * 0.07 + t * 1.5 + k) * 1);
       ctx.fillRect(Math.round(x), y + wob, len, 1);
       if (p > 0.55) ctx.fillRect(Math.round(x) + 1, y + wob - 1, Math.max(1, len - 3), 1);
@@ -226,43 +240,43 @@ export function drawSea(ctx: CanvasRenderingContext2D, t: number, id: ThemeId = 
   if (id === 'ice') {
     // 雪花
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    for (let i = 0; i < 40; i++) { const x = (i * 47 + Math.sin(t + i) * 6 + t * 6) % W, y = (i * 29 + t * (10 + (i % 4) * 3)) % H; ctx.fillRect(Math.round(x), Math.round(y), i % 5 ? 1 : 2, i % 5 ? 1 : 2); }
+    for (let i = 0; i < 40; i++) { const x = ((i * 47 + Math.sin(t + i) * 6 + t * 6) % WW) - b, y = (i * 29 + t * (10 + (i % 4) * 3)) % H; ctx.fillRect(Math.round(x), Math.round(y), i % 5 ? 1 : 2, i % 5 ? 1 : 2); }
     return;
   }
   if (id === 'forest') {
     // 螢火光點
-    for (let i = 0; i < 26; i++) { const x = (i * 41 + Math.sin(t * 0.8 + i) * 8) % W, y = (i * 23 + Math.cos(t * 0.6 + i) * 5) % (H - 10); if (Math.sin(t * 3 + i) < 0) continue; ctx.fillStyle = i % 3 ? 'rgba(230,255,150,0.9)' : 'rgba(255,255,220,0.9)'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }
+    for (let i = 0; i < 26; i++) { const x = ((i * 41 + Math.sin(t * 0.8 + i) * 8) % WW) - b, y = (i * 23 + Math.cos(t * 0.6 + i) * 5) % (H - 10); if (Math.sin(t * 3 + i) < 0) continue; ctx.fillStyle = i % 3 ? 'rgba(230,255,150,0.9)' : 'rgba(255,255,220,0.9)'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }
     return;
   }
   if (id === 'void') {
     // 錯亂方塊
-    for (let i = 0; i < 14; i++) { if ((Math.floor(t * 6) + i * 7) % 5) continue; const x = (i * 67 + Math.floor(t * 3) * 13) % W, y = (i * 37) % H; ctx.fillStyle = i % 2 ? 'rgba(200,154,255,0.7)' : 'rgba(95,241,255,0.5)'; ctx.fillRect(x, y, 2 + (i % 3) * 2, 1 + (i % 2)); }
+    for (let i = 0; i < 14; i++) { if ((Math.floor(t * 6) + i * 7) % 5) continue; const x = ((i * 67 + Math.floor(t * 3) * 13) % WW) - b, y = (i * 37) % H; ctx.fillStyle = i % 2 ? 'rgba(200,154,255,0.7)' : 'rgba(95,241,255,0.5)'; ctx.fillRect(x, y, 2 + (i % 3) * 2, 1 + (i % 2)); }
     return;
   }
   if (id === 'core') {
     // 往上流動的資料光點
-    for (let i = 0; i < 32; i++) { const x = (i * 29) % W, y = H - ((i * 17 + t * (12 + (i % 4) * 4)) % H); ctx.fillStyle = i % 4 ? 'rgba(95,241,255,0.75)' : 'rgba(255,255,255,0.9)'; ctx.fillRect(x, Math.round(y), 1, i % 3 ? 2 : 1); }
+    for (let i = 0; i < 32; i++) { const x = ((i * 29) % WW) - b, y = H - ((i * 17 + t * (12 + (i % 4) * 4)) % H); ctx.fillStyle = i % 4 ? 'rgba(95,241,255,0.75)' : 'rgba(255,255,255,0.9)'; ctx.fillRect(x, Math.round(y), 1, i % 3 ? 2 : 1); }
     return;
   }
   if (id === 'cyber') {
     // 掃描線與往上飄的位元
-    const sy = Math.floor((t * 30) % H); ctx.fillStyle = 'rgba(95,241,255,0.12)'; ctx.fillRect(0, sy, W, 2);
-    for (let i = 0; i < 28; i++) { const x = (i * 37) % W, y = H - ((i * 19 + t * (10 + (i % 4) * 5)) % H); if ((Math.floor(t * 4) + i) % 6 === 0) continue; ctx.fillStyle = i % 3 ? 'rgba(95,241,255,0.8)' : 'rgba(255,74,200,0.85)'; ctx.fillRect(x, Math.round(y), i % 4 ? 1 : 2, 1); }
+    const sy = Math.floor((t * 30) % H); ctx.fillStyle = 'rgba(95,241,255,0.12)'; ctx.fillRect(-b, sy, WW, 2);
+    for (let i = 0; i < 28; i++) { const x = ((i * 37) % WW) - b, y = H - ((i * 19 + t * (10 + (i % 4) * 5)) % H); if ((Math.floor(t * 4) + i) % 6 === 0) continue; ctx.fillStyle = i % 3 ? 'rgba(95,241,255,0.8)' : 'rgba(255,74,200,0.85)'; ctx.fillRect(x, Math.round(y), i % 4 ? 1 : 2, 1); }
     return;
   }
   if (id === 'abyss') {
     // 海雪往下飄、生物光一閃一閃
-    for (let i = 0; i < 40; i++) { const x = (i * 43 + Math.sin(t * 0.5 + i) * 5) % W, y = (i * 23 + t * (3 + (i % 4))) % H; ctx.fillStyle = 'rgba(200,220,255,0.35)'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }
-    for (let i = 0; i < 12; i++) { const a = Math.sin(t * 1.5 + i * 2.3); if (a < 0.3) continue; const x = (i * 71) % W, y = 50 + ((i * 29) % (H - 60)); ctx.fillStyle = i % 2 ? `rgba(95,241,255,${a})` : `rgba(160,120,255,${a})`; ctx.fillRect(x, y, 1, 1); }
+    for (let i = 0; i < 40; i++) { const x = ((i * 43 + Math.sin(t * 0.5 + i) * 5) % WW) - b, y = (i * 23 + t * (3 + (i % 4))) % H; ctx.fillStyle = 'rgba(200,220,255,0.35)'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }
+    for (let i = 0; i < 12; i++) { const a = Math.sin(t * 1.5 + i * 2.3); if (a < 0.3) continue; const x = ((i * 71) % WW) - b, y = 50 + ((i * 29) % (H - 60)); ctx.fillStyle = i % 2 ? `rgba(95,241,255,${a})` : `rgba(160,120,255,${a})`; ctx.fillRect(x, y, 1, 1); }
     return;
   }
   if (id === 'lava') {
     // 往上飄的火星
-    for (let i = 0; i < 30; i++) { const x = (i * 53 + Math.sin(t * 1.5 + i) * 4) % W, y = H - ((i * 31 + t * (8 + (i % 5) * 3)) % H); ctx.fillStyle = i % 3 ? 'rgba(255,140,40,0.8)' : 'rgba(255,220,120,0.9)'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }
+    for (let i = 0; i < 30; i++) { const x = ((i * 53 + Math.sin(t * 1.5 + i) * 4) % WW) - b, y = H - ((i * 31 + t * (8 + (i % 5) * 3)) % H); ctx.fillStyle = i % 3 ? 'rgba(255,140,40,0.8)' : 'rgba(255,220,120,0.9)'; ctx.fillRect(Math.round(x), Math.round(y), 1, 1); }
     return;
   }
   // 遠方海鳥
-  const bx = ((t * 9) % (W + 40)) - 20, by = 18 + Math.sin(t * 0.7) * 3;
+  const bx = ((t * 9) % (WW + 40)) - 20 - b, by = 18 + Math.sin(t * 0.7) * 3;
   ctx.fillStyle = id === 'sunset' ? '#2a1a40' : '#33506e';
   for (const [dx, dy] of [[0, 0], [9, 4], [-7, 5]]) {
     const wing = Math.floor(t * 4 + dx) % 2;
@@ -634,7 +648,7 @@ function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number, theme = '
   for (let y = 0; y < H; y++) {
     const wave = Math.sin(y * 0.18 + t * 0.6) * 3 + Math.sin(y * 0.05 - t * 0.3) * 4;
     const x0 = Math.round(fx + wave);
-    for (let x = Math.max(0, x0 - 10); x < W; x++) {
+    for (let x = Math.max(0, x0 - 10); x < W + view.bleed; x++) {
       const d = x - x0;
       if (d < 0 && BAYER[y & 3][x & 3] > (d + 10) * 1.6) continue;
       const n = Math.sin(x * 0.07 + t * 0.35) * Math.sin(y * 0.09 - t * 0.2) + Math.sin((x - y) * 0.035 + t * 0.25) * 0.6;
@@ -644,15 +658,16 @@ function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number, theme = '
   }
   // 霧上的雲團
   for (let k = 0; k < 6; k++) {
-    const cx = fx + 14 + ((k * 37 + t * 3) % Math.max(20, W - fx)), cy = 14 + k * 22;
+    const cx = fx + 14 + ((k * 37 + t * 3) % Math.max(20, W + view.bleed - fx)), cy = 14 + k * 22;
     ctx.drawImage(cloudSprite(dark ? (theme as ThemeId) : 'day', k % 5), Math.round(cx - 30), cy);
   }
 }
 
 export function drawChart(ctx: CanvasRenderingContext2D, t: number, route: ChartNode[][], station: number, picked: number | null, path: number[], seed: number, theme = 'day') {
-  ctx.drawImage(chartBase(route, seed, theme), 0, 0);
+  drawWideBg(ctx, chartBase(route, seed, theme));
+  const b = view.bleed;
   ctx.fillStyle = 'rgba(232,251,255,0.35)';
-  for (let i = 0; i < 26; i++) { const x = ((i * 53 + t * 5) % (W + 10)) - 5, y = (i * 29) % H; ctx.fillRect(Math.round(x), y, 3, 1); ctx.fillRect(Math.round(x) + 3, y - 1, 2, 1); }
+  for (let i = 0; i < 30; i++) { const x = ((i * 53 + t * 5) % (W + b * 2 + 10)) - 5 - b, y = (i * 29) % H; ctx.fillRect(Math.round(x), y, 3, 1); ctx.fillRect(Math.round(x) + 3, y - 1, 2, 1); }
   // 已走過的航線（金色）
   const chosen = [...path, ...(picked !== null ? [picked] : [])];
   for (let i = 0; i < chosen.length - 1; i++) {
