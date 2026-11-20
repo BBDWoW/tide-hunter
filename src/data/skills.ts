@@ -1,8 +1,20 @@
 // 技能資料。cost = 能量消耗（每回合 +1，上限 5，戰鬥開始時有 2 點）
 import type { Elem } from './types';
 
-export type StatusId = 'burn' | 'para' | 'poison' | 'freeze' | 'glitch' | 'sleep';
+export type StatusId = 'burn' | 'para' | 'poison' | 'freeze' | 'glitch' | 'sleep' | 'blind' | 'bleed';
 export type StatKey = 'atk' | 'def' | 'spd';
+
+// 場地／天候：同一時間只會有一種，持續數回合，對雙方都有效
+export type FieldId = 'tide' | 'lava' | 'fog' | 'storm' | 'aurora' | 'grid' | 'grove';
+export const FIELDS: Record<FieldId, { name: string; desc: string; color: string }> = {
+  tide: { name: '漲潮', desc: '水屬性技能威力 ×1.5，火屬性技能威力 ×0.5。', color: '#3a9be0' },
+  lava: { name: '熔岩地面', desc: '火屬性技能威力 ×1.2；非火、非岩屬性每回合受到 1/16 傷害。', color: '#e2512a' },
+  fog: { name: '濃霧', desc: '除了暗屬性之外，所有攻擊的命中率 ×0.8。', color: '#8a93a8' },
+  storm: { name: '雷暴雲', desc: '電屬性技能威力 ×1.5。', color: '#d8b21a' },
+  aurora: { name: '極光', desc: '冰、飛屬性技能威力 ×1.3，冰凍機率加倍。', color: '#7fd8e8' },
+  grid: { name: '資料網格', desc: '數碼屬性技能威力 ×1.5，資料錯亂機率加倍。', color: '#1fae9a' },
+  grove: { name: '聖林', desc: '草屬性技能威力 ×1.5；每回合雙方回復 1/16 HP（草屬性 1/8）。', color: '#4caf50' },
+};
 
 export interface SkillEffect {
   status?: { id: StatusId; chance: number; self?: boolean };
@@ -14,6 +26,19 @@ export interface SkillEffect {
   multi?: [number, number]; // 連擊次數範圍
   energy?: number; // 額外獲得能量
   selfSleep?: number; // 使用後自己睡著幾回合（睡著時防禦 +1）
+  // ── M3 新機制 ──
+  vsStatus?: number; // 對手有任何異常狀態時，威力倍率
+  chain?: { id: StatusId; mult?: number; crit?: boolean }; // 異常連鎖：對手是這個狀態時威力提升／必定暴擊
+  lowHp?: number; // HP 越低威力越高：威力 ×(1 + lowHp × 已損失 HP 比例)
+  steal?: number; // 命中後偷走對手的能量
+  charge?: boolean; // 蓄力：下一次攻擊威力 ×2
+  lockOn?: boolean; // 鎖定：下一次攻擊必定命中且暴擊
+  field?: { id: FieldId; turns: number }; // 展開場地
+  counter?: number; // 本回合受到攻擊時，把傷害的這個比例反彈回去
+  trap?: number; // 在對手場地布下暗礁，持續回合數
+  recoil?: number; // 自己受到造成傷害的這個比例
+  selfKO?: boolean; // 使用後自己倒下
+  cleanse?: boolean; // 治癒自己的異常狀態
 }
 
 export interface Skill {
@@ -102,6 +127,57 @@ const S: Skill[] = [
   { id: 'firewall', name: '防火牆', elem: null, power: 0, cost: 1, acc: 100, desc: '產生最大 HP 30% 的護盾。', fx: { shield: 0.3 }, anim: 'buff' },
   { id: 'stormfang', name: '霆牙爆', elem: 'elec', power: 110, cost: 3, acc: 90, desc: '帶著落雷的撕咬，30% 使對手麻痺。', fx: { status: { id: 'para', chance: 0.3 } }, anim: 'beam' },
   { id: 'crabcannon', name: '鉗砲', elem: 'water', power: 90, cost: 2, acc: 85, desc: '從巨鉗發射高壓水砲。', anim: 'beam' },
+  // ── M3 新技能 ──
+  // 無屬性
+  { id: 'recklessram', name: '捨身衝撞', elem: null, power: 120, cost: 2, acc: 100, desc: '不顧一切地撞上去，自己也會受到傷害的 1/3。', fx: { recoil: 0.33 }, anim: 'hit' },
+  { id: 'counterscale', name: '鏡面鱗', elem: null, power: 0, cost: 1, acc: 100, desc: '先制。本回合受到攻擊時，把 60% 的傷害反彈回去。', fx: { priority: 2, counter: 0.6 }, anim: 'buff' },
+  { id: 'rendclaw', name: '裂爪', elem: null, power: 55, cost: 1, acc: 100, desc: '銳利的爪擊，30% 使對手流血。', fx: { status: { id: 'bleed', chance: 0.3 } }, anim: 'hit' },
+  { id: 'purify', name: '淨化', elem: null, power: 0, cost: 1, acc: 100, desc: '治癒自己的異常狀態，並回復最大 HP 的 15%。', fx: { cleanse: true, heal: 0.15 }, anim: 'heal' },
+  // 水
+  { id: 'aquajet', name: '水流噴射', elem: 'water', power: 40, cost: 1, acc: 100, desc: '先制攻擊。', fx: { priority: 1 }, anim: 'splash' },
+  { id: 'counterflow', name: '逆流', elem: 'water', power: 55, cost: 2, acc: 100, desc: 'HP 越低威力越高（最高 2.5 倍）。', fx: { lowHp: 1.5 }, anim: 'splash' },
+  { id: 'tidecharge', name: '蓄潮', elem: 'water', power: 0, cost: 1, acc: 100, desc: '蓄積潮水的力量，下一次攻擊威力加倍。', fx: { charge: true }, anim: 'buff' },
+  { id: 'hightide', name: '漲潮', elem: 'water', power: 0, cost: 2, acc: 100, desc: '場地變成「漲潮」5 回合：水屬性威力 ×1.5，火屬性威力 ×0.5。', fx: { field: { id: 'tide', turns: 5 } }, anim: 'splash' },
+  { id: 'sharkrend', name: '鯊齒撕裂', elem: 'water', power: 80, cost: 2, acc: 95, desc: '用鋸齒撕咬，40% 使對手流血。', fx: { status: { id: 'bleed', chance: 0.4 } }, anim: 'hit' },
+  // 火
+  { id: 'flareblitz', name: '烈焰衝鋒', elem: 'fire', power: 120, cost: 3, acc: 100, desc: '全身著火衝撞，自己受到傷害的 1/3，10% 使對手灼傷。', fx: { recoil: 0.33, status: { id: 'burn', chance: 0.1 } }, anim: 'hit' },
+  { id: 'lavafloor', name: '熔岩地面', elem: 'fire', power: 0, cost: 2, acc: 100, desc: '場地變成「熔岩地面」5 回合：火屬性威力 ×1.2，非火、非岩屬性每回合受傷。', fx: { field: { id: 'lava', turns: 5 } }, anim: 'splash' },
+  { id: 'coreburst', name: '爆裂熔核', elem: 'fire', power: 200, cost: 3, acc: 100, desc: '引爆體內的熔核，造成巨大傷害，但自己會倒下。', fx: { selfKO: true }, anim: 'beam' },
+  { id: 'scorch', name: '焦灼', elem: 'fire', power: 55, cost: 1, acc: 100, desc: '對灼傷中的對手威力 ×2。', fx: { chain: { id: 'burn', mult: 2 } }, anim: 'hit' },
+  // 草
+  { id: 'venomstrike', name: '毒棘刺擊', elem: 'grass', power: 60, cost: 2, acc: 100, desc: '對中毒的對手威力 ×2。', fx: { chain: { id: 'poison', mult: 2 } }, anim: 'hit' },
+  { id: 'sacredgrove', name: '聖林', elem: 'grass', power: 0, cost: 2, acc: 100, desc: '場地變成「聖林」5 回合：草屬性威力 ×1.5，每回合雙方回復 HP（草屬性回復更多）。', fx: { field: { id: 'grove', turns: 5 } }, anim: 'heal' },
+  { id: 'seedleech', name: '寄生種子', elem: 'grass', power: 45, cost: 1, acc: 100, desc: '回復造成傷害的 50%。', fx: { drain: 0.5 }, anim: 'hit' },
+  // 電
+  { id: 'energydrain', name: '吸能觸手', elem: 'elec', power: 45, cost: 1, acc: 100, desc: '命中後偷走對手 1 點能量。', fx: { steal: 1 }, anim: 'beam' },
+  { id: 'conduct', name: '導電', elem: 'elec', power: 65, cost: 2, acc: 100, desc: '對麻痺的對手必定擊中要害。', fx: { chain: { id: 'para', crit: true } }, anim: 'beam' },
+  { id: 'flash', name: '閃光', elem: 'elec', power: 0, cost: 1, acc: 90, desc: '刺眼的強光使對手致盲（命中率 ×0.6，換下場時解除）。', fx: { status: { id: 'blind', chance: 1 } }, anim: 'beam' },
+  { id: 'thunderstorm', name: '雷暴雲', elem: 'elec', power: 0, cost: 2, acc: 100, desc: '場地變成「雷暴雲」5 回合：電屬性威力 ×1.5。', fx: { field: { id: 'storm', turns: 5 } }, anim: 'beam' },
+  // 飛
+  { id: 'featherblade', name: '羽刃', elem: 'fly', power: 65, cost: 2, acc: 100, desc: '鋒利的羽毛斬擊，30% 使對手流血。', fx: { status: { id: 'bleed', chance: 0.3 } }, anim: 'hit' },
+  { id: 'tailwind', name: '順風', elem: 'fly', power: 0, cost: 1, acc: 100, desc: '乘著順風，速度大幅提高。', fx: { stat: { key: 'spd', delta: 2, self: true } }, anim: 'buff' },
+  { id: 'hurricane', name: '暴風', elem: 'fly', power: 110, cost: 3, acc: 80, desc: '狂暴的颶風，20% 使對手致盲。', fx: { status: { id: 'blind', chance: 0.2 } }, anim: 'splash' },
+  // 岩
+  { id: 'reefspikes', name: '暗礁', elem: 'rock', power: 0, cost: 1, acc: 100, desc: '在對手場地布下暗礁 4 回合：每回合受到傷害，換人上場時受到更多傷害。', fx: { trap: 4 }, anim: 'hit' },
+  { id: 'sandtoss', name: '擲沙', elem: 'rock', power: 30, cost: 1, acc: 100, desc: '朝對手眼睛撒沙，50% 使對手致盲。', fx: { status: { id: 'blind', chance: 0.5 } }, anim: 'splash' },
+  // 冰
+  { id: 'iceshard', name: '冰刺', elem: 'ice', power: 40, cost: 1, acc: 100, desc: '先制攻擊。', fx: { priority: 1 }, anim: 'hit' },
+  { id: 'frostcrack', name: '凍裂', elem: 'ice', power: 70, cost: 2, acc: 100, desc: '敲碎冰層，對冰凍中的對手威力 ×1.5。', fx: { chain: { id: 'freeze', mult: 1.5 } }, anim: 'hit' },
+  { id: 'auroraveil', name: '極光', elem: 'ice', power: 0, cost: 2, acc: 100, desc: '場地變成「極光」5 回合：冰、飛屬性威力 ×1.3，冰凍機率加倍。', fx: { field: { id: 'aurora', turns: 5 } }, anim: 'beam' },
+  // 暗
+  { id: 'opportunist', name: '趁火打劫', elem: 'dark', power: 55, cost: 1, acc: 100, desc: '對有異常狀態的對手威力 ×2。', fx: { vsStatus: 2 }, anim: 'hit' },
+  { id: 'shadowsneak', name: '影襲', elem: 'dark', power: 40, cost: 1, acc: 100, desc: '先制攻擊。', fx: { priority: 1 }, anim: 'hit' },
+  { id: 'inkshot', name: '墨霧彈', elem: 'dark', power: 45, cost: 1, acc: 100, desc: '噴出墨汁，50% 使對手致盲。', fx: { status: { id: 'blind', chance: 0.5 } }, anim: 'splash' },
+  { id: 'bloodtide', name: '血潮', elem: 'dark', power: 70, cost: 2, acc: 100, desc: '對流血的對手威力 ×1.5，並回復造成傷害的 30%。', fx: { chain: { id: 'bleed', mult: 1.5 }, drain: 0.3 }, anim: 'beam' },
+  { id: 'seafog', name: '濃霧', elem: 'dark', power: 0, cost: 1, acc: 100, desc: '場地變成「濃霧」5 回合：除了暗屬性之外，攻擊命中率 ×0.8。', fx: { field: { id: 'fog', turns: 5 } }, anim: 'splash' },
+  { id: 'bonerend', name: '骨刃', elem: 'dark', power: 65, cost: 2, acc: 100, desc: '用尖銳的骨頭劃開，40% 使對手流血。', fx: { status: { id: 'bleed', chance: 0.4 } }, anim: 'hit' },
+  // 數碼
+  { id: 'scanlock', name: '掃描鎖定', elem: 'data', power: 0, cost: 1, acc: 100, desc: '鎖定目標，下一次攻擊必定命中且擊中要害。', fx: { lockOn: true }, anim: 'buff' },
+  { id: 'datagrid', name: '資料網格', elem: 'data', power: 0, cost: 2, acc: 100, desc: '場地變成「資料網格」5 回合：數碼屬性威力 ×1.5，資料錯亂機率加倍。', fx: { field: { id: 'grid', turns: 5 } }, anim: 'beam' },
+  { id: 'crash', name: '程式崩潰', elem: 'data', power: 65, cost: 2, acc: 100, desc: '對資料錯亂的對手威力 ×1.6。', fx: { chain: { id: 'glitch', mult: 1.6 } }, anim: 'beam' },
+  { id: 'virus', name: '病毒注入', elem: 'data', power: 50, cost: 1, acc: 100, desc: '注入病毒程式，30% 使對手中毒。', fx: { status: { id: 'poison', chance: 0.3 } }, anim: 'beam' },
+  { id: 'selfdestruct', name: '自毀程序', elem: 'data', power: 170, cost: 3, acc: 100, desc: '啟動自毀程序，造成巨大傷害，但自己會倒下。', fx: { selfKO: true }, anim: 'beam' },
 ];
+
 
 export const SKILLS: Record<string, Skill> = Object.fromEntries(S.map((s) => [s.id, s]));

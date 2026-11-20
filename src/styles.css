@@ -294,3 +294,10 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .update-toast { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 50; background: rgba(5, 10, 32, 0.92); border: 1px solid #ffcf4a; color: #fff; padding: 6px 14px; font-size: 14px; pointer-events: none; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; }
 .update-toast b { color: #ffcf4a; }
 .update-toast.quiet { border-color: var(--bevel); opacity: 0.85; font-size: 12px; top: auto; bottom: 8px; }
+
+/* ── M3：新異常狀態、場地 ── */
+.st-blind { background: #5a5a6a; } .st-bleed { background: #b0203a; } .st-trap { background: #7a6a4a; } .st-charge { background: #2f8fd8; } .st-lock { background: #c23fa8; }
+.field-chip { position: absolute; top: calc(var(--u) * 3); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 0.4em; background: rgba(5, 10, 32, 0.75); border: 1px solid; color: #fff; font-size: max(10px, calc(var(--u) * 3.4)); padding: 0.2em 0.7em; white-space: nowrap; pointer-events: none; }
+.field-chip i { width: 0.7em; height: 0.7em; display: inline-block; }
+.field-chip span { opacity: 0.75; font-size: 0.85em; }
+.portrait .field-chip { top: auto; bottom: calc(var(--u) * 26); }

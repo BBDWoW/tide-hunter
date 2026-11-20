@@ -60,6 +60,12 @@ export function makeMon(formId: string, lv: number, boss = false, wild = false):
     const b = known.find((id) => basic(id) && SKILLS[id].elem && f.elems.includes(SKILLS[id].elem!)) ?? known.find(basic);
     if (b) picked[0] = b;
   }
+  // 至少要有一招攻擊技：沒有的話，用最近學會的攻擊技換掉最早的變化技
+  const atk = (id: string) => SKILLS[id] && SKILLS[id].power > 0;
+  if (!picked.some(atk)) {
+    const a = [...known].reverse().find(atk);
+    if (a) picked[0] = a;
+  }
   const m: Mon = { uid: newUid(), form: formId, lv, xp: 0, hp: 0, skills: picked, status: null, boss, wild };
   m.hp = maxHp(m);
   return m;
