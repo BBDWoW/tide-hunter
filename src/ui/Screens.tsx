@@ -2,11 +2,11 @@ import { useEffect, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { FORMS, STARTERS } from '../data/creatures';
 import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/types';
-import { ITEMS, type ItemId } from '../game/battle';
+import { ITEMS, statusLabel, type ItemId } from '../game/battle';
 import { ancestryOf, formOf, makeMon, maxHp, xpToNext, type Mon } from '../game/creature';
 import { bayCap, bayStartLevel, bringBack, buyRecruit, buyUpgrade, loadMeta, monFromBay, RECRUITS, saveMeta, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
 import { SKILLS } from '../data/skills';
-import { enterSpecial, healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
+import { canUseOutside, enterSpecial, healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
 import { BOONS, LURES } from '../data/boons';
 import { chartPos, drawChart, drawDeep, drawPort, drawSea, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
@@ -213,9 +213,9 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
         })}
       </>}
       panel={panel && (
-        <Win class="big-panel" title={panel === 'party' ? `隊伍 ${run.party.length}/6` : panel === 'shop' ? `漂流商店　🐚 ${run.shells}` : '道具與能力'}>
+        <Win class="big-panel" title={panel === 'party' ? `隊伍 ${run.party.length}/6` : panel === 'shop' ? `漂流商店　🐚 ${run.shells}` : '背包'}>
           {panel === 'party' && <PartyList run={run} onChange={() => force((n) => n + 1)} />}
-          {panel === 'items' && <ItemList run={run} />}
+          {panel === 'items' && <ItemList run={run} onChange={() => { saveRun(run); force((n) => n + 1); }} />}
           {panel === 'shop' && <ShopList run={run} onChange={() => { saveRun(run); force((n) => n + 1); }} />}
           {panel === 'shop' ? <MenuItem onClick={onNext} hot>離開商店，繼續航行</MenuItem> : <MenuItem onClick={() => setPanel(null)}>關閉</MenuItem>}
         </Win>
@@ -240,7 +240,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
               {node && action ? <><MenuItem onClick={() => { run.notice = undefined; action!.fn(); }} hot>{action.btn}</MenuItem>{action.alt && <MenuItem onClick={action.alt.fn}>{action.alt.btn}</MenuItem>}</>
                 : opts.map((o, j) => <MenuItem key={j} hot={j === hover} onHover={() => setHover(j)} onClick={() => choose(j)}>{NODE_INFO[o.kind].name}{o.kind === 'fish' || o.kind === 'elite' ? `・${spotName(run, o.spot).name}` : ''}</MenuItem>)}
               <MenuItem onClick={() => setPanel(panel === 'party' ? null : 'party')}>隊伍</MenuItem>
-              {!action?.alt && <MenuItem onClick={() => setPanel(panel === 'items' ? null : 'items')}>道具</MenuItem>}
+              {!action?.alt && <MenuItem onClick={() => setPanel(panel === 'items' ? null : 'items')}>背包</MenuItem>}
               <MenuItem onClick={onQuit}>存檔離開</MenuItem>
             </div>
           </Win>
@@ -286,17 +286,46 @@ function PartyList({ run, onChange }: { run: RunState; onChange: () => void }) {
   );
 }
 
-function ItemList({ run }: { run: RunState }) {
+const BAG_USABLE: ItemId[] = ['potion', 'superpotion', 'revive'];
+
+function ItemList({ run, onChange }: { run: RunState; onChange: () => void }) {
   const owned = Object.entries(run.boons).filter(([, n]) => n > 0);
+  const [using, setUsing] = useState<ItemId | null>(null);
+  const [msg, setMsg] = useState('');
+  if (using) return (
+    <div class="item-list">
+      <p class="small">要對誰使用 <b>{ITEMS[using].name}</b>？（剩 {run.items[using]} 個）</p>
+      <div class="pick-grid">
+        {run.party.map((m, i) => (
+          <button class="pick" key={m.uid} disabled={!canUseOutside(m, using)}
+            onClick={() => { setMsg(applyItemOutside(run, using, i)); setUsing(null); onChange(); }}>
+            <Sprite form={m.form} size={48} />
+            <span class="grow">
+              <span class="row-gap"><b>{formOf(m).name}</b><span class="num">Lv{m.lv}</span></span>
+              <Bar value={m.hp} max={maxHp(m)} />
+              <span class="small dim">{Math.max(0, m.hp)}/{maxHp(m)}{m.hp <= 0 ? ' · 倒下' : m.status ? ` · ${statusLabel(m.status)}` : ''}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+      <MenuItem onClick={() => setUsing(null)}>返回背包</MenuItem>
+    </div>
+  );
   return (
     <div class="item-list">
+      {msg && <p class="accent">{msg}</p>}
+      <h3 class="sub-h">回復道具（點「使用」）</h3>
+      {BAG_USABLE.map((id) => (
+        <div class="item-row" key={id}><b>{ITEMS[id].name}</b><span class="num">×{run.items[id] ?? 0}</span><span class="small dim grow">{ITEMS[id].desc}</span>
+          <button class="chip-btn" disabled={!run.items[id] || !run.party.some((m) => canUseOutside(m, id))} onClick={() => { setMsg(''); setUsing(id); }}>使用</button></div>
+      ))}
+      <div class="item-row"><b>能量海膽</b><span class="num">×{run.items.ether ?? 0}</span><span class="small dim">{ITEMS.ether.desc}（只能在戰鬥中用）</span></div>
+      <div class="item-row"><b>生命石</b><span class="num">×{run.lifeStones ?? 0}</span><span class="small dim">戰鬥中全隊倒下時，可以讓全隊以 50% HP 復活，再選擇繼續戰鬥或逃跑。</span></div>
+      <h3 class="sub-h">魚餌與貨幣</h3>
       <div class="item-row"><b>捕捉餌</b><span class="num">×{run.catchBait}</span><span class="small dim">收服夥伴時消耗 1 個。</span></div>
       <div class="item-row"><b>星光餌</b><span class="num">×{run.lures.star}</span><span class="small dim">{LURES.star.desc}</span></div>
       <div class="item-row"><b>傳說餌</b><span class="num">×{run.lures.legend}</span><span class="small dim">{LURES.legend.desc}</span></div>
       <div class="item-row"><b>貝殼幣</b><span class="num">{run.shells}</span><span class="small dim">在漂流商店使用。</span></div>
-      {(Object.keys(ITEMS) as ItemId[]).map((id) => (
-        <div class="item-row" key={id}><b>{ITEMS[id].name}</b><span class="num">×{run.items[id] ?? 0}</span><span class="small dim">{ITEMS[id].desc}</span></div>
-      ))}
       <h3 class="sub-h">已獲得的能力</h3>
       {owned.length ? owned.map(([id, n]) => (
         <div class="item-row" key={id}><b>{BOONS[id].name}</b><span class="num">×{n}</span><span class="small dim">{BOONS[id].desc}</span></div>

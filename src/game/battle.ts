@@ -431,6 +431,18 @@ function endOfTurn(s: BattleState, ev: BEvent[]) {
 }
 
 // 倒下後的強制換人（不算一回合）
+/** 生命石：全隊以 50% HP 復活，出場中的夥伴原地站起來，戰鬥繼續 */
+export function lifeStoneRevive(s: BattleState, side: SideId) {
+  const sd = s.sides[side];
+  for (const m of sd.team) {
+    if (m.hp > 0) continue;
+    m.hp = Math.max(1, Math.floor(maxHp(m) / 2)); m.status = null;
+    sd.vol[m.uid] = freshVol(); sd.vol[m.uid].energy += sd.mods?.energy ?? 0;
+  }
+  s.over = null;
+  s.needSwitch[side] = false;
+}
+
 export function forcedSwitch(s: BattleState, side: SideId, to: number): BEvent[] {
   const ev: BEvent[] = [];
   switchIn(s, side, to, ev);

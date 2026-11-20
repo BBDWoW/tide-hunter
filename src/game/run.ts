@@ -1,7 +1,7 @@
 // 一局冒險的狀態：隊伍、道具、航程站點、存檔
 import { CORE_POOL, FOREST_POOL, FORMS, ICE_POOL, LAVA_POOL, VOID_POOL, ZONE1_POOL } from '../data/creatures';
 import { effectiveness, RARITY_ORDER, type Rarity } from '../data/types';
-import { makeMon, maxHp, type Mon } from './creature';
+import { formOf, makeMon, maxHp, type Mon } from './creature';
 import { int, makeRng, newSeed, next, weighted, type Rng } from './rng';
 import type { ItemId } from './battle';
 import { BOON_LIST, BOON_TIER, BOONS, type LureId } from '../data/boons';
@@ -113,6 +113,7 @@ export interface RunState {
   returnTo?: { zone: ZoneId; route: RouteNode[][]; station: number; path: number[] }; // 在特殊區域時，原本的航線
   specialLv?: number; // 特殊區域的基準等級（依進入時的位置決定）
   notice?: string; // 回到海圖時要顯示的訊息
+  lifeStones?: number; // 生命石：全滅時可以讓全隊復活
   catchBait: number;
   lures: Record<'star' | 'legend', number>;
   boons: Record<string, number>;
@@ -223,7 +224,7 @@ export interface Encounter { mon: Mon; rarity: Rarity }
 export type ShadowKind = 'fish' | 'treasure' | 'junk';
 export interface Shadow { size: 1 | 2 | 3; kind: ShadowKind; rarity: Rarity; x: number }
 
-export function rollShadows(run: RunState, lure: LureId): Shadow[] {
+export function rollShadows(run: RunState, lure: LureId, fishOnly = false): Shadow[] {
   const r = run.rng, luck = boon(run, 'lucky');
   const node = nodeOf(run);
   if (node.kind === 'boss') return [{ size: 3, kind: 'fish', rarity: FORMS[zoneOf(run).boss].rarity, x: 170 }];
@@ -248,6 +249,7 @@ export function rollShadows(run: RunState, lure: LureId): Shadow[] {
           : weighted(r, [['A', 60], ['B', 40]] as [Rarity, number][]);
     }
     if (firstStop(run)) { kind = 'fish'; rarity = 'N'; }
+    if (fishOnly) kind = 'fish';
     if (node.kind === 'elite') { kind = 'fish'; if (rarity === 'N' || rarity === 'B') rarity = 'A'; }
     return { size, kind, rarity, x: xs[i] };
   });
@@ -389,4 +391,25 @@ export const SHOP: ShopItem[] = [
   { id: 'potion', name: '海藻藥膏', desc: '回復 50% HP。', price: 18, buy: (r) => { r.items.potion++; } },
   { id: 'superpotion', name: '珍珠精華', desc: '回復全部 HP 並治癒異常。', price: 45, buy: (r) => { r.items.superpotion++; } },
   { id: 'revive', name: '復甦貝', desc: '使倒下的夥伴復活。', price: 40, buy: (r) => { r.items.revive++; } },
+  { id: 'lifestone', name: '生命石', desc: '戰鬥中全隊倒下時，讓全隊以 50% HP 復活，可以繼續戰鬥或逃跑。', price: 120, buy: (r) => { r.lifeStones = (r.lifeStones ?? 0) + 1; } },
 ];
+
+// ── 背包：戰鬥外使用道具 ──
+/** 這個道具能不能對這隻夥伴使用（戰鬥外） */
+export function canUseOutside(m: Mon, item: ItemId): boolean {
+  const mx = maxHp(m);
+  if (item === 'revive') return m.hp <= 0;
+  if (item === 'potion') return m.hp > 0 && m.hp < mx;
+  if (item === 'superpotion') return m.hp > 0 && (m.hp < mx || !!m.status);
+  return false; // 能量海膽只能在戰鬥中用
+}
+export function applyItemOutside(run: RunState, item: ItemId, idx: number): string {
+  const m = run.party[idx], mx = maxHp(m), name = formOf(m).name;
+  if (!run.items[item] || !canUseOutside(m, item)) return '';
+  run.items[item]--;
+  if (item === 'revive') { m.hp = Math.floor(mx / 2); m.status = null; return `${name} 復活了！`; }
+  const amt = item === 'potion' ? Math.min(mx - m.hp, Math.floor(mx / 2)) : mx - m.hp;
+  m.hp += amt;
+  if (item === 'superpotion') m.status = null;
+  return `${name} 回復了 ${amt} HP${item === 'superpotion' ? '，異常狀態也治好了' : ''}。`;
+}

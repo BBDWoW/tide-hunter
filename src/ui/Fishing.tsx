@@ -17,7 +17,7 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
   const [phase, setPhase] = useState<FishPhase | 'lure' | 'loot'>(boss || !hasLures ? 'choose' : 'lure');
   const [sel, setSel] = useState(boss ? 0 : 1);
   const [loot, setLoot] = useState<Loot | null>(null);
-  const [msg, setMsg] = useState(boss ? '海面異常平靜……霸主就在這片水域。' : `${spotName(run, spot).name}：${spotName(run, spot).desc}`);
+  const [msg, setMsg] = useState(boss ? '海面異常平靜……霸主就在這片水域。' : `${spotName(run, spot).name}：${spotName(run, spot).desc}（點兩下魚影拋竿）`);
   const st = useRef({
     view: { phase: 'choose', power: 0, castT: 0, bobX: 170, shadows: [], sel: 1, spot: zoneOf(run).theme === 'day' ? spot : 'none', theme: zoneOf(run).theme } as FishView,
     t: 0, wait: 0, nibbles: 0, nib: 0, bite: 0, q: 0, done: false,
@@ -25,11 +25,32 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
   st.current.view.shadows = shadows;
   st.current.view.sel = sel;
   const setP = (p: FishPhase) => { st.current.view.phase = p; setPhase(p); };
+  const lureUsed = useRef<LureId>('normal');
+  const lastTap = useRef(-1);
+  const treasureNode = nodeOf(run).kind === 'treasure';
+  // 點魚影：第一下選取，再點同一個就拋竿（也可以雙擊）
+  const tapShadow = (i: number) => {
+    if (lastTap.current === i) { startCast(); return; }
+    lastTap.current = i; setSel(i);
+    setMsg(`選了${SIZE_NAME[shadows[i].size]}魚影。再點一次魚影就拋竿！`);
+  };
 
   const pickLure = (l: LureId) => {
     if (l !== 'normal') run.lures[l]--;
+    lureUsed.current = l;
     setShadows(rollShadows(run, l));
-    setMsg(l === 'normal' ? '用普通餌。選一個魚影吧，影子越大，越可能是稀有的魚。' : `用了${LURES[l].name}！大魚影裡可能藏著不得了的東西……`);
+    setMsg(l === 'normal' ? '用普通餌。點兩下魚影就能拋竿，影子越大，越可能是稀有的魚。' : `用了${LURES[l].name}！大魚影裡可能藏著不得了的東西……`);
+    setP('choose');
+  };
+  // 釣到寶箱或垃圾後留在原地繼續釣：魚影重新出現，而且這次都是魚（用同一種餌，不會再扣）
+  const fishAgain = () => {
+    const s = st.current;
+    s.done = false; s.t = 0; s.view.castT = 0; s.view.power = 0;
+    lastTap.current = -1;
+    setLoot(null);
+    setShadows(rollShadows(run, lureUsed.current, true));
+    setSel(1);
+    setMsg('換個位置再拋一次！這次水面下的影子都是魚。');
     setP('choose');
   };
   const startCast = () => { setP('cast'); setMsg('點擊畫面（或空白鍵）拋竿！力量條停在頂端的紅色區域是完美拋竿。'); };
@@ -91,7 +112,7 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
         {phase === 'cast' && <div class="cast-meter" aria-hidden="true"><div class="sweet" style={{ height: `${(1 - perfectAt(run)) * 100}%` }} /><i ref={meter} /><span>力量</span></div>}
         {phase === 'hooked' && <div class="flash" />}
         {phase === 'choose' && shadows.map((sh, i) => (
-          <button key={i} class={`hit shadow-hit ${i === sel ? 'on' : ''}`} aria-label={`${SIZE_NAME[sh.size]}魚影`} onClick={() => setSel(i)}
+          <button key={i} class={`hit shadow-hit ${i === sel ? 'on' : ''}`} aria-label={`${SIZE_NAME[sh.size]}魚影`} onClick={() => tapShadow(i)}
             style={{ left: `${((sh.x - 20) / 256) * 100}%`, top: `${((78 + i * 7) / 144) * 100}%`, width: `${(40 / 256) * 100}%`, height: `${(18 / 144) * 100}%` }} />
         ))}
       </>}
@@ -105,10 +126,13 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
               <MenuItem onClick={() => pickLure('legend')} disabled={!run.lures.legend} sub={`×${run.lures.legend}`}>傳說餌</MenuItem>
             </div>}
             {phase === 'choose' && <div class="cmd-grid">
-              {shadows.map((sh, i) => <MenuItem key={i} onClick={() => setSel(i)} hot={i === sel}>{['左', '中', '右'][[...shadows].sort((a, b) => a.x - b.x).indexOf(sh)] ?? ''}・{SIZE_NAME[sh.size]}魚影</MenuItem>)}
-              <MenuItem onClick={startCast}>對準它拋竿！</MenuItem>
+              {shadows.map((sh, i) => <MenuItem key={i} onClick={() => { lastTap.current = i; setSel(i); }} hot={i === sel}>{['左', '中', '右'][[...shadows].sort((a, b) => a.x - b.x).indexOf(sh)] ?? ''}・{SIZE_NAME[sh.size]}魚影</MenuItem>)}
+              <MenuItem onClick={startCast} hot>🎣 拋竿！</MenuItem>
             </div>}
-            {phase === 'loot' && <MenuItem onClick={onDone} hot>繼續航行</MenuItem>}
+            {phase === 'loot' && (treasureNode ? <MenuItem onClick={onDone} hot>繼續航行</MenuItem> : <div class="cmd-grid">
+              <MenuItem onClick={fishAgain} hot>繼續釣魚</MenuItem>
+              <MenuItem onClick={onDone}>離開這裡</MenuItem>
+            </div>)}
             {sceneTap && <p class="dim center small">點擊畫面</p>}
           </Win>
         </div>

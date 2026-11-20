@@ -4,7 +4,7 @@ import { FORMS } from '../data/creatures';
 import { SKILLS, type StatusId } from '../data/skills';
 import { effectiveness, RARITY } from '../data/types';
 import {
-  active, aiChoose, aiForcedSwitch, canAfford, createBattle, forcedSwitch, ITEMS, MAX_ENERGY, resolveTurn, statusLabel, volOf,
+  active, aiChoose, aiForcedSwitch, canAfford, createBattle, forcedSwitch, ITEMS, lifeStoneRevive, MAX_ENERGY, resolveTurn, statusLabel, volOf,
   type Action, type BattleState, type BEvent, type ItemId, type SideId,
 } from '../game/battle';
 import { formOf, maxHp, type Mon } from '../game/creature';
@@ -20,7 +20,7 @@ import { Reel } from './Reel';
 
 export interface BattleResult { outcome: 'win' | 'lose' | 'caught' | 'fled'; enemy: Mon; participants: string[] }
 
-type Mode = 'busy' | 'main' | 'skills' | 'switch' | 'force' | 'items' | 'itemTarget' | 'reel';
+type Mode = 'busy' | 'main' | 'skills' | 'switch' | 'force' | 'items' | 'itemTarget' | 'reel' | 'lifestone';
 interface Disp { form: string; lv: number; hp: number; max: number; energy: number; status: StatusId | null; shield: number }
 interface Popup { id: number; side: SideId; text: string; cls: string }
 
@@ -166,10 +166,29 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     const over = bs.over;
     let outcome: BattleResult['outcome'] = caught ? 'caught' : over?.fled ? 'fled' : over?.winner === 0 ? 'win' : 'lose';
     if (outcome === 'win') { say('戰鬥勝利！'); }
-    if (outcome === 'lose') { say('你的隊伍全部倒下了……'); }
+    if (outcome === 'lose') {
+      say('你的隊伍全部倒下了……');
+      if ((run.lifeStones ?? 0) > 0) { await wait(500); say(`要使用生命石讓全隊復活嗎？（剩 ${run.lifeStones} 顆）`); setMode('lifestone'); return; }
+    }
     await wait(1100);
     onEnd({ outcome, enemy: enc.mon, participants: [...participants.current] });
   }
+
+  async function useLifeStone() {
+    setMode('busy');
+    run.lifeStones = (run.lifeStones ?? 0) - 1;
+    lifeStoneRevive(bs, 0);
+    const a = anim.current, c = center(0);
+    a.fade[0] = 1; a.enter[0] = 0;
+    disp.current[0] = snap(0);
+    burst(a.parts, c.x, c.y, 'heal', null);
+    say('生命石發出耀眼的光芒……全隊復活了！');
+    rerender();
+    await wait(900);
+    say(boss ? '再戰一次吧！' : '要繼續戰鬥，還是剪線逃跑？');
+    setMode('main');
+  }
+  const giveUp = async () => { setMode('busy'); await wait(300); onEnd({ outcome: 'lose', enemy: enc.mon, participants: [...participants.current] }); };
 
   async function submit(a: Action) {
     setMode('busy');
@@ -304,6 +323,12 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           </Win>
           <Win class="cmd">
             {(mode === 'busy' || picking || mode === 'reel') && <p class="dim center">……</p>}
+            {mode === 'lifestone' && (
+              <div class="cmd-grid">
+                <MenuItem onClick={useLifeStone} hot sub={`×${run.lifeStones ?? 0}`}>使用生命石</MenuItem>
+                <MenuItem onClick={giveUp}>放棄</MenuItem>
+              </div>
+            )}
             {mode === 'main' && (
               <div class="cmd-grid">
                 <MenuItem onClick={() => { setHover(0); setMode('skills'); }} hot>技能</MenuItem>
