@@ -305,7 +305,7 @@ const F: Form[] = [
     base: { hp: 98, atk: 112, def: 86, spd: 96 }, ability: 'lure', extra: ['dragonpresence'],
     learn: [[15, 'abyssmaw'], [15, 'datastorm'], [16, 'crash'], [17, 'datagrid'], [18, 'opportunist']], desc: '被這隻眼睛注視的地方，現實就會開始崩解。' },
   // ── 超特殊：神之手（打倒霸主後極低機率出現） ──
-  { id: 'godhand', name: '神之手', family: 'godhand', stage: 3, rarity: 'SSR', category: '神獸', elems: [], sprite: 'godhand', pal: 'water', secret: true, scale: 1.1,
+  { id: 'godhand', name: '神之手', family: 'godhand', stage: 3, rarity: 'SSR', category: '神獸', elems: [], sprite: 'godhand', pal: 'water', secret: true, scale: 0.95,
     base: { hp: 100, atk: 1, def: 200, spd: 60 }, ability: 'none',
     learn: [[1, 'gh_toss'], [1, 'gh_love'], [1, 'gh_fire'], [1, 'gh_stay'], [1, 'gh_pull']], desc: '從天上伸出的一隻白色的手，擁有壓垮世界的力量。但其實，它只是想有人陪。' },
   // ── 霸主 ──

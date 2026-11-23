@@ -14,22 +14,16 @@ import { Icon } from './Icon';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
 
-/** 天上伸下來的白色手臂 + 手 */
-export function drawGodHand(c: CanvasRenderingContext2D, t: number, x: number, handY: number, scale = 1.5, open = 0, hand = true) {
-  const size = 64 * scale;
-  // 光柱
-  const beamH = hand ? handY + size : handY + 8;
+/** 神之手：天上照下來的光柱 + 雲上的手（hand = false 時只畫光，給戰鬥畫面用） */
+export function drawGodHand(c: CanvasRenderingContext2D, t: number, x: number, handY: number, scale = 1, open = 0, hand = true) {
+  const size = 96 * scale;
+  const beamH = handY + size * 0.6;
   const g = c.createLinearGradient(0, 0, 0, beamH);
-  g.addColorStop(0, 'rgba(255,250,220,0.35)'); g.addColorStop(1, 'rgba(255,250,220,0)');
-  c.fillStyle = g; c.fillRect(x - size * 0.6, 0, size * 1.2, beamH);
-  // 手臂（從畫面最上面接到手腕）
-  const armW = Math.round(20 * scale), top = handY + 4 * scale;
-  c.fillStyle = '#34385a'; c.fillRect(Math.round(x - armW / 2 - 1), -4, armW + 2, Math.max(0, top + 4));
-  c.fillStyle = '#fafaff'; c.fillRect(Math.round(x - armW / 2), -4, armW, Math.max(0, top + 4));
-  c.fillStyle = '#dee2f0'; c.fillRect(Math.round(x - armW / 2 + 2), -4, Math.round(3 * scale), Math.max(0, top + 4));
-  // 光點
-  for (let i = 0; i < 10; i++) { const p = (t * 0.3 + i / 10) % 1; c.fillStyle = `rgba(255,245,200,${1 - p})`; c.fillRect(Math.round(x - size / 2 + ((i * 37) % size)), Math.round(handY + size * 0.4 - p * 40), 1, 1); }
-  if (hand) drawSprite(c, 'godhand', PAL.water, x - size / 2, handY, { f: open > 0.5 ? 1 : Math.floor(t * 1.5) % 2, scale });
+  g.addColorStop(0, 'rgba(255,240,190,0.32)'); g.addColorStop(1, 'rgba(255,240,190,0)');
+  c.fillStyle = g; c.fillRect(x - size * 0.45, 0, size * 0.9, beamH);
+  // 飄落的金色光點
+  for (let i = 0; i < 12; i++) { const p = (t * 0.25 + i / 12) % 1; c.fillStyle = `rgba(255,230,150,${1 - p})`; c.fillRect(Math.round(x - size / 2 + ((i * 41) % size)), Math.round(p * (handY + size * 0.5)), 1, 1); }
+  if (hand) drawSprite(c, 'godhand', PAL.water, x - size / 2, handY + Math.sin(t * 1.4) * 2 - open * 2, { scale });
 }
 
 const RAR_ORDER = ['SSR', 'S', 'A', 'B', 'N'];
@@ -78,8 +72,8 @@ export function GodHandScreen({ vp, run, onFight, onDone }: { vp: Viewport; run:
     // 霸主在海面上；被抓走時往上升
     const lift = took ? Math.min(1, t / 2) * 26 : 0;
     drawSprite(c, f.sprite, PAL[f.pal], X - 32, 72 - lift + Math.sin(t * 2) * 1, { f: Math.floor(t * 2) % 2 });
-    const hy = -80 + intro * (took ? 8 - lift + 80 : 14 + 80) + Math.sin(t * 1.2) * 2;
-    drawGodHand(c, t, X, hy, 1, took ? 1 : 0);
+    const hy = -100 + intro * ((took ? -8 - lift : -2) + 100);
+    drawGodHand(c, t, X, hy, 0.85, took ? 1 : 0);
   };
   let body;
   if (gh.stage === 'offer') body = (
