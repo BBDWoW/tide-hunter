@@ -395,21 +395,45 @@ function PartyList({ run, onChange }: { run: RunState; onChange: () => void }) {
 
 const BAG_USABLE: ItemId[] = ['potion', 'superpotion', 'revive'];
 
+type BagTab = 'heal' | 'fish' | 'held' | 'boon';
+interface BagEntry { key: string; icon: string; name: string; count: number | string; desc: string; use?: ItemId }
+const BOON_ICON: Record<string, string> = { 戰鬥: 'attack', 捕捉: 'rod', 釣魚: 'starlure', 養成: 'train', 回復: 'heal' };
+const ITEM_ICON: Record<ItemId, string> = { potion: 'potion', superpotion: 'elixir', revive: 'revive', ether: 'ether' };
+
+/** 背包：分類分頁＋圖示格子，點一格在旁邊看說明（不用往下捲） */
 function ItemList({ run, onChange }: { run: RunState; onChange: () => void }) {
-  const owned = Object.entries(run.boons).filter(([, n]) => n > 0);
+  const [tab, setTab] = useState<BagTab>('heal');
+  const [sel, setSel] = useState<string | null>(null);
   const [using, setUsing] = useState<ItemId | null>(null);
-  const [msg, setMsg] = useState('');
-  // 剛剛用過的結果：留在畫面上，看得到回了多少
   const [last, setLast] = useState<{ uid: string; text: string; from: number; to: number; max: number; n: number } | null>(null);
+  const heldCount = (run.heldBag ?? []).reduce<Record<string, number>>((a, h) => { a[h] = (a[h] ?? 0) + 1; return a; }, {});
+  const lists: Record<BagTab, BagEntry[]> = {
+    heal: [
+      ...(['potion', 'superpotion', 'revive', 'ether'] as ItemId[]).map((id) => ({ key: id, icon: ITEM_ICON[id], name: ITEMS[id].name, count: run.items[id] ?? 0, desc: ITEMS[id].desc + (id === 'ether' ? '（只能在戰鬥中用）' : ''), use: BAG_USABLE.includes(id) ? id : undefined })),
+      { key: 'lifestone', icon: 'lifestone', name: '生命石', count: run.lifeStones ?? 0, desc: '戰鬥中全隊倒下時，可以讓全隊以 50% HP 復活，再選擇繼續戰鬥或逃跑。' },
+    ],
+    fish: [
+      { key: 'bait', icon: 'bait', name: '捕捉餌', count: run.catchBait, desc: '收服夥伴時消耗 1 個。' },
+      { key: 'star', icon: 'starlure', name: '星光餌', count: run.lures.star, desc: LURES.star.desc },
+      { key: 'legend', icon: 'legendlure', name: '傳說餌', count: run.lures.legend, desc: LURES.legend.desc },
+      { key: 'shells', icon: 'shell', name: '貝殼幣', count: run.shells, desc: '在漂流商店使用。' },
+    ],
+    held: Object.entries(heldCount).map(([h, n]) => ({ key: h, icon: HELD[h as HeldId].icon, name: HELD[h as HeldId].name, count: n, desc: `${HELD[h as HeldId].desc}　到「隊伍」畫面就能讓夥伴裝上。` })),
+    boon: Object.entries(run.boons).filter(([, n]) => n > 0).map(([id, n]) => ({ key: id, icon: BOON_ICON[BOONS[id].cat] ?? 'sparkle', name: BOONS[id].name, count: `${n} 層`, desc: BOONS[id].desc })),
+  };
+  const TABS: [BagTab, string, string][] = [['heal', '回復', 'heal'], ['fish', '魚餌與錢', 'bait'], ['held', '攜帶道具', 'scope'], ['boon', '能力', 'sparkle']];
+  const list = lists[tab];
+  const cur = list.find((e) => e.key === sel) ?? list[0] ?? null;
   const use = (item: ItemId, i: number) => {
     const m = run.party[i], from = Math.max(0, m.hp);
     const text = applyItemOutside(run, item, i);
     if (!text) return;
     setLast({ uid: m.uid, text, from, to: m.hp, max: maxHp(m), n: (last?.n ?? 0) + 1 });
-    setMsg(text); onChange();
+    onChange();
   };
+
   if (using) return (
-    <div class="item-list">
+    <div class="bag">
       <button class="chip-btn back-chip" onClick={() => { setUsing(null); setLast(null); }}>← 返回背包</button>
       {last && (
         <div class="use-result" key={last.n}>
@@ -434,24 +458,28 @@ function ItemList({ run, onChange }: { run: RunState; onChange: () => void }) {
     </div>
   );
   return (
-    <div class="item-list">
-      {msg && <p class="accent">{msg}</p>}
-      <h3 class="sub-h">回復道具（點「使用」）</h3>
-      {BAG_USABLE.map((id) => (
-        <div class="item-row" key={id}><b>{ITEMS[id].name}</b><span class="num">×{run.items[id] ?? 0}</span><span class="small dim grow">{ITEMS[id].desc}</span>
-          <button class="chip-btn" disabled={!run.items[id] || !run.party.some((m) => canUseOutside(m, id))} onClick={() => { setMsg(''); setLast(null); setUsing(id); }}>使用</button></div>
-      ))}
-      <div class="item-row"><b>能量海膽</b><span class="num">×{run.items.ether ?? 0}</span><span class="small dim">{ITEMS.ether.desc}（只能在戰鬥中用）</span></div>
-      <div class="item-row"><b>生命石</b><span class="num">×{run.lifeStones ?? 0}</span><span class="small dim">戰鬥中全隊倒下時，可以讓全隊以 50% HP 復活，再選擇繼續戰鬥或逃跑。</span></div>
-      <h3 class="sub-h">魚餌與貨幣</h3>
-      <div class="item-row"><b>捕捉餌</b><span class="num">×{run.catchBait}</span><span class="small dim">收服夥伴時消耗 1 個。</span></div>
-      <div class="item-row"><b>星光餌</b><span class="num">×{run.lures.star}</span><span class="small dim">{LURES.star.desc}</span></div>
-      <div class="item-row"><b>傳說餌</b><span class="num">×{run.lures.legend}</span><span class="small dim">{LURES.legend.desc}</span></div>
-      <div class="item-row"><b>貝殼幣</b><span class="num">{run.shells}</span><span class="small dim">在漂流商店使用。</span></div>
-      <h3 class="sub-h">已獲得的能力</h3>
-      {owned.length ? owned.map(([id, n]) => (
-        <div class="item-row" key={id}><b>{BOONS[id].name}</b><span class="num">×{n}</span><span class="small dim">{BOONS[id].desc}</span></div>
-      )) : <p class="small dim">還沒有。每場戰鬥勝利後可以挑選一張能力卡。</p>}
+    <div class="bag">
+      <div class="tabs bag-tabs">
+        {TABS.map(([k, label, icon]) => <button key={k} class={`tab ${tab === k ? 'on' : ''}`} onClick={() => { setTab(k); setSel(null); }}><Icon name={icon} /> {label}</button>)}
+      </div>
+      <div class="bag-body">
+        <div class="bag-grid">
+          {list.length ? list.map((e) => (
+            <button key={e.key} class={`bag-cell ${cur?.key === e.key ? 'on' : ''} ${e.count === 0 ? 'empty' : ''}`} onClick={() => setSel(e.key)}>
+              <Icon name={e.icon} size="1.9em" />
+              <span class="bag-name">{e.name}</span>
+              <span class="bag-count num">{typeof e.count === 'number' ? `×${e.count}` : e.count}</span>
+            </button>
+          )) : <p class="small dim">{tab === 'held' ? '還沒有攜帶道具。寶箱、精英、船隊、營地、商店都有機會拿到。' : '還沒有能力。每場戰鬥勝利後可以挑選一張能力卡。'}</p>}
+        </div>
+        {cur && (
+          <div class="bag-detail">
+            <div class="row-gap"><Icon name={cur.icon} size="2.4em" /><b class="big-name">{cur.name}</b><span class="num">{typeof cur.count === 'number' ? `×${cur.count}` : cur.count}</span></div>
+            <p class="small">{cur.desc}</p>
+            {cur.use && <MenuItem hot disabled={!run.items[cur.use] || !run.party.some((m) => canUseOutside(m, cur.use!))} onClick={() => { setLast(null); setUsing(cur.use!); }}>使用</MenuItem>}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

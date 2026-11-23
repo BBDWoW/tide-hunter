@@ -10,7 +10,7 @@ import { BOON_TIER, BOONS } from '../data/boons';
 import { HELD } from '../data/held';
 import { EVO_W, playEvolution } from '../render/evo';
 import type { BattleResult } from './Battle';
-import { AbilityLines, Bar, Elems, IvStars, EnvHint, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
+import { AbilityLines, Bar, Elems, IvStars, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
 import { sfx } from '../audio/engine';
@@ -23,6 +23,8 @@ type Task =
 
 interface Line { uid: string; text: string }
 
+type Step = 'caught' | 'results' | 'tasks' | 'boon' | 'end';
+
 export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: RunState; result: BattleResult; onDone: () => void }) {
   const [lines, setLines] = useState<Line[]>([]);
   const [tasks, setTasks] = useState<Task[] | null>(null);
@@ -30,6 +32,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
   // 戰鬥勝利或收服後：三選一能力卡（霸主戰後直接結算，不抽卡）
   const [boonOpts] = useState<string[] | null>(() => (result.outcome !== 'fled' && !isBoss(run) ? rollBoons(run, nodeOf(run).kind === 'elite' || !!result.team) : null));
   const [boonDone, setBoonDone] = useState(false);
+  const [step, setStep] = useState<Step>(result.outcome === 'caught' ? 'caught' : 'results');
 
   // 只執行一次：結算所有變化，產生待處理事項
   useEffect(() => {
@@ -108,60 +111,91 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
   if (!tasks) return null;
 
   const bossWin = isBoss(run) && result.outcome === 'win';
-  const title = bossWin ? '霸主討伐成功！' : result.outcome === 'caught' ? '收服成功！' : result.outcome === 'win' ? '戰鬥勝利' : '順利脫身';
   const doneLabel = !bossWin ? '繼續航行' : run.returnTo ? '回到原本的航線' : run.zoneNo < FINAL_ZONE ? '前往下一片海域' : '凱旋回港';
 
-  const evolving = cur?.k === 'evolve';
-  return (
-    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => (evolving ? drawDeep(c, t) : drawSea(c, t, 'day'))} />}
-      panel={
-        <Win class={`big-panel after ${evolving ? 'evolving' : ''}`} title={evolving ? '進化' : title}>
-          {cur?.k === 'evolve' ? (
-            <EvolveScene mon={find(cur.uid)!} to={cur.to}
-              onDone={(learn) => {
-                const m = find(cur.uid)!;
-                updateDex((d) => { d.evolved = [...new Set([...(d.evolved ?? []), cur.to])]; });
-                const branch = Object.values(FORMS).flatMap((f) => f.evolve ?? []).find((e) => e.to === cur.to && (e.style || e.zone));
-                const why = branch?.zone ? `（受到${ZONES[branch.zone as ZoneId]?.name ?? ''}的環境影響）` : branch?.style ? `（依戰鬥風格走向${branch.style === 'guard' ? '守護型' : '攻擊型'}）` : '';
-                note(m.uid, `進化成了 ${formOf(m).name}！${why}`);
-                const extra: Task[] = learn.map((sk) => ({ k: 'learn', uid: m.uid, skill: sk }));
-                const nextEvo = evolveTarget(m, run.zone);
-                if (nextEvo) extra.push({ k: 'evolve', uid: m.uid, to: nextEvo });
-                shift(extra);
-              }} />
-          ) : <>
-            {bossWin && <p class="accent boss-calm">{ZONES[run.zone]?.name}的潮水平靜了下來。夥伴們都成長了不少！</p>}
-            {caughtMon.current && <CaughtCard mon={caughtMon.current} />}
-            <div class="after-list">
-              {run.party.map((m) => (
-                <div class="after-row" key={m.uid}>
-                  <Sprite form={m.form} size={48} mutant={m.mutant} />
-                  <div class="grow">
-                    <span class="row-gap"><b>{formOf(m).name}</b><span class="num">Lv{m.lv}</span></span>
-                    <Bar value={m.xp} max={xpToNext(m.lv)} kind="xp" />
-                    <StyleMeter mon={m} /><EnvHint mon={m} />
-                    {lines.filter((l) => l.uid === m.uid).map((l, i) => <p class="small" key={i}>{l.text}</p>)}
-                  </div>
-                </div>
-              ))}
-              {result.outcome === 'fled' && <p class="dim">沒有獲得經驗值。</p>}
-              {lines.filter((l) => l.uid === '_coins' || l.uid === '_held' || l.uid === '_boon').map((l, i) => <p class="small accent" key={'c' + i}>{l.text}</p>)}
+  // 一個畫面只做一件事：收服 → 經驗與升級 → 進化／學技能（一次一件）→ 選能力卡
+  const hasTasks = !!tasks.length;
+  const nextFrom = (from: Step): Step => {
+    const order: Step[] = ['caught', 'results', 'tasks', 'boon', 'end'];
+    for (const st of order.slice(order.indexOf(from) + 1)) {
+      if (st === 'tasks' && hasTasks) return st;
+      if (st === 'boon' && boonOpts && !boonDone) return st;
+      if (st === 'end') return st;
+    }
+    return 'end';
+  };
+  const stepNow: Step = step === 'tasks' && !cur ? nextFrom('tasks') : step;
+  const evolving = stepNow === 'tasks' && cur?.k === 'evolve';
+  const go = (st: Step) => { if (st === 'end' && !(boonOpts && boonDone)) onDone(); else setStep(st); };
+  const boonLine = lines.find((l) => l.uid === '_boon');
+
+  let body;
+  if (stepNow === 'caught' && caughtMon.current) body = (
+    <Win class="big-panel after" title="收服成功！">
+      <CaughtCard mon={caughtMon.current} />
+      <MenuItem onClick={() => go(nextFrom('caught'))} hot>下一步</MenuItem>
+    </Win>
+  );
+  else if (stepNow === 'results' || (stepNow === 'caught' && !caughtMon.current)) body = (
+    <Win class="big-panel after" title={bossWin ? '霸主討伐成功！' : result.outcome === 'fled' ? '順利脫身' : '經驗與升級'}>
+      {bossWin && <p class="accent boss-calm">{ZONES[run.zone]?.name}的潮水平靜了下來。夥伴們都成長了不少！</p>}
+      <div class="after-list">
+        {run.party.map((m) => (
+          <div class="after-row" key={m.uid}>
+            <Sprite form={m.form} size={48} mutant={m.mutant} />
+            <div class="grow">
+              <span class="row-gap"><b>{formOf(m).name}</b><span class="num">Lv{m.lv}</span></span>
+              <Bar value={m.xp} max={xpToNext(m.lv)} kind="xp" />
+              {lines.filter((l) => l.uid === m.uid).map((l, i) => <p class="small" key={i}>{l.text}</p>)}
             </div>
-            {cur?.k === 'learn' && !autoLearn && <LearnPrompt mon={find(cur.uid)!} skill={cur.skill}
-              onPick={(forget) => {
-                const m = find(cur.uid)!;
-                if (forget !== null) {
-                  const old = m.skills[forget]; m.skills[forget] = cur.skill;
-                  note(m.uid, `${formOf(m).name} 忘記了 ${SKILLS[old].name}，學會了 ${SKILLS[cur.skill].name}！`);
-                } else note(m.uid, `${formOf(m).name} 沒有學習 ${SKILLS[cur.skill].name}。`);
-                shift();
-              }} />}
-            {cur?.k === 'full' && <FullPrompt run={run} mon={cur.mon} onDone={(text) => { note(cur.mon.uid, text); shift(); }} />}
-            {!cur && boonOpts && !boonDone && <BoonPick ids={boonOpts} onPick={(id) => { note('_boon', applyBoon(run, id)); if (run.after) run.after.boons = undefined; saveRun(run); setBoonDone(true); }} />}
-            {!cur && (!boonOpts || boonDone) && <MenuItem onClick={onDone} hot>{doneLabel}</MenuItem>}
-          </>}
-        </Win>
-      } />
+          </div>
+        ))}
+        {result.outcome === 'fled' && <p class="dim">沒有獲得經驗值。</p>}
+      </div>
+      {lines.filter((l) => l.uid === '_coins' || l.uid === '_held').map((l, i) => <p class="small accent" key={'c' + i}>{l.text}</p>)}
+      {(() => { const nx = nextFrom('results'); return <MenuItem onClick={() => go(nx)} hot>{nx === 'end' ? doneLabel : nx === 'tasks' ? '下一步：夥伴的成長' : '下一步：選能力卡'}</MenuItem>; })()}
+    </Win>
+  );
+  else if (stepNow === 'tasks' && cur) body = (
+    <Win class={`big-panel after ${evolving ? 'evolving' : ''}`} title={cur.k === 'evolve' ? '進化' : cur.k === 'learn' ? '學習新技能' : '隊伍滿了'}>
+      {cur.k === 'evolve' && <EvolveScene mon={find(cur.uid)!} to={cur.to}
+        onDone={(learn) => {
+          const m = find(cur.uid)!;
+          updateDex((d) => { d.evolved = [...new Set([...(d.evolved ?? []), cur.to])]; });
+          const branch = Object.values(FORMS).flatMap((f) => f.evolve ?? []).find((e) => e.to === cur.to && (e.style || e.zone));
+          const why = branch?.zone ? `（受到${ZONES[branch.zone as ZoneId]?.name ?? ''}的環境影響）` : branch?.style ? `（依戰鬥風格走向${branch.style === 'guard' ? '守護型' : '攻擊型'}）` : '';
+          note(m.uid, `進化成了 ${formOf(m).name}！${why}`);
+          const extra: Task[] = learn.map((sk) => ({ k: 'learn', uid: m.uid, skill: sk }));
+          const nextEvo = evolveTarget(m, run.zone);
+          if (nextEvo) extra.push({ k: 'evolve', uid: m.uid, to: nextEvo });
+          shift(extra);
+        }} />}
+      {cur.k === 'learn' && !autoLearn && <LearnPrompt mon={find(cur.uid)!} skill={cur.skill}
+        onPick={(forget) => {
+          const m = find(cur.uid)!;
+          if (forget !== null) {
+            const old = m.skills[forget]; m.skills[forget] = cur.skill;
+            note(m.uid, `${formOf(m).name} 忘記了 ${SKILLS[old].name}，學會了 ${SKILLS[cur.skill].name}！`);
+          } else note(m.uid, `${formOf(m).name} 沒有學習 ${SKILLS[cur.skill].name}。`);
+          shift();
+        }} />}
+      {cur.k === 'full' && <FullPrompt run={run} mon={cur.mon} onDone={(text) => { note(cur.mon.uid, text); shift(); }} />}
+    </Win>
+  );
+  else if (stepNow === 'boon' && boonOpts && !boonDone) body = (
+    <Win class="big-panel after" title="選一張能力卡">
+      <BoonPick ids={boonOpts} onPick={(id) => { note('_boon', applyBoon(run, id)); if (run.after) run.after.boons = undefined; saveRun(run); setBoonDone(true); setStep('end'); }} />
+    </Win>
+  );
+  else body = (
+    <Win class="big-panel after" title="準備出發">
+      {boonLine && <p class="accent">{boonLine.text}</p>}
+      <MenuItem onClick={onDone} hot>{doneLabel}</MenuItem>
+    </Win>
+  );
+
+  return (
+    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => (evolving ? drawDeep(c, t) : drawSea(c, t, 'day'))} />} panel={body} />
   );
 }
 
@@ -186,9 +220,14 @@ function LearnPrompt({ mon, skill, onPick }: { mon: Mon; skill: string; onPick: 
   const f = formOf(mon);
   return (
     <div class="prompt">
-      <p><b>{f.name}</b> 想學習 <b class="accent">{SKILLS[skill].name}</b>，但技能槽已經滿了（{skillSlots(mon)} 招）。</p>
-      <p class="small muted">新技能：{SKILLS[skill].desc}（{SKILLS[skill].power ? `威力 ${SKILLS[skill].power}` : '變化'} · 能量 {SKILLS[skill].cost}）</p>
-      <p class="small">要忘記哪一招？</p>
+      <div class="learn-head">
+        <Sprite form={mon.form} size={72} mutant={mon.mutant} />
+        <span class="grow">
+          <b>{f.name}</b> 想學習新技能，但技能槽已經滿了（{skillSlots(mon)} 招）。
+          <span class="learn-new"><SkillLine id={skill} /><span class="small dim">{SKILLS[skill].desc}</span></span>
+        </span>
+      </div>
+      <p class="small">要忘記哪一招？（第 1 格的普攻不能忘記）</p>
       <div class="grid2">
         {mon.skills.map((s, i) => <MenuItem key={s} disabled={i === 0} onClick={() => onPick(i)} sub={i === 0 ? '普攻' : undefined}><SkillLine id={s} /></MenuItem>)}
         <MenuItem onClick={() => onPick(null)}>放棄學習 {SKILLS[skill].name}</MenuItem>
@@ -247,7 +286,6 @@ function FullPrompt({ run, mon, onDone }: { run: RunState; mon: Mon; onDone: (t:
 function BoonPick({ ids, onPick }: { ids: string[]; onPick: (id: string) => void }) {
   return (
     <div class="boon-pick">
-      <p class="win-title">選一張能力卡</p>
       <div class="boon-row">
         {ids.map((id) => {
           const b = BOONS[id], tier = BOON_TIER[b.tier];
@@ -271,7 +309,7 @@ export function ResumeBoon({ vp, run, onDone }: { vp: Viewport; run: RunState; o
     <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawSea(c, t, 'day')} />}
       panel={
         <Win class="big-panel after" title="戰鬥勝利">
-          <p class="small dim">上次的戰鬥還沒選能力卡。</p>
+          <p class="small dim">上次的戰鬥還沒選能力卡，選一張吧。</p>
           {msg ? <><p class="small accent">{msg}</p><MenuItem onClick={onDone} hot>繼續航行</MenuItem></>
             : <BoonPick ids={run.after?.boons ?? []} onPick={(id) => { setMsg(applyBoon(run, id)); if (run.after) run.after.boons = undefined; saveRun(run); }} />}
         </Win>

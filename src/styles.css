@@ -607,3 +607,34 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 /* 選單：右邊的小字（數量、說明）空間不夠時先縮，主要文字不被截掉 */
 .mi-main { flex: 1 0 auto; max-width: 100%; }
 .mi-sub { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.learn-head { display: flex; gap: calc(var(--u) * 3); align-items: center; }
+.learn-new { display: grid; gap: 2px; margin-top: 0.4em; padding: 0.4em 0.6em; background: rgba(255, 207, 74, 0.1); border-left: 3px solid var(--amber); }
+
+/* 背包：分頁＋格子＋說明 */
+.bag { display: grid; gap: calc(var(--u) * 2.5); min-width: 0; }
+.bag-tabs .tab { display: inline-flex; align-items: center; gap: 0.3em; }
+.bag-body { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: calc(var(--u) * 3); align-items: start; }
+.portrait .bag-body { grid-template-columns: 1fr; }
+.bag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(76px, calc(var(--u) * 26)), 1fr)); gap: 8px; }
+.bag-cell { display: grid; justify-items: center; gap: 2px; padding: 8px 4px 6px; background: rgba(5, 10, 32, 0.45); border: 1px solid transparent; color: var(--ink); font-family: inherit; cursor: pointer; min-height: 76px; }
+.bag-cell.on { border-color: var(--amber); background: rgba(255, 207, 74, 0.12); }
+.bag-cell.empty { opacity: 0.45; }
+.bag-cell .icon { color: #cfe4ff; }
+.bag-cell.on .icon { color: var(--amber); }
+.bag-name { font-size: 0.78em; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.bag-count { font-size: 0.72em; color: var(--dim); }
+.bag-detail { display: grid; gap: calc(var(--u) * 2); padding: calc(var(--u) * 3); background: rgba(255, 255, 255, 0.05); border-left: 3px solid var(--amber); }
+.bag-detail .icon { color: var(--amber); }
+/* 橫式背包：格子縮小、一排放 5 格，整頁不用捲 */
+.console.landscape .bag { gap: 6px; }
+.console.landscape .bag-grid { grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 6px; }
+.console.landscape .bag-cell { min-height: 58px; padding: 5px 2px 4px; }
+.console.landscape .bag-cell .icon { width: 1.5em; height: 1.5em; }
+.console.landscape .bag-tabs .tab { min-height: 36px; }
+.console.landscape .bag-detail { padding: 8px 10px; gap: 6px; }
+.console.landscape .big-panel:has(.bag) { gap: 6px; }
+.console.landscape .bag-body { grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr); gap: 8px; }
+.console.landscape .bag-grid { grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); }
+.console.landscape .bag-detail .big-name { font-size: 1em; }
+/* 可關閉的視窗會把指令區藏起來，所以視窗可以用到整個畫面高度 */
+.console.landscape .panel-layer.closable.with-dock { padding-top: calc(var(--u) * 3); padding-bottom: calc(var(--u) * 3); }
