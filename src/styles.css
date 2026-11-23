@@ -654,3 +654,7 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 .big-panel > .win-title.has-close { background: #162860; box-shadow: 0 calc(var(--u) * 1) calc(var(--u) * 1.5) rgba(0, 0, 0, 0.35); }
 .big-panel * { min-width: 0; overflow-wrap: anywhere; }
 .big-panel canvas, .big-panel svg, .big-panel img { max-width: 100%; }
+
+/* 收線捕捉的黑幕：蓋滿整個螢幕（含左右延伸的海面和下方訊息框） */
+.console.landscape .frame:has(.reel) .overlay { z-index: 4; }
+.console.landscape .reel { background: rgba(3, 8, 26, 0.5); box-shadow: 0 0 0 100vmax rgba(3, 8, 26, 0.5); }
