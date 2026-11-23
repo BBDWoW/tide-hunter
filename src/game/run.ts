@@ -248,7 +248,7 @@ export const totalStation = (run: RunState) => run.zoneNo * ROUTE_LEN + run.stat
 export const nodeOf = (run: RunState): RouteNode => run.route[run.station][run.picked ?? 0];
 export const isBoss = (run: RunState) => run.route[run.station]?.[0].kind === 'boss';
 
-export interface Encounter { mon: Mon; rarity: Rarity; landing?: Landing }
+export interface Encounter { mon: Mon; rarity: Rarity; landing?: Landing; team?: Mon[]; crew?: string } // team／crew：對手船隊（多隻、不能收服）
 
 // ── 水面下的魚：大小決定稀有度（玩家拋竿前看不到，上鉤才知道） ──
 export type ShadowKind = 'fish' | 'treasure' | 'junk';

@@ -198,7 +198,12 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
   const [panel, setPanel] = useState<'party' | 'items' | 'shop' | null>(null);
   const [hover, setHover] = useState(0);
   const [, force] = useState(0);
-  const choose = (j: number) => { run.picked = j; saveRun(run); setPanel(null); force((n) => n + 1); };
+  // 點路線：釣點、精英、寶藏、事件、船隊直接出發；營地、商店、入口要先看選項
+  const choose = (j: number) => {
+    run.picked = j; saveRun(run); setPanel(null);
+    if (['fish', 'elite', 'treasure', 'event', 'crew'].includes(opts[j].kind)) { run.notice = undefined; onGo(); return; }
+    force((n) => n + 1);
+  };
 
   const node = run.picked !== null ? opts[run.picked] : null;
   let action: { text: string; btn: string; fn: () => void; alt?: { btn: string; fn: () => void } } | null = null;

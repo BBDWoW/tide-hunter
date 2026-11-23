@@ -30,7 +30,7 @@ const DASH = 0.5; // 近戰衝刺的時間（秒）
 const TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(hover: none)').matches;
 // 動畫是「hit」但其實是丟出去／從遠處打的招式，不衝過去
 const RANGED_HIT = new Set(['ember', 'pebble', 'icepebble', 'rockslide', 'microquake', 'bigquake']);
-const readSpeed = () => { try { return localStorage.getItem(SPEED_KEY) === 'fast'; } catch { return false; } };
+const readSpeed = () => { try { return localStorage.getItem(SPEED_KEY) !== 'normal'; } catch { return true; } }; // 預設快速
 
 export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunState; enc: Encounter; boss: boolean; onEnd: (r: BattleResult) => void }) {
   const bsRef = useRef<BattleState | null>(null);
@@ -38,6 +38,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     bsRef.current = createBattle(makeRng((next(run.rng) * 2 ** 32) >>> 0), { team: run.party, name: '你', mods: battleMods(run) }, { team: [enc.mon], name: boss ? '霸主' : '野生' }, true);
   }
   const bs = bsRef.current;
+  const crew = !!enc.team; // 對手船隊：多隻敵人、不能收服
   const snap = (side: SideId): Disp => {
     const m = active(bs, side);
     return { form: m.form, lv: m.lv, hp: m.hp, max: maxHp(m), energy: volOf(bs, side).energy, status: m.status, shield: volOf(bs, side).shield, mutant: m.mutant };
@@ -54,6 +55,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const fastRef = useRef(fast); fastRef.current = fast;
   const participants = useRef(new Set<string>([active(bs, 0).uid]));
   const [hover, setHover] = useState(0);
+  const [peek, setPeek] = useState(-1); // 正在看說明的技能（滑鼠移過去／觸控點一下）
   const [armed, setArmed] = useState(-1); // 觸控：已經點過一下、等第二下確認的選項
   const [info, setInfo] = useState<SideId | null>(null); // 查看雙方資料
   const net = useRef<{ wob: number; glow: number } | null>(null);
@@ -68,7 +70,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     parts: [] as Particle[], beams: [] as Beam[],
   });
 
-  const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, fastRef.current ? ms * 0.45 : ms));
+  const hurry = useRef(false); // 點訊息框：這一輪的演出加速
+  const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, hurry.current ? ms * 0.15 : fastRef.current ? ms * 0.45 : ms));
   const say = (text: string) => setLog((l) => [...l.slice(-30), text]);
   const pop = (side: SideId, text: string, cls: string) => {
     const id = Math.random();
@@ -220,10 +223,10 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
 
   /** 觸控：第一下選取並顯示說明，第二下才執行；有滑鼠時直接執行 */
   const confirmTap = (i: number, act: () => void) => {
-    if (TOUCH && armed !== i) { setHover(i); setArmed(i); return; }
+    if (TOUCH && armed !== i) { setHover(i); setPeek(i); setArmed(i); return; }
     setArmed(-1); act();
   };
-  useEffect(() => { setArmed(-1); }, [mode]);
+  useEffect(() => { setArmed(-1); setPeek(-1); if (mode === 'main') hurry.current = false; }, [mode]);
 
   async function submit(a: Action) {
     setMode('busy');
@@ -283,8 +286,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const n = parseInt(e.key, 10);
-      if (mode === 'main' && n >= 1 && n <= 5) [() => setMode('skills'), () => !boss && setMode('reel'), () => setMode('switch'), () => setMode('items'), () => !boss && submit({ type: 'run' })][n - 1]();
-      else if (mode === 'skills' && n >= 1 && n <= 4) { const m = active(bs, 0); if (m.skills[n - 1] && canAfford(bs, 0, n - 1)) submit({ type: 'skill', slot: n - 1 }); }
+      if (mode === 'main' && n >= 1 && n <= 4) { const m = active(bs, 0); if (m.skills[n - 1] && canAfford(bs, 0, n - 1)) submit({ type: 'skill', slot: n - 1 }); }
+      else if (mode === 'main' && n >= 5 && n <= 8) [() => !boss && startReel(), () => setMode('switch'), () => setMode('items'), () => !boss && submit({ type: 'run' })][n - 5]();
       else if (e.key === 'Escape' && ['skills', 'switch', 'items', 'itemTarget'].includes(mode)) setMode('main');
     };
     window.addEventListener('keydown', onKey);
@@ -298,7 +301,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const reel = <Reel rarity={FORMS[foe.form].rarity} hpRatio={foe.hp / maxHp(foe)} hasStatus={!!foe.status} name={FORMS[foe.form].name} zoneBonus={boon(run, 'reelzone') * 0.15 + (run.perks?.reel ?? 0)} onDone={onReel} />;
   const startReel = () => { if (run.catchBait <= 0) return; run.catchBait--; setMode('reel'); };
   const picking = mode === 'switch' || mode === 'force' || mode === 'itemTarget';
-  const hs = mode === 'skills' ? SKILLS[me.skills[hover]] : null;
+  const hs = (mode === 'main' || mode === 'skills') && peek >= 0 ? SKILLS[me.skills[peek]] : null;
   const hi = mode === 'items' ? (Object.keys(ITEMS) as ItemId[])[hover] : null;
 
   return (
@@ -343,12 +346,13 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       dock={mode === 'reel' && vp.portrait ? reel : (
         <div class="dock-split battle-dock">
           <Win class="msg">
+            <div class="tap-hurry" onClick={() => { if (mode === 'busy') hurry.current = true; }}>
             {hs ? (
               <div class="skill-info">
                 <div class="row-gap"><b class="big-name">{hs.name}</b>{hs.elem ? <ElemChip e={hs.elem} /> : <span class="chip neutral">無</span>}</div>
                 <p class="small">{hs.power ? (() => { const p = Math.round(effPower(bs, 0, 1, hs)); return p !== hs.power ? `威力 ${hs.power} → ${p}` : `威力 ${hs.power}`; })() : '變化技'} · 能量 {hs.cost} · 命中 {Math.round(Math.min(1, hitChance(bs, 0, hs)) * 100)}{hs.power > 0 && (() => { const e = effectiveness(hs.elem, formOf(foe).elems); return e >= 2 ? ' · 效果絕佳！' : e < 1 ? ' · 效果不好' : ''; })()}</p>
                 <p class="small dim">{hs.desc}</p>
-                {TOUCH && armed === hover && <p class="small accent">再點一次使用</p>}
+                {TOUCH && armed === peek && <p class="small accent">再點一次使用</p>}
               </div>
             ) : hi ? (
               <div class="skill-info"><b class="big-name">{ITEMS[hi].name}</b><p class="small dim">{ITEMS[hi].desc}</p></div>
@@ -357,6 +361,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                 {log.slice(-2).map((l, i, arr) => <p key={log.length - arr.length + i} class={i === arr.length - 1 ? 'last' : 'prev'}>{l}</p>)}
               </div>
             )}
+            </div>
           </Win>
           <Win class="cmd">
             {(mode === 'busy' || picking || mode === 'reel') && <p class="dim center">……</p>}
@@ -367,12 +372,25 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
               </div>
             )}
             {mode === 'main' && (
-              <div class="cmd-grid">
-                <MenuItem onClick={() => { setHover(0); setMode('skills'); }} hot>技能</MenuItem>
-                <MenuItem onClick={startReel} disabled={boss || run.catchBait <= 0} sub={boss ? '' : `餌×${run.catchBait}`}>收線捕捉</MenuItem>
-                <MenuItem onClick={() => setMode('switch')}>換人</MenuItem>
-                <MenuItem onClick={() => { setHover(0); setMode('items'); }}>道具</MenuItem>
-                {!boss && <MenuItem onClick={() => submit({ type: 'run' })}>剪線逃跑</MenuItem>}
+              <div class="battle-main" onMouseLeave={() => { if (!TOUCH) setPeek(-1); }}>
+                <div class="cmd-grid">
+                  {me.skills.map((id, i) => {
+                    const sk = SKILLS[id], ok = canAfford(bs, 0, i);
+                    return (
+                      <MenuItem key={id} disabled={!ok} sel={TOUCH && armed === i} onHover={() => { setHover(i); if (!TOUCH) setPeek(i); }} onClick={() => confirmTap(i, () => submit({ type: 'skill', slot: i }))}
+                        sub={<span class="cost">{'◆'.repeat(sk.cost) || '—'}</span>}>
+                        <i class="dot" style={{ background: sk.elem ? `var(--el-${sk.elem})` : '#c8d2e8' }} />{sk.name}
+                      </MenuItem>
+                    );
+                  })}
+                  {!meAffordAny && <MenuItem onClick={() => submit({ type: 'skill', slot: -1 })}>掙扎</MenuItem>}
+                </div>
+                <div class="act-row">
+                  {!boss && !crew && <button class="act-btn" onClick={startReel} disabled={run.catchBait <= 0}>🎣 捕捉<small>×{run.catchBait}</small></button>}
+                  <button class="act-btn" onClick={() => setMode('switch')}>🔄 換人</button>
+                  <button class="act-btn" onClick={() => { setHover(0); setMode('items'); }}>🎒 道具</button>
+                  {!boss && <button class="act-btn" onClick={() => submit({ type: 'run' })}>🏃 逃跑</button>}
+                </div>
               </div>
             )}
             {mode === 'skills' && (

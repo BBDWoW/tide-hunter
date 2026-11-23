@@ -412,3 +412,12 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 /* 直式：上下螢幕的下方也維持左右兩欄，固定高度各自捲動 */
 .portrait .dex-panel { height: calc(100dvh - var(--scene-h, 220px) - 40px); min-height: 360px; }
 .portrait .dex-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }
+
+/* ── 戰鬥主選單：招式直接列出，下面一排小按鈕 ── */
+.battle-main { display: grid; gap: calc(var(--u) * 1.5); }
+.act-row { display: flex; gap: calc(var(--u) * 1.2); }
+.act-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 0.3em; white-space: nowrap; background: rgba(5, 10, 32, 0.55); border: 1px solid var(--bevel); color: var(--ink); font-family: inherit; font-size: 0.82em; padding: calc(var(--u) * 1.2) calc(var(--u) * 0.6); cursor: pointer; min-height: calc(var(--u) * 7.5); }
+.act-btn small { font-size: 0.8em; opacity: 0.75; }
+.act-btn:disabled { opacity: 0.4; cursor: default; }
+@media (hover: hover) { .act-btn:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); } }
+.tap-hurry { height: 100%; }
