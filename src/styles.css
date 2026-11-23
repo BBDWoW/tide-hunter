@@ -596,3 +596,14 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
   .portrait .title-tools { top: auto; bottom: 6px; right: 6px; }
   .portrait .app-version { right: auto; left: 6px; }
 }
+/* 文字不超出：個體值細項自己換行；圖鑑清單的名字縮小一點、格子放寬，5 個字的名字也放得下 */
+.iv-stars:has(.iv-detail) { white-space: normal; display: inline-flex; flex-wrap: wrap; align-items: center; row-gap: 2px; max-width: 100%; }
+.iv-stars .iv-detail { margin-left: 0.5em; }
+.row-gap { flex-wrap: wrap; min-width: 0; }
+.dex-list { grid-template-columns: repeat(auto-fill, minmax(max(64px, calc(var(--u) * 24)), 1fr)); }
+.dex-list .dex-cell .small { font-size: 0.78em; letter-spacing: -0.02em; }
+.pcard .grow, .pick .grow, .after-row .grow { min-width: 0; }
+.skill-line, .ability-line { overflow-wrap: anywhere; }
+/* 選單：右邊的小字（數量、說明）空間不夠時先縮，主要文字不被截掉 */
+.mi-main { flex: 1 0 auto; max-width: 100%; }
+.mi-sub { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
