@@ -4,6 +4,7 @@ import { LURES, type LureId } from '../data/boons';
 import { castTarget, judgeLanding, landingZones, nodeOf, rollShadows, rollTreasure, spotName, zoneOf, type Landing, type Loot, type RunState, type Shadow } from '../game/run';
 import { drawFishing, type FishPhase, type FishView } from '../render/scene';
 import { useTap } from './input';
+import { Tip } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
 
@@ -129,6 +130,7 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
           return <div class="cast-meter" aria-hidden="true"><div class="zone-good" style={band(z.good)} /><div class="zone-perfect" style={band(z.perfect)} /><i ref={meter} /></div>;
         })()}
         {phase === 'hooked' && <div class="flash" />}
+        {phase === 'choose' && !boss && <Tip id="fishing">點畫面拋竿，力量條停在黃色區域就會落在漣漪上（紅色是完美）。浮標猛地下沉時再點一次！落點越準，對手開場的 HP 越少、越好抓。</Tip>}
       </>}
       dock={
         <div class="dock-split">

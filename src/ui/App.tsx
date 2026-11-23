@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, leaveSpecial, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
+import { dailyPartner, MAX_STAR, pearlMul, todayKey, boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, leaveSpecial, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollCrew, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
 import { AfterBattle } from './AfterBattle';
 import { Battle, type BattleResult } from './Battle';
 import { Fishing } from './Fishing';
@@ -90,7 +90,14 @@ export function App() {
   const finishRun = (win: boolean) => {
     const r = run!;
     const meta = loadMeta();
-    const pearls = pearlsFor({ station: totalStation(r), battlesWon: r.battlesWon, caught: r.caught, win });
+    let pearls = Math.round(pearlsFor({ station: totalStation(r), battlesWon: r.battlesWon, caught: r.caught, win }) * pearlMul(r.star ?? 0));
+    if (r.daily) {
+      // 每日挑戰：記錄當天最好的成績，珍珠只有當天第一次結算時拿得到
+      const d = meta.daily?.day === r.daily ? meta.daily : { day: r.daily, best: 0, win: false, paid: false };
+      d.best = Math.max(d.best, totalStation(r)); d.win ||= win;
+      if (d.paid) pearls = 0;
+      d.paid = true; meta.daily = d;
+    } else if (win && (r.star ?? 0) >= (meta.maxStar ?? 0) && (meta.maxStar ?? 0) < MAX_STAR) meta.maxStar = (r.star ?? 0) + 1;
     meta.pearls += pearls; meta.totalPearls += pearls; meta.runs++;
     saveMeta(meta);
     returnFromRun(meta, r.party);
@@ -99,7 +106,7 @@ export function App() {
     go({ k: 'end', win, pearls });
   };
 
-  const startRun = (mon: Mon) => { const r = newRun(mon, loadMeta()); markCaught(mon.form); saveRun(r); setRun(r); go({ k: 'voyage' }); };
+  const startRun = (mon: Mon, daily?: string) => { const m = loadMeta(); const r = newRun(mon, m, { star: m.star ?? 0, daily }); if (!daily) markCaught(mon.form); saveRun(r); setRun(r); go({ k: 'voyage' }); };
   const onNew = () => {
     const m = loadMeta();
     if (!m.bay.length) { go({ k: 'starter' }); return; }
@@ -120,7 +127,7 @@ export function App() {
   let body;
   switch (screen.k) {
     case 'title':
-      body = <Title vp={vp} hasSave={!!loadRun()} onNew={onNew} onBay={() => go({ k: 'bay' })}
+      body = <Title vp={vp} hasSave={!!loadRun()} onNew={onNew} onDaily={() => { const day = todayKey(); startRun(dailyPartner(day), day); }} onBay={() => go({ k: 'bay' })}
         onContinue={() => { const r = loadRun(); if (r) { setRun(r); go(r.pendingZone ? { k: 'zonepick' } : { k: 'voyage' }); } }}
         onDex={() => go({ k: 'dex' })} onHelp={() => go({ k: 'help' })} onPort={() => go({ k: 'port' })} />;
       break;
@@ -128,7 +135,7 @@ export function App() {
       body = <StarterPick vp={vp} onBack={() => go({ k: 'title' })} onPick={(form) => { const m = loadMeta(); const b = newBayMon(form); m.bay.push(b); m.selected = b.id; saveMeta(m); startRun(monFromBay(b)); }} />;
       break;
     case 'voyage':
-      body = <Voyage vp={vp} run={run!} onGo={() => (nodeOf(run!).kind === 'event' ? go({ k: 'event', ev: pickEvent(run!) }) : go({ k: 'fishing' }))} onNext={advance} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
+      body = <Voyage vp={vp} run={run!} onGo={() => { const k = nodeOf(run!).kind; if (k === 'event') go({ k: 'event', ev: pickEvent(run!) }); else if (k === 'crew') { const enc = rollCrew(run!); enc.team!.forEach((m) => markSeen(m.form)); saveRun(run); go({ k: 'battle', enc }); } else go({ k: 'fishing' }); }} onNext={advance} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
       break;
     case 'fishing':
       body = <Fishing vp={vp} run={run!} boss={boss} onDone={advance} onHook={(q, sh, landing) => {

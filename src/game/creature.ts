@@ -3,6 +3,7 @@ import { FORMS, hasAb, type Form, type Stats } from '../data/creatures';
 import { RARITY, STAGE_SLOTS } from '../data/types';
 import { SKILLS, type StatusId } from '../data/skills';
 
+import type { HeldId } from '../data/held';
 export interface Mon {
   uid: string;
   form: string;
@@ -20,6 +21,7 @@ export interface Mon {
   iv?: number[]; // 個體值：[HP, 攻擊, 防禦, 速度]，各 -10～+10（%）
   style?: { atk: number; guard: number }; // 戰鬥風格：用攻擊技／變化技的次數（決定分支進化）
   mutant?: boolean; // 異變個體：顏色不同、個體值較好
+  held?: HeldId; // 攜帶道具
 }
 
 export const MUTANT_CHANCE = 1 / 30;

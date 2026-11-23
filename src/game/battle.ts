@@ -5,6 +5,8 @@ import { FIELDS, SKILLS, type FieldId, type Skill, type StatKey, type StatusId }
 import { effectiveness, ELEM } from '../data/types';
 import { blockRate, dodgeRate, formOf, maxHp, statsOf, type Mon } from './creature';
 import { hasAb } from '../data/creatures';
+import type { HeldId } from '../data/held';
+import type { Elem } from '../data/types';
 import { chance, int, next, range, type Rng } from './rng';
 
 export type SideId = 0 | 1;
@@ -20,9 +22,10 @@ export interface Volatile {
   charged?: boolean; // 蓄力中：下一次攻擊威力 ×2
   lockOn?: boolean; // 鎖定中：下一次攻擊必定命中且暴擊
   counter?: number; // 本回合的反擊比例
+  pearlUsed?: boolean; // 不屈珍珠已經用掉
 }
 
-export interface SideMods { atk: number; def: number; energy: number; crit: number }
+export interface SideMods { atk: number; def: number; energy: number; crit: number; reso?: Partial<Record<Elem, number>> }
 const NO_MODS: SideMods = { atk: 1, def: 1, energy: 0, crit: 0 };
 
 export interface Side {
@@ -31,6 +34,8 @@ export interface Side {
   active: number;
   vol: Record<string, Volatile>; // 依 uid
   name: string;
+  boss?: boolean; // 霸主：HP 掉到一半時會狂暴一次
+  enraged?: boolean;
 }
 
 export interface BattleState {
@@ -75,6 +80,7 @@ export type BEvent =
   | { t: 'block'; side: SideId }
   | { t: 'field'; id: FieldId | null; turns: number }
   | { t: 'trap'; side: SideId; turns: number }
+  | { t: 'enrage'; side: SideId }
   | { t: 'end'; winner: SideId };
 
 export const STRUGGLE: Skill = { id: 'struggle', name: '掙扎', elem: null, power: 35, cost: 0, acc: 100, desc: '能量不足時使用。', anim: 'hit' };
@@ -86,19 +92,30 @@ export const STATUS_TURNS: Partial<Record<StatusId, number>> = { burn: 4, poison
 
 export const active = (s: BattleState, side: SideId) => s.sides[side].team[s.sides[side].active];
 export const volOf = (s: BattleState, side: SideId) => s.sides[side].vol[active(s, side).uid];
+const held = (m: Mon, id: HeldId) => m.held === id;
 
 function freshVol(): Volatile {
   return { energy: 2, shield: 0, stages: { atk: 0, def: 0, spd: 0 }, turnsIn: 0, freezeTurns: 0, sleepTurns: 0, undyingUsed: false };
 }
 
-type SideInit = { team: Mon[]; name: string; mods?: SideMods };
+type SideInit = { team: Mon[]; name: string; mods?: SideMods; boss?: boolean };
 export function createBattle(rng: Rng, a: SideInit, b: SideInit, wild: boolean): BattleState {
   const mk = (x: SideInit): Side => {
     const vol: Record<string, Volatile> = {};
-    x.team.forEach((m) => { vol[m.uid] = freshVol(); vol[m.uid].energy += x.mods?.energy ?? 0; });
-    return { team: x.team, active: Math.max(0, x.team.findIndex((m) => m.hp > 0)), vol, name: x.name, mods: x.mods };
+    x.team.forEach((m) => { vol[m.uid] = freshVol(); vol[m.uid].energy += (x.mods?.energy ?? 0) + (held(m, 'sparkcell') ? 1 : 0); });
+    return { team: x.team, active: Math.max(0, x.team.findIndex((m) => m.hp > 0)), vol, name: x.name, mods: x.mods, boss: x.boss };
   };
-  return { rng, turn: 1, sides: [mk(a), mk(b)], wild, over: null, needSwitch: [false, false], field: null, traps: [0, 0] };
+  const st: BattleState = { rng, turn: 1, sides: [mk(a), mk(b)], wild, over: null, needSwitch: [false, false], field: null, traps: [0, 0] };
+  for (const side of [0, 1] as SideId[]) bubble(st, side);
+  return st;
+}
+
+/** 泡泡護符：上場時獲得護盾 */
+function bubble(s: BattleState, side: SideId, ev?: BEvent[]) {
+  const m = active(s, side);
+  if (!held(m, 'bubblecharm') || m.hp <= 0) return;
+  const v = volOf(s, side); v.shield = Math.max(v.shield, Math.floor(maxHp(m) * 0.15));
+  ev?.push({ t: 'shield', side, amount: v.shield });
 }
 
 const stageMult = (s: number) => (s >= 0 ? (2 + s) / 2 : 2 / (2 - s));
@@ -111,6 +128,7 @@ function effSpeed(s: BattleState, side: SideId): number {
   if (hasAb(f, 'firststrike') && v.turnsIn === 0) spd *= 2;
   if (hasAb(f, 'stormking')) spd *= 1.2;
   if (hasAb(f, 'swiftswim')) spd *= 1.15;
+  if (held(m, 'swiftfin')) spd *= 1.2;
   return spd;
 }
 
@@ -150,8 +168,9 @@ export function resolveTurn(s: BattleState, actions: [Action, Action]): BEvent[]
     if (actions[side].type === 'skill' && (me.uid !== startActive[side] || active(s, foeSide).hp <= 0)) continue;
     doAction(s, side, actions[side], ev);
     checkFaints(s, ev);
+    checkEnrage(s, ev);
   }
-  if (!s.over) endOfTurn(s, ev);
+  if (!s.over) { endOfTurn(s, ev); checkEnrage(s, ev); }
   s.turn++;
   return ev;
 }
@@ -192,6 +211,7 @@ export function switchIn(s: BattleState, side: SideId, to: number, ev: BEvent[])
   const inc = sd.team[to];
   ev.push({ t: 'switch', side, index: to, form: inc.form, hp: inc.hp, energy: sd.vol[inc.uid].energy, status: inc.status });
   ev.push({ t: 'msg', text: side === 0 ? `上吧，${formOf(sd.team[to]).name}！` : `${sd.name}派出了 ${formOf(sd.team[to]).name}！` });
+  bubble(s, side, ev);
   if ((s.traps?.[side] ?? 0) > 0 && inc.hp > 0) {
     const d = Math.max(1, Math.floor(maxHp(inc) / 8));
     inc.hp = Math.max(0, inc.hp - d);
@@ -236,6 +256,7 @@ function applyStatus(s: BattleState, side: SideId, st: StatusId, ev: BEvent[]): 
   if (st === 'bleed' && (formOf(m).elems.some((e) => e === 'rock' || e === 'data') || hasAb(formOf(m), 'undying'))) return false;
   m.status = st;
   m.statusTurns = STATUS_TURNS[st] ?? 0;
+  if (held(m, 'cleansebell')) m.statusTurns = Math.max(1, Math.ceil(m.statusTurns / 2));
   if (st === 'freeze') volOf(s, side).freezeTurns = 0;
   ev.push({ t: 'status', side, status: st });
   ev.push({ t: 'msg', text: `${nameOf(s, side)} ${STATUS_NAME[st]}了！` });
@@ -316,9 +337,10 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     if (fx.lockOn) { v.lockOn = true; ev.push({ t: 'msg', text: `${myName} 鎖定了目標！下一次攻擊必定命中要害！` }); }
     if (fx.counter) { v.counter = fx.counter; ev.push({ t: 'msg', text: `${myName} 擺出了反擊的架勢！` }); }
     if (fx.field) {
-      s.field = { id: fx.field.id, turns: fx.field.turns };
-      ev.push({ t: 'field', id: fx.field.id, turns: fx.field.turns });
-      ev.push({ t: 'msg', text: `場地變成了「${FIELDS[fx.field.id].name}」！（${fx.field.turns} 回合）` });
+      const turns = fx.field.turns + (held(me, 'tidecrest') ? 2 : 0);
+      s.field = { id: fx.field.id, turns };
+      ev.push({ t: 'field', id: fx.field.id, turns });
+      ev.push({ t: 'msg', text: `場地變成了「${FIELDS[fx.field.id].name}」！（${turns} 回合）` });
     }
     if (fx.trap) {
       s.traps ??= [0, 0];
@@ -356,7 +378,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     return;
   }
   // 閃避：被麻痺、冰凍、睡著時沒辦法閃
-  if (!sure && !['para', 'freeze', 'sleep'].includes(tgt.status ?? '') && chance(s.rng, dodgeRate(formOf(tgt)))) {
+  if (!sure && !['para', 'freeze', 'sleep'].includes(tgt.status ?? '') && chance(s.rng, dodgeRate(formOf(tgt)) + (held(tgt, 'ripplecloak') ? 0.08 : 0))) {
     ev.push({ t: 'dodge', side: foe }); ev.push({ t: 'msg', text: `${nameOf(s, foe)} 靈巧地閃開了！` });
     v.charged = false; v.lockOn = false;
     if (fx.selfKO) selfKO(s, side, ev);
@@ -392,8 +414,9 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
   }
   v.charged = false; v.lockOn = false;
   if (hits > 1) ev.push({ t: 'msg', text: `擊中了 ${landed} 次！` });
-  if (fx.drain && total > 0 && me.hp > 0) {
-    const amt = Math.min(maxHp(me) - me.hp, Math.floor(total * fx.drain));
+  const drain = (fx.drain ?? 0) + (held(me, 'leechcoral') ? 0.15 : 0);
+  if (drain && total > 0 && me.hp > 0) {
+    const amt = Math.min(maxHp(me) - me.hp, Math.floor(total * drain));
     if (amt > 0) { me.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: me.hp }); ev.push({ t: 'msg', text: `${myName} 吸取了 ${amt} HP！` }); }
   }
   if (fx.recoil && total > 0 && me.hp > 0) {
@@ -411,6 +434,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     }
   }
   if (active(s, foe).hp > 0) {
+    if (held(me, 'venomspine') && total > 0 && chance(s.rng, 0.2)) applyStatus(s, foe, 'poison', ev);
     if (fx.status && chance(s.rng, statusChance(s, fx.status.id, fx.status.chance))) applyStatus(s, foe, fx.status.id, ev);
     if (fx.stat && !fx.stat.self && chance(s.rng, fx.stat.chance ?? 1)) changeStat(s, foe, fx.stat.key, fx.stat.delta, ev);
   }
@@ -466,15 +490,20 @@ export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill)
   const vm = volOf(s, side), vt = volOf(s, foe);
   const ma = s.sides[side].mods ?? NO_MODS, md = s.sides[foe].mods ?? NO_MODS;
   let A = statsOf(me).atk * stageMult(vm.stages.atk) * ma.atk;
+  if (held(me, 'sharpfang')) A *= 1.2;
+  if (held(me, 'berserkscale')) A *= 1.35;
   if (me.status === 'burn') A *= 0.75;
   let D = statsOf(tg).def * stageMult(vt.stages.def) * md.def;
   if (hasAb(ft, 'sturdy')) D *= 1.2;
+  if (held(tg, 'berserkscale')) D *= 0.8;
   const base = (((2 * me.lv) / 5 + 2) * effPower(s, side, foe, sk) * A) / D / 50 + 2;
   const eff = effectiveness(sk.elem, ft.elems);
   const forced = vm.lockOn || (!!sk.fx?.chain?.crit && tg.status === sk.fx.chain.id);
-  const crit = forced || chance(s.rng, 0.0625 + ma.crit);
+  const crit = forced || chance(s.rng, 0.0625 + ma.crit + (held(me, 'scope') ? 0.12 : 0));
   let mod = eff * (crit ? 1.5 : 1) * range(s.rng, 0.85, 1);
   if (sk.elem && fm.elems.includes(sk.elem)) mod *= 1.3;
+  if (sk.elem && ma.reso?.[sk.elem]) mod *= 1 + ma.reso[sk.elem]!;
+  if (held(tg, 'shellplate')) mod *= 0.85;
   if (hasAb(fm, 'blazing') && sk.elem === 'fire' && me.hp < maxHp(me) / 3) mod *= 1.5;
   if ((hasAb(fm, 'tidegod') || hasAb(fm, 'oceanpower')) && sk.elem === 'water') mod *= 1.3;
   if (hasAb(ft, 'hardshell')) mod *= 0.85;
@@ -489,6 +518,9 @@ function dealDamage(s: BattleState, side: SideId, dmg: number, eff: number, crit
   let real = Math.min(m.hp, dmg);
   if (m.hp - dmg <= 0 && hasAb(formOf(m), 'undying') && !v.undyingUsed) {
     v.undyingUsed = true; real = m.hp - 1;
+  } else if (m.hp - dmg <= 0 && m.hp > 1 && held(m, 'lastpearl') && !v.pearlUsed) {
+    v.pearlUsed = true; real = m.hp - 1;
+    ev.push({ t: 'msg', text: `${nameOf(s, side)} 握緊了不屈珍珠，撐住了！` });
   }
   m.hp -= real;
   ev.push({ t: 'dmg', side, amount: real, hp: m.hp, eff, crit, shield: v.shield });
@@ -524,6 +556,22 @@ function checkFaints(s: BattleState, ev: BEvent[]) {
       return;
     }
     s.needSwitch[side] = true;
+  }
+}
+
+/** 霸主狂暴：HP 掉到一半以下時，攻擊提高、防禦下降、能量 +1（每場一次） */
+function checkEnrage(s: BattleState, ev: BEvent[]) {
+  if (s.over) return;
+  for (const side of [0, 1] as SideId[]) {
+    const sd = s.sides[side], m = active(s, side);
+    if (!sd.boss || sd.enraged || m.hp <= 0 || m.hp > maxHp(m) / 2) continue;
+    sd.enraged = true;
+    const v = volOf(s, side);
+    ev.push({ t: 'enrage', side });
+    ev.push({ t: 'msg', text: `${formOf(m).name} 發出震耳的怒吼——進入狂暴狀態！` });
+    v.energy = Math.min(MAX_ENERGY, v.energy + 1); ev.push({ t: 'energy', side, value: v.energy });
+    changeStat(s, side, 'atk', 1, ev);
+    changeStat(s, side, 'def', -1, ev); // 狂暴的代價：防禦露出破綻
   }
 }
 

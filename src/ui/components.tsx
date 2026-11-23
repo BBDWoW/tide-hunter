@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { ABILITIES, abilitiesOf, FORMS, recolorOf } from '../data/creatures';
 import { ELEM, RARITY, STAGE_NAME, type Elem, type Rarity } from '../data/types';
@@ -118,4 +118,18 @@ export function StyleMeter({ mon }: { mon: Mon }) {
       <span class="small dim">變化技使用比例 {Math.round(r * 100)}%（達 {GUARD_THRESHOLD * 100}% 走守護型）</span>
     </div>
   );
+}
+
+// ── 新手提示：每個提示只出現一次 ──
+const TIP_KEY = 'tidehunter.tips.v1';
+const seenTips = (): string[] => { try { return JSON.parse(localStorage.getItem(TIP_KEY) || '[]'); } catch { return []; } };
+export function Tip({ id, children, inline }: { id: string; children: ComponentChildren; inline?: boolean }) {
+  const [show, setShow] = useState(() => !seenTips().includes(id));
+  if (!show) return null;
+  const close = (e: Event) => {
+    e.stopPropagation();
+    try { localStorage.setItem(TIP_KEY, JSON.stringify([...seenTips(), id])); } catch { /* 略過 */ }
+    setShow(false);
+  };
+  return <button class={`tip ${inline ? 'inline' : ''}`} onClick={close} onPointerDown={(e) => e.stopPropagation()}><span>💡 {children}</span><small>知道了 ✕</small></button>;
 }

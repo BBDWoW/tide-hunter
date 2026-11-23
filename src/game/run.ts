@@ -1,3 +1,4 @@
+import { HELD, HELD_IDS, resonance, type HeldId } from '../data/held';
 // 一局冒險的狀態：隊伍、道具、航程站點、存檔
 import { ABYSS_POOL, CORE_POOL, CYBER_POOL, FOREST_POOL, FORMS, ICE_POOL, LAVA_POOL, VOID_POOL, ZONE1_POOL } from '../data/creatures';
 import { effectiveness, RARITY_ORDER, type Rarity } from '../data/types';
@@ -8,7 +9,7 @@ import { BOON_LIST, BOON_TIER, BOONS, type LureId } from '../data/boons';
 import { gainXp, xpToNext } from './creature';
 import { upLv, type Meta, type UpgradeId } from './meta';
 
-export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'event' | 'portal' | 'boss';
+export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'event' | 'portal' | 'boss' | 'crew';
 export const NODE_INFO: Record<NodeKind, { name: string; desc: string }> = {
   fish: { name: '釣點', desc: '普通的釣點，水面下有東西在游動。' },
   elite: { name: '精英釣點', desc: '強大的潮靈盤據在這裡。更難打，但戰後的能力卡更好。' },
@@ -18,6 +19,7 @@ export const NODE_INFO: Record<NodeKind, { name: string; desc: string }> = {
   event: { name: '神秘事件', desc: '海面上好像發生了什麼事……' },
   portal: { name: '神秘入口', desc: '海面裂開了一道發光的縫隙，不知道通往哪裡……' },
   boss: { name: '霸主', desc: '這片海域的霸主就在前方。' },
+  crew: { name: '馴潮船隊', desc: '一支馴潮師船隊攔住了去路。2–3 隻夥伴輪番上陣，不能收服，但獎勵很豐厚。' },
 };
 export interface RouteNode { kind: NodeKind; spot: SpotKind; target?: ZoneId }
 export const ROUTE_LEN = 10;
@@ -150,6 +152,11 @@ export interface RunState {
   rng: Rng;
   party: Mon[];
   items: Record<ItemId, number>;
+  heldBag?: HeldId[]; // 還沒裝上的攜帶道具
+  star?: number; // 潮位（難度）
+  daily?: string; // 每日挑戰的日期
+  camp?: { key: string; text: string }; // 這個營地已經做過的事
+  shopStock?: { key: string; held: HeldId[]; refreshes: number }; // 這間商店的攜帶道具貨架
   station: number;
   shells: number;
   caught: number;
@@ -158,14 +165,51 @@ export interface RunState {
 
 export const PARTY_MAX = 6;
 
-export function newRun(first: Mon, meta?: Meta): RunState {
-  const seed = newSeed(), rng = makeRng(seed);
-  const up = (id: UpgradeId) => (meta ? upLv(meta, id) : 0);
+// ── 潮位（難度）：通關後解鎖下一級，效果會累加 ──
+export const MAX_STAR = 5;
+export const STAR_RULES = [
+  '野生潮靈與對手的能力 +10%',
+  '商店價格 +25%',
+  '開局少 1 個捕捉餌和 1 個海藻藥膏',
+  '霸主等級 +2',
+  '營地休息的回復量減半，對手能力再 +10%',
+];
+export const starOf = (run: RunState) => run.star ?? 0;
+/** 對手的能力加成（潮位 1、5） */
+export function foeMods(run: RunState) {
+  const k = 1 + (starOf(run) >= 1 ? 0.1 : 0) + (starOf(run) >= 5 ? 0.1 : 0);
+  return { atk: k, def: k, energy: 0, crit: 0 };
+}
+export const priceMul = (run: RunState) => (1 - (run.perks?.discount ?? 0)) * (starOf(run) >= 2 ? 1.25 : 1);
+export const campHealMul = (run: RunState) => (starOf(run) >= 5 ? 0.5 : 1);
+export const pearlMul = (star: number) => 1 + star * 0.2;
+
+// ── 每日挑戰：同一天所有人拿到同一個種子、同一隻夥伴 ──
+export const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+export function dailySeed(day: string): number {
+  let h = 2166136261;
+  for (const c of day) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+export const DAILY_STAR = 1;
+/** 今天的每日挑戰夥伴（從第一片海域的 N／B 幼體和御三家裡挑） */
+export function dailyPartner(day: string): Mon {
+  const rng = makeRng(dailySeed(day) ^ 0x5bd1e995);
+  const roots = [...new Set(['water1', 'fire1', 'grass1', ...ZONES.shallows.pool.filter((id) => ['N', 'B'].includes(FORMS[id].rarity) && FORMS[id].stage === 1)])];
+  const id = roots[Math.floor(next(rng) * roots.length)];
+  return makeMon(id, 5, false, false, () => next(rng));
+}
+
+export function newRun(first: Mon, meta?: Meta, opt: { star?: number; daily?: string } = {}): RunState {
+  const seed = opt.daily ? dailySeed(opt.daily) : newSeed(), rng = makeRng(seed);
+  const up = (id: UpgradeId) => (meta && !opt.daily ? upLv(meta, id) : 0);
+  const star = opt.daily ? DAILY_STAR : opt.star ?? 0, lean = star >= 3 ? 1 : 0;
   return {
+    star, daily: opt.daily,
     version: 4, seed, rng, zone: 'shallows', zoneNo: 0,
     party: [first],
-    items: { potion: 3 + up('supply'), superpotion: 0, revive: 1, ether: 1 },
-    catchBait: 1 + up('bait'), lures: { star: up('star'), legend: up('legend') }, boons: {},
+    items: { potion: 3 + up('supply') - lean, superpotion: 0, revive: 1, ether: 1 },
+    catchBait: Math.max(0, 1 + up('bait') - lean), lures: { star: up('star'), legend: up('legend') }, boons: {},
     perks: { reel: up('rod') * 0.08, discount: up('discount') * 0.1, camp: up('herbal') * 0.15 },
     lifeStones: up('kiln'),
     route: generateRoute(rng), picked: null, path: [],
@@ -186,7 +230,7 @@ function generateRoute(rng: Rng, len = ROUTE_LEN, special = false): RouteNode[][
       ? [['fish', 40], ['elite', 20], ['treasure', 18], ['event', 16]]
       : [['fish', 42], ['treasure', 10], ['event', 16]];
     if (!special && i >= 3) weights.push(['elite', 16], ['camp', 12]);
-    if (!special && i >= 2) weights.push(['shop', 12]);
+    if (!special && i >= 2) weights.push(['shop', 12], ['crew', 11]);
     for (let k = 0; k < n; k++) {
       let kind = weighted(rng, weights);
       if (kind !== 'fish' && opts.some((o) => o.kind === kind)) kind = 'fish';
@@ -286,10 +330,31 @@ export function rollShadows(run: RunState, lure: LureId, fishOnly = false): Shad
 }
 const chanceOf = (r: Rng, p: number) => next(r) < p;
 
+// ── 馴潮船隊：2–3 隻不能收服的對手 ──
+const CAPTAINS = ['浪花姊妹', '老船長海鷗', '珊瑚幫', '霧笛團', '鹹魚兄弟', '燈塔守衛', '漂流詩人', '潮聲樂團'];
+export function rollCrew(run: RunState): Encounter {
+  const z = zoneOf(run), r = run.rng;
+  const n = run.station >= 5 ? 3 : 2;
+  const pool = z.pool.filter((id) => ['N', 'B', 'A'].includes(FORMS[id].rarity));
+  const base = (z.special ? (run.specialLv ?? 10) : z.lvBase) + run.station * 0.8;
+  const team: Mon[] = [];
+  for (let i = 0; i < n; i++) {
+    let id = pool[Math.floor(next(r) * pool.length)];
+    const lv = Math.max(3, Math.round(base - 1 + int(r, 0, 2) + (i === n - 1 ? 1 : 0)));
+    const ev = FORMS[id].evolve?.find((e) => lv >= e.level);
+    if (ev) id = ev.to;
+    const m = makeMon(id, lv, false, true, () => next(r));
+    team.push(m);
+  }
+  // 壓軸的那隻帶著攜帶道具
+  if (run.station >= 4) team[n - 1].held = HELD_IDS[Math.floor(next(r) * HELD_IDS.length)];
+  return { mon: team[0], rarity: FORMS[team[0].form].rarity, team, crew: CAPTAINS[Math.floor(next(r) * CAPTAINS.length)] };
+}
+
 // 拋竿品質 q（0–1）：完美拋竿可以把稀有度往上推一級（但推不到 S／SSR）
 export function rollEncounter(run: RunState, q: number, shadow: Shadow): Encounter {
   if (isBoss(run)) {
-    const z = zoneOf(run), mon = makeMon(z.boss, z.special ? (run.specialLv ?? 10) + 3 : z.bossLv, true, true);
+    const z = zoneOf(run), mon = makeMon(z.boss, (z.special ? (run.specialLv ?? 10) + 3 : z.bossLv) + (starOf(run) >= 4 ? 2 : 0), true, true);
     return { mon, rarity: FORMS[z.boss].rarity };
   }
   let rarity = shadow.rarity;
@@ -345,7 +410,8 @@ export function rollTreasure(run: RunState, kind: 'treasure' | 'junk'): Loot {
     run.shells += 5;
     return { title: '釣到了垃圾……', text: `是${j}。賣給回收商換了 5 枚貝殼幣。` };
   }
-  const pick = weighted(r, [['shells', 38], ['bait', 26], ['potion', 18], ['star', 10], ['revive', 8]] as [string, number][]);
+  const pick = weighted(r, [['shells', 34], ['bait', 22], ['potion', 16], ['held', 14], ['star', 8], ['revive', 6]] as [string, number][]);
+  if (pick === 'held') { const h = giveHeld(run); return { title: '釣到寶箱！', text: `裡面有攜帶道具「${HELD[h].icon} ${HELD[h].name}」！到隊伍裡讓夥伴裝上吧。` }; }
   if (pick === 'shells') { const n = int(r, 25, 60); run.shells += n; return { title: '釣到寶箱！', text: `裡面有 ${n} 枚貝殼幣。` }; }
   if (pick === 'bait') { run.catchBait += 1; return { title: '釣到寶箱！', text: '裡面有一個捕捉餌！' }; }
   if (pick === 'potion') { run.items.potion += 2; return { title: '釣到寶箱！', text: '裡面有海藻藥膏 ×2。' }; }
@@ -383,7 +449,7 @@ export function applyBoon(run: RunState, id: string): string {
   return `獲得「${b.name}」`;
 }
 export function battleMods(run: RunState) {
-  return { atk: 1 + boon(run, 'atk') * 0.1, def: 1 + boon(run, 'def') * 0.1, energy: boon(run, 'energy'), crit: boon(run, 'crit') * 0.06 };
+  return { atk: 1 + boon(run, 'atk') * 0.1, def: 1 + boon(run, 'def') * 0.1, energy: boon(run, 'energy'), crit: boon(run, 'crit') * 0.06, reso: resonance(run.party.map((m) => FORMS[m.form].elems)) };
 }
 
 export function healParty(run: RunState, ratio: number, revive = false) {
@@ -432,8 +498,74 @@ export const markCaught = (form: string) => updateDex((d) => {
 });
 
 // ── 商店 ──
+// ── 攜帶道具 ──
+/** 隨機一個攜帶道具（盡量不跟身上已有的重複） */
+export function randomHeld(run: RunState, exclude: HeldId[] = []): HeldId {
+  const have = new Set<HeldId>([...(run.heldBag ?? []), ...run.party.map((m) => m.held).filter((x): x is HeldId => !!x), ...exclude]);
+  const pool = HELD_IDS.filter((h) => !have.has(h));
+  const from = pool.length ? pool : HELD_IDS;
+  return from[Math.floor(next(run.rng) * from.length)];
+}
+export function giveHeld(run: RunState, id: HeldId = randomHeld(run)): HeldId {
+  (run.heldBag ??= []).push(id);
+  return id;
+}
+/** 裝上（或換下）攜帶道具；id = null 代表卸下 */
+export function equipHeld(run: RunState, m: Mon, id: HeldId | null) {
+  const bag = (run.heldBag ??= []);
+  if (id) { const i = bag.indexOf(id); if (i < 0) return; bag.splice(i, 1); }
+  if (m.held) bag.push(m.held);
+  m.held = id ?? undefined;
+}
+/** 營地特訓：活著的夥伴各獲得大約 0.8 級的經驗 */
+export function campTrain(run: RunState): string {
+  const ups: string[] = [];
+  for (const m of run.party) {
+    if (m.hp <= 0) continue;
+    const before = m.lv;
+    gainXp(m, Math.floor(xpToNext(m.lv) * 0.8), run.zone);
+    if (m.lv > before) ups.push(`${FORMS[m.form].name} Lv${m.lv}`);
+  }
+  return `夥伴們在沙灘上練習到天黑。${ups.length ? `升級了：${ups.join('、')}！` : '大家都進步了一些。'}`;
+}
+/** 營地探索：找到攜帶道具或寶箱 */
+export function campSearch(run: RunState): string {
+  if (next(run.rng) < 0.55) { const h = giveHeld(run); return `在小島的岩縫裡找到了「${HELD[h].icon} ${HELD[h].name}」！${HELD[h].desc}`; }
+  const l = rollTreasure(run, 'treasure');
+  return `在沙灘上挖到一個小箱子……${l.text}`;
+}
+export const SHOP_REFRESH = 20;
+const shopKey = (run: RunState) => `${run.zone}-${run.zoneNo}-${run.station}`;
+/** 這間商店今天賣的攜帶道具（每間店 2 樣，可以花貝殼幣換一批） */
+export function shopHeld(run: RunState): HeldId[] {
+  if (run.shopStock?.key !== shopKey(run)) {
+    const a = randomHeld(run), b = randomHeld(run, [a]);
+    run.shopStock = { key: shopKey(run), held: [a, b], refreshes: 0 };
+  }
+  return run.shopStock.held;
+}
+export const refreshCost = (run: RunState) => SHOP_REFRESH * (1 + (run.shopStock?.refreshes ?? 0));
+export function refreshShop(run: RunState): boolean {
+  shopHeld(run);
+  const cost = refreshCost(run);
+  if (run.shells < cost) return false;
+  run.shells -= cost;
+  const st = run.shopStock!;
+  const a = randomHeld(run, st.held), b = randomHeld(run, [...st.held, a]);
+  st.held = [a, b]; st.refreshes++;
+  return true;
+}
+export function buyHeld(run: RunState, id: HeldId): boolean {
+  const st = run.shopStock, price = heldPrice(run, id);
+  if (!st || run.shells < price) return false;
+  const i = st.held.indexOf(id); if (i < 0) return false;
+  run.shells -= price; st.held.splice(i, 1); giveHeld(run, id);
+  return true;
+}
+
 export interface ShopItem { id: string; name: string; desc: string; price: number; buy: (run: RunState) => void }
-export const priceOf = (run: RunState, it: ShopItem) => Math.round(it.price * (1 - (run.perks?.discount ?? 0)));
+export const priceOf = (run: RunState, it: ShopItem) => Math.round(it.price * priceMul(run));
+export const heldPrice = (run: RunState, id: HeldId) => Math.round(HELD[id].price * priceMul(run));
 export const SHOP: ShopItem[] = [
   { id: 'bait', name: '捕捉餌', desc: '收服夥伴時消耗 1 個。', price: 30, buy: (r) => { r.catchBait++; } },
   { id: 'star', name: '星光餌', desc: '會引來大魚，有機會是 S 級。', price: 90, buy: (r) => { r.lures.star++; } },

@@ -1,11 +1,13 @@
 // 戰後處理：收服入隊、經驗與升級、學習技能、進化
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { next } from '../game/rng';
 import { FORMS } from '../data/creatures';
 import { SKILLS } from '../data/skills';
 import { RARITY, STAGE_NAME } from '../data/types';
 import { evolve, evolveTarget, formOf, gainXp, maxHp, skillSlots, xpReward, xpToNext, type Mon } from '../game/creature';
-import { applyBoon, boon, isBoss, markCaught, updateDex, nodeOf, PARTY_MAX, rollBoons, ZONES, type RunState, type ZoneId } from '../game/run';
+import { applyBoon, giveHeld, boon, isBoss, markCaught, updateDex, nodeOf, PARTY_MAX, rollBoons, ZONES, type RunState, type ZoneId } from '../game/run';
 import { BOON_TIER, BOONS } from '../data/boons';
+import { HELD } from '../data/held';
 import { EVO_W, playEvolution } from '../render/evo';
 import type { BattleResult } from './Battle';
 import { AbilityLines, Bar, Elems, IvStars, EnvHint, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
@@ -25,7 +27,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const caughtMon = useRef<Mon | null>(null);
   // 戰鬥勝利或收服後：三選一能力卡（霸主戰後直接結算，不抽卡）
-  const [boonOpts] = useState<string[] | null>(() => (result.outcome !== 'fled' && !isBoss(run) ? rollBoons(run, nodeOf(run).kind === 'elite') : null));
+  const [boonOpts] = useState<string[] | null>(() => (result.outcome !== 'fled' && !isBoss(run) ? rollBoons(run, nodeOf(run).kind === 'elite' || !!result.team) : null));
   const [boonDone, setBoonDone] = useState(false);
 
   // 只執行一次：結算所有變化，產生待處理事項
@@ -46,10 +48,13 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
     }
     if (result.outcome === 'win' || result.outcome === 'caught') {
       run.battlesWon++;
-      const reward = Math.floor(xpReward(enemy) * (result.outcome === 'caught' ? 0.7 : 1) * (1 + boon(run, 'xp') * 0.3));
-      const coins = Math.floor((8 + enemy.lv * 2) * (nodeOf(run).kind === 'elite' ? 2 : 1));
+      // 船隊：每一隻都算經驗（稍微打折），貝殼幣加倍
+      const foes = result.team ?? [enemy];
+      const reward = Math.floor(foes.reduce((a, f) => a + xpReward(f), 0) * (foes.length > 1 ? 0.75 : 1) * (result.outcome === 'caught' ? 0.7 : 1) * (1 + boon(run, 'xp') * 0.3));
+      const coins = Math.floor(foes.reduce((a, f) => a + 8 + f.lv * 2, 0) * (nodeOf(run).kind === 'elite' ? 2 : 1));
       run.shells += coins;
       out.push({ uid: '_coins', text: `獲得 ${coins} 枚貝殼幣（共 ${run.shells}）` });
+      if (result.team || (nodeOf(run).kind === 'elite' && next(run.rng) < 0.5)) { const h = giveHeld(run); out.push({ uid: '_held', text: `${result.team ? "船隊留下" : "菁英掉落"}了攜帶道具「${HELD[h].icon} ${HELD[h].name}」！` }); }
       for (const m of run.party) {
         if (m.hp <= 0 || m === enemy) continue;
         const bondMul = 1 + Math.min(10, m.bond ?? 0) * 0.05; // 羈絆經驗加成
@@ -122,7 +127,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
                 </div>
               ))}
               {result.outcome === 'fled' && <p class="dim">沒有獲得經驗值。</p>}
-              {lines.filter((l) => l.uid === '_coins' || l.uid === '_boon').map((l, i) => <p class="small accent" key={'c' + i}>{l.text}</p>)}
+              {lines.filter((l) => l.uid === '_coins' || l.uid === '_held' || l.uid === '_boon').map((l, i) => <p class="small accent" key={'c' + i}>{l.text}</p>)}
             </div>
             {cur?.k === 'learn' && !autoLearn && <LearnPrompt mon={find(cur.uid)!} skill={cur.skill}
               onPick={(forget) => {

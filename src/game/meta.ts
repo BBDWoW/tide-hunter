@@ -5,7 +5,7 @@ import { STAGE_SLOTS } from '../data/types';
 import { ancestryOf, makeMon, maxHp, newUid, rollIv, type Mon } from './creature';
 import type { Rarity } from '../data/types';
 
-export type UpgradeId = 'bait' | 'rod' | 'discount' | 'supply' | 'bay' | 'star' | 'school' | 'herbal' | 'kiln' | 'legend';
+export type UpgradeId = 'bait' | 'rod' | 'discount' | 'supply' | 'bay' | 'star' | 'school' | 'herbal' | 'kiln' | 'legend' | 'cabin';
 export const UPGRADES: Record<UpgradeId, { name: string; desc: (lv: number) => string; costs: number[] }> = {
   bait: { name: '餌料倉', desc: (lv) => `開局的捕捉餌 +${lv}`, costs: [20, 45, 80] },
   rod: { name: '釣竿工坊', desc: (lv) => `收線時的捕捉區變寬 ${lv * 8}%`, costs: [25, 55, 95] },
@@ -17,6 +17,7 @@ export const UPGRADES: Record<UpgradeId, { name: string; desc: (lv: number) => s
   herbal: { name: '藥草園', desc: (lv) => `營地休息多回復 ${lv * 15}% HP`, costs: [35, 75] },
   kiln: { name: '生命石窯', desc: () => '開局獲得 1 顆生命石', costs: [150] },
   legend: { name: '傳說祭壇', desc: () => '開局獲得 1 個傳說餌', costs: [260] },
+  cabin: { name: '船艙擴建', desc: (lv) => `冒險結束時可以帶 ${1 + lv} 隻新夥伴回棲息灣`, costs: [60, 140] },
 };
 
 // 招募：前四隻一開始就能招募；其他的要先在圖鑑收服過（同一條進化線的任何型態都算）
@@ -71,6 +72,9 @@ export interface Meta {
   selected?: string; // 棲息灣裡「出航夥伴」的 id
   achieved?: string[]; // 已經領取獎勵的成就
   title?: string; // 目前顯示的稱號（成就 id）
+  maxStar?: number; // 已解鎖的最高潮位
+  star?: number; // 上次選的潮位
+  daily?: { day: string; best: number; win: boolean; paid: boolean }; // 每日挑戰紀錄
 }
 
 const KEY = 'tidehunter.meta.v1';
@@ -104,6 +108,10 @@ export const selectedBay = (m: Meta) => m.bay.find((b) => b.id === m.selected) ?
 
 // ── 分解：多出來的夥伴換成少量珍珠 ──
 export const DISMANTLE: Record<Rarity, number> = { N: 5, B: 10, A: 25, S: 50, SSR: 100 };
+/** 冒險結束時可以帶回棲息灣的新夥伴數量 */
+export const bringBackSlots = (m: Meta) => 1 + upLv(m, 'cabin');
+/** 沒帶回去的夥伴回到大海，留下的珍珠 */
+export const releaseValue = (mon: Mon) => DISMANTLE[FORMS[rootOf(mon.form)]?.rarity ?? 'N'] * (mon.mutant ? 2 : 1);
 export const dismantleValue = (b: BayMon) => DISMANTLE[FORMS[b.root]?.rarity ?? 'N'] * (b.mutant ? 2 : 1);
 export function dismantle(m: Meta, id: string): number {
   const b = m.bay.find((x) => x.id === id);

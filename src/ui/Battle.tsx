@@ -1,8 +1,9 @@
 // 戰鬥畫面：把引擎吐出的事件依序播放成動畫，並提供玩家的選單
+import { HELD } from '../data/held';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { FORMS } from '../data/creatures';
 import { FIELDS, SKILLS, type FieldId, type StatusId } from '../data/skills';
-import { effectiveness, RARITY } from '../data/types';
+import { effectiveness, ELEM, RARITY, type Elem } from '../data/types';
 import {
   active, aiChoose, aiForcedSwitch, canAfford, createBattle, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, resolveTurn, statusLabel, volOf,
   type Action, type BattleState, type BEvent, type ItemId, type SideId,
@@ -10,15 +11,17 @@ import {
 import { blockRate, dodgeRate, formOf, maxHp, statsOf, type Mon } from '../game/creature';
 import { makeRng, next } from '../game/rng';
 import { catchChance, rollShakes } from '../game/capture';
-import { battleMods, boon, LANDING_BONUS, zoneOf } from '../game/run';
+import { foeMods, battleMods, boon, LANDING_BONUS, zoneOf } from '../game/run';
 import type { Encounter, RunState } from '../game/run';
 import { auraColor, burst, drawBattle, drawNet, H, monSlot, W, type Beam, type MonView, type Particle } from '../render/scene';
-import { AbilityLines, Bar, ElemChip, Elems, Energy, IvStars, RarityTag, SkillLine, Sprite, StageTag } from './components';
+import { Tip, AbilityLines, Bar, ElemChip, Elems, Energy, IvStars, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
 import { Reel } from './Reel';
 
-export interface BattleResult { outcome: 'win' | 'lose' | 'caught' | 'fled'; enemy: Mon; participants: string[] }
+export interface BattleResult { outcome: 'win' | 'lose' | 'caught' | 'fled'; enemy: Mon; participants: string[]; team?: Mon[] }
+/** 對手下一步的預告 */
+interface Intent { key: string; act: Action; icon: string; name: string; elem: Elem | null; atk: boolean }
 
 type Mode = 'busy' | 'main' | 'skills' | 'switch' | 'force' | 'items' | 'itemTarget' | 'reel' | 'lifestone';
 interface Disp { form: string; lv: number; hp: number; max: number; energy: number; status: StatusId | null; shield: number; trap?: number; mutant?: boolean }
@@ -30,12 +33,23 @@ const DASH = 0.5; // 近戰衝刺的時間（秒）
 const TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(hover: none)').matches;
 // 動畫是「hit」但其實是丟出去／從遠處打的招式，不衝過去
 const RANGED_HIT = new Set(['ember', 'pebble', 'icepebble', 'rockslide', 'microquake', 'bigquake']);
+// 霸主登場台詞（依霸主）
+const BOSS_INTRO: Record<string, string[]> = {
+  whale: ['海面隆起成一座小山……', '鯨嘯張開巨口，整片淺灘的海水都在往牠嘴裡流！'],
+  frostking: ['冰層發出劈啪的碎裂聲。', '冰冠海豹王緩緩抬頭，頭上的冰冠映著極光。'],
+  lavadragon: ['海水沸騰，蒸氣遮住了天空。', '熔岩海龍王從裂谷中升起，鱗片間流著岩漿！'],
+  mainframe_leviathan: ['所有的螢幕同時閃爍：「偵測到入侵者。」', '主機海皇啟動了——資料洪流從四面八方湧來！'],
+  nether_whale: ['燈光一盞一盞熄滅，只剩下深淵的黑。', '冥海巨鯨無聲地張開眼睛，比整艘船還要大。'],
+  vine_antler_deer: ['樹林裡的藤蔓開始往同一個方向生長……', '藤角鹿踏著花瓣走來，森林在牠身後合攏。'],
+  void_star_dragon: ['星光被一點一點吸走。', '虛無星龍盤旋在破碎的星空裡，低聲咆哮。'],
+  domain_realm_core: ['空間像玻璃一樣出現裂痕。', '域界核心開始轉動，周圍的一切都被它改寫！'],
+};
 const readSpeed = () => { try { return localStorage.getItem(SPEED_KEY) !== 'normal'; } catch { return true; } }; // 預設快速
 
 export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunState; enc: Encounter; boss: boolean; onEnd: (r: BattleResult) => void }) {
   const bsRef = useRef<BattleState | null>(null);
   if (!bsRef.current) {
-    bsRef.current = createBattle(makeRng((next(run.rng) * 2 ** 32) >>> 0), { team: run.party, name: '你', mods: battleMods(run) }, { team: [enc.mon], name: boss ? '霸主' : '野生' }, true);
+    bsRef.current = createBattle(makeRng((next(run.rng) * 2 ** 32) >>> 0), { team: run.party, name: '你', mods: battleMods(run) }, { team: enc.team ?? [enc.mon], name: boss ? '霸主' : enc.crew ?? '野生', boss, mods: foeMods(run) }, !enc.team);
   }
   const bs = bsRef.current;
   const crew = !!enc.team; // 對手船隊：多隻敵人、不能收服
@@ -59,6 +73,21 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const [armed, setArmed] = useState(-1); // 觸控：已經點過一下、等第二下確認的選項
   const [info, setInfo] = useState<SideId | null>(null); // 查看雙方資料
   const net = useRef<{ wob: number; glow: number } | null>(null);
+  const [intent, setIntent] = useState<Intent | null>(null);
+  const intentRef = useRef<Intent | null>(null);
+  /** 輪到玩家時，先決定好對手這回合要做什麼並顯示出來 */
+  const planEnemy = () => {
+    if (bs.over || active(bs, 1).hp <= 0) { intentRef.current = null; setIntent(null); return; }
+    const key = `${bs.turn}-${active(bs, 1).uid}`;
+    if (intentRef.current?.key === key) return;
+    const act = aiChoose(bs, 1);
+    const foeM = active(bs, 1);
+    const sk = act.type === 'skill' ? (act.slot < 0 ? null : SKILLS[foeM.skills[act.slot]]) : null;
+    const it: Intent = sk
+      ? { key, act, icon: sk.power > 0 ? '⚔' : sk.fx?.heal ? '✚' : sk.fx?.status || (sk.fx?.stat && !sk.fx.stat.self) ? '☠' : '✦', name: sk.name, elem: sk.elem, atk: sk.power > 0 }
+      : { key, act, icon: '⚔', name: '掙扎', elem: null, atk: true };
+    intentRef.current = it; setIntent(it);
+  };
 
   const mkView = (side: SideId, form: string): MonView => {
     const p = monSlot(side, form);
@@ -112,7 +141,9 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     (async () => {
       const ef = FORMS[enc.mon.form];
       await wait(500);
-      say(boss ? `霸主「${ef.name}」擋住了去路！` : `野生的 ${ef.name} 出現了！`);
+      if (crew) { say(`「${enc.crew}」的船隊攔住了去路！（${enc.team!.length} 隻）`); await wait(500); say(`${enc.crew}派出了 ${ef.name}！`); }
+      else if (boss) { for (const line of BOSS_INTRO[enc.mon.form] ?? []) { say(line); await wait(900); } say(`霸主「${ef.name}」擋住了去路！`); }
+      else say(`野生的 ${ef.name} 出現了！`);
       if (enc.rarity === 'SSR') say('★ 傳說級的氣息！這可能是唯一的機會！');
       else if (enc.rarity === 'S') say('☆ 史詩級的稀有生物！');
       if (enc.mon.mutant) say('✦ 是異變個體！牠的顏色跟一般的不一樣！');
@@ -180,6 +211,12 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       }
       case 'field': setField(e.id ? { id: e.id, turns: e.turns } : null); break;
       case 'trap': d[e.side].trap = e.turns; rerender(); break;
+      case 'enrage': {
+        const c = center(e.side), v = a.mons[e.side];
+        v.aura = '#ff3040'; v.flash = 0.6; a.shakeT[e.side] = 0.8;
+        burst(a.parts, c.x, c.y, 'faint', 'fire'); burst(a.parts, c.x, c.y, 'buff', 'fire');
+        pop(e.side, '狂暴！', 'crit'); await wait(700); break;
+      }
       case 'end': break;
     }
   }
@@ -202,7 +239,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       if ((run.lifeStones ?? 0) > 0) { await wait(500); say(`要使用生命石讓全隊復活嗎？（剩 ${run.lifeStones} 顆）`); setMode('lifestone'); return; }
     }
     await wait(1100);
-    onEnd({ outcome, enemy: enc.mon, participants: [...participants.current] });
+    onEnd({ outcome, enemy: crew ? active(bs, 1) : enc.mon, participants: [...participants.current], team: enc.team });
   }
 
   async function useLifeStone() {
@@ -226,12 +263,15 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     if (TOUCH && armed !== i) { setHover(i); setPeek(i); setArmed(i); return; }
     setArmed(-1); act();
   };
-  useEffect(() => { setArmed(-1); setPeek(-1); if (mode === 'main') hurry.current = false; }, [mode]);
+  useEffect(() => { setArmed(-1); setPeek(-1); if (mode === 'main') { hurry.current = false; planEnemy(); } }, [mode]);
 
   async function submit(a: Action) {
     setMode('busy');
     if (a.type === 'item') run.items[a.item]--;
-    const evs = resolveTurn(bs, [a, aiChoose(bs, 1)]);
+    const it = intentRef.current, key = `${bs.turn}-${active(bs, 1).uid}`;
+    const foeAct = it && it.key === key && (it.act.type !== 'skill' || canAfford(bs, 1, it.act.slot)) ? it.act : aiChoose(bs, 1);
+    intentRef.current = null; setIntent(null);
+    const evs = resolveTurn(bs, [a, foeAct]);
     await play(evs);
     await afterTurn();
   }
@@ -308,7 +348,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={draw} label="戰鬥畫面" />}
       overlay={<>
-        <HudBox onOpen={() => setInfo(1)} side={1} d={de} rarity={FORMS[de.form].rarity} boss={boss} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
+        <HudBox onOpen={() => setInfo(1)} side={1} d={de} rarity={crew ? undefined : FORMS[de.form].rarity} boss={boss} intent={mode === 'main' || mode === 'skills' ? intent : null} warn={!!intent?.atk && effectiveness(intent.elem, formOf(active(bs, 0)).elems) >= 2} crewLeft={crew ? bs.sides[1].team.filter((m) => m.hp > 0).length : 0} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
         <HudBox onOpen={() => setInfo(0)} side={0} d={dp} charged={volOf(bs, 0).charged} locked={volOf(bs, 0).lockOn} turns={active(bs, 0).statusTurns} />
         {popups.map((p) => {
           const c = monSlot(p.side, disp.current[p.side].form);
@@ -317,6 +357,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         {field && <div class="field-chip" style={{ borderColor: FIELDS[field.id].color }} title={FIELDS[field.id].desc}><i style={{ background: FIELDS[field.id].color }} />{FIELDS[field.id].name}<span>剩 {field.turns} 回合</span></div>}
         <button class="speed" onClick={toggleFast} aria-pressed={fast}>{fast ? '▶▶ 快速' : '▶ 一般'}</button>
         {mode === 'reel' && !vp.portrait && reel}
+        {mode === 'main' && !boss && <Tip id="battle">直接點技能出招（◆ 是能量消耗）。對手 HP 條下面的「下一步」是牠這回合要做的事。把對手打虛弱再按 🎣 捕捉，比較容易收服。點 HP 框可以看詳細資料。</Tip>}
+        {mode === 'main' && boss && <Tip id="boss">霸主的 HP 掉到一半時會狂暴：攻擊提高，但防禦會露出破綻。霸主不能捕捉，也不能逃跑。</Tip>}
       </>}
       onPanelClose={info !== null ? () => setInfo(null) : mode === 'switch' || mode === 'itemTarget' ? () => setMode(mode === 'itemTarget' ? 'items' : 'main') : undefined}
       panel={info !== null ? <InfoPanel bs={bs} side={info} boss={boss} onClose={() => setInfo(null)} /> : picking && (
@@ -425,7 +467,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   );
 }
 
-function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen }: { side: SideId; d: Disp; rarity?: keyof typeof RARITY; boss?: boolean; charged?: boolean; locked?: boolean; turns?: number; onOpen?: () => void }) {
+function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent, crewLeft, warn }: { side: SideId; d: Disp; rarity?: keyof typeof RARITY; boss?: boolean; charged?: boolean; locked?: boolean; turns?: number; onOpen?: () => void; intent?: Intent | null; crewLeft?: number; warn?: boolean }) {
   const f = FORMS[d.form];
   return (
     <div class={`hud hud-${side} clickable`} onClick={onOpen} role="button" aria-label={`查看 ${f.name} 的資料`}>
@@ -433,6 +475,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen }: { sid
         <b class="hud-name">{f.name}</b>{d.mutant && <span class="mutant-tag">✦</span>}
         {rarity && <RarityTag r={rarity} />}
         {boss && <span class="boss-tag">霸主</span>}
+        {!!crewLeft && <span class="crew-left" title="船隊剩下的夥伴">{'●'.repeat(crewLeft)}</span>}
         <span class="lv">Lv{d.lv}</span>
       </div>
       <div class="hud-sub"><Elems list={f.elems} />{d.status && <span class={`st st-${d.status}`}>{statusLabel(d.status)}{turns ? ` ${turns}` : ''}</span>}{d.shield > 0 && <span class="st st-shield">護盾 {d.shield}</span>}{(d.trap ?? 0) > 0 && <span class="st st-trap">暗礁 {d.trap}</span>}{charged && <span class="st st-charge">蓄力</span>}{locked && <span class="st st-lock">鎖定</span>}</div>
@@ -441,6 +484,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen }: { sid
         <Energy value={d.energy} max={MAX_ENERGY} />
         {side === 0 && <span class="hpnum">{d.hp}/{d.max}</span>}
       </div>
+      {intent && <div class={`hud-intent ${warn ? 'warn' : ''}`} title={warn ? '對你的夥伴效果絕佳！' : undefined}><span class="dim">下一步</span> {intent.icon} {intent.name}{warn && ' ‼'}</div>}
     </div>
   );
 }
@@ -472,6 +516,8 @@ function InfoPanel({ bs, side, boss, onClose }: { bs: BattleState; side: SideId;
       </div>
       {mine && <p class="small">攻擊 {st.atk}・防禦 {st.def}・速度 {st.spd}</p>}
       <p class="small dim">閃避 {Math.round(dodgeRate(f) * 100)}%・格擋 {Math.round(blockRate(f) * 100)}%</p>
+      {m.held && <p class="small">攜帶 <b>{HELD[m.held].icon} {HELD[m.held].name}</b>：{HELD[m.held].desc}</p>}
+      {mine && Object.entries(bs.sides[0].mods?.reso ?? {}).map(([e, b]) => <p class="small accent" key={e}>屬性共鳴：{ELEM[e as Elem].name}技能 +{Math.round((b ?? 0) * 100)}%</p>)}
       <AbilityLines form={f.id} />
       {mine && <div class="skills-col">{m.skills.map((id) => <SkillLine id={id} key={id} />)}</div>}
       <MenuItem onClick={onClose} hot>關閉</MenuItem>

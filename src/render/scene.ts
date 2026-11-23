@@ -600,7 +600,7 @@ export function drawPort(ctx: CanvasRenderingContext2D, t: number, bay: string[]
 }
 
 // ── 海圖：俯視的航線 ──
-export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'event' | 'portal' | 'boss';
+export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'event' | 'portal' | 'boss' | 'crew';
 export interface ChartNode { kind: NodeKind }
 export function chartPos(step: number, idx: number, n: number): [number, number] {
   const x = 16 + step * 25, ys = n === 1 ? [60] : n === 2 ? [42, 80] : [30, 60, 90];
@@ -639,7 +639,7 @@ function chartBase(route: ChartNode[][], seed: number, theme = 'day') {
     x.fillStyle = '#ff5a6e'; for (let i = 0; i < 6; i++) x.fillRect(cx, cy - 7 + i, 1, 1);
   });
 }
-const NODE_COL: Record<NodeKind, string> = { fish: '#f4f8ff', elite: '#c58cff', treasure: '#ffcf4a', camp: '#ff9a3a', shop: '#7ee3c8', event: '#9ad8ff', portal: '#c89aff', boss: '#e8304a' };
+const NODE_COL: Record<NodeKind, string> = { fish: '#f4f8ff', elite: '#c58cff', treasure: '#ffcf4a', camp: '#ff9a3a', shop: '#7ee3c8', event: '#9ad8ff', portal: '#c89aff', boss: '#e8304a', crew: '#ff7a8a' };
 function nodeIcon(ctx: CanvasRenderingContext2D, k: NodeKind, x: number, y: number) {
   ctx.fillStyle = '#141a33'; ctx.fillRect(x - 6, y - 14, 13, 11);
   ctx.fillStyle = NODE_COL[k]; ctx.fillRect(x - 5, y - 13, 11, 9);
@@ -651,6 +651,8 @@ function nodeIcon(ctx: CanvasRenderingContext2D, k: NodeKind, x: number, y: numb
   if (k === 'portal') { ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 1, y - 12, 3, 7); ctx.fillStyle = '#5ff1ff'; ctx.fillRect(x, y - 11, 1, 5); ctx.fillStyle = '#141a33'; ctx.fillRect(x - 3, y - 9, 1, 1); ctx.fillRect(x + 3, y - 9, 1, 1); }
   if (k === 'event') { ctx.fillRect(x - 2, y - 12, 5, 1); ctx.fillRect(x + 2, y - 11, 1, 2); ctx.fillRect(x, y - 9, 2, 1); ctx.fillRect(x, y - 8, 1, 1); ctx.fillRect(x, y - 6, 1, 1); }
   if (k === 'shop') { ctx.fillRect(x - 3, y - 11, 7, 1); ctx.fillRect(x - 2, y - 10, 1, 4); ctx.fillRect(x + 2, y - 10, 1, 4); ctx.fillRect(x - 3, y - 7, 7, 1); }
+  // 船隊：小旗子＋船身
+  if (k === 'crew') { ctx.fillRect(x - 1, y - 12, 1, 5); ctx.fillStyle = '#ffffff'; ctx.fillRect(x, y - 12, 3, 2); ctx.fillStyle = '#141a33'; ctx.fillRect(x - 4, y - 7, 9, 1); ctx.fillRect(x - 3, y - 6, 7, 1); }
   if (k === 'boss') { ctx.fillRect(x - 3, y - 11, 7, 4); ctx.fillStyle = '#e8304a'; ctx.fillRect(x - 2, y - 10, 2, 2); ctx.fillRect(x + 1, y - 10, 2, 2); ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 2, y - 7, 1, 2); ctx.fillRect(x, y - 7, 1, 2); ctx.fillRect(x + 2, y - 7, 1, 2); }
 }
 function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number, theme = 'day') {
