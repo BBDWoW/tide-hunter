@@ -6,7 +6,7 @@ import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/ty
 import { ITEMS, statusLabel, type ItemId } from '../game/battle';
 import { ancestryOf, blockRate, dodgeRate, formOf, maxHp, xpToNext, type Mon } from '../game/creature';
 import { bringBackSlots, releaseValue, achStats, ACHIEVEMENTS, bayCap, bringBack, buyUpgrade, claimable, claimAchievement, loadMeta, saveMeta, titleOf, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
-import { MAX_STAR, STAR_RULES, todayKey, campHealMul, heldPrice, campSearch, campTrain, buyHeld, equipHeld, refreshCost, refreshShop, shopHeld, canUseOutside, enterSpecial, FINAL_ZONE, ZONE_CHOICES, healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
+import { MAX_STAR, STAR_RULES, todayKey, campHealMul, heldPrice, campSearch, campTrain, buyHeld, equipHeld, refreshCost, refreshShop, shopHeld, canUseOutside, enterSpecial, FINAL_ZONE, ZONE_CHOICES, healParty, loadDex, loadRun, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
 import { APP_VERSION, CHANGELOG, hasUnreadNews, markNewsRead } from '../game/version';
 import { loadSound, saveSound, sfx, type SoundSettings } from '../audio/engine';
@@ -29,10 +29,15 @@ export function MenuItem({ children, onClick, disabled, hot, sel, sub, onHover }
 export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, onPort, onBay }: { vp: Viewport; hasSave: boolean; onNew: () => void; onDaily: () => void; onContinue: () => void; onDex: () => void; onHelp: () => void; onPort: () => void; onBay: () => void }) {
   const dex = loadDex(), meta = loadMeta();
   const [stars, setStars] = useState(false);
+  // 有進行中的冒險時，開新局前先確認
+  const [confirm, setConfirm] = useState<null | { k: 'new' | 'daily'; go: () => void }>(null);
+  const guard = (k: 'new' | 'daily', go: () => void) => () => (hasSave ? setConfirm({ k, go }) : go());
+  const saved = hasSave ? loadRun() : null;
   const [star, setStar] = useState(meta.star ?? 0);
   const maxStar = meta.maxStar ?? 0;
   const today = todayKey(), daily = meta.daily?.day === today ? meta.daily : null;
   const begin = () => { const m = loadMeta(); m.star = Math.min(star, maxStar); saveMeta(m); setStars(false); onNew(); };
+  const openNew = () => (maxStar > 0 ? setStars(true) : onNew());
   const [news, setNews] = useState(false);
   const [sound, setSound] = useState(false);
   const [snd, setSnd] = useState(loadSound);
@@ -52,8 +57,17 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
         </div>
         <span class="app-version">v{APP_VERSION}</span>
       </>}
-      onPanelClose={sound || news || stars ? () => { setSound(false); setNews(false); setStars(false); } : undefined}
-      panel={stars ? (
+      onPanelClose={sound || news || stars || confirm ? () => { setSound(false); setNews(false); setStars(false); setConfirm(null); } : undefined}
+      panel={confirm ? (
+        <Win class="big-panel confirm-panel" title="還有進行中的冒險" onClose={() => setConfirm(null)} closeLabel="取消">
+          <p>目前的冒險還沒結束{saved ? `（${saved.daily ? '每日挑戰・' : ''}第 ${totalStation(saved)} 站・夥伴 ${saved.party.length} 隻）` : ''}。</p>
+          <p class="warn-text">開始{confirm.k === 'daily' ? '每日挑戰' : '新的冒險'}會<b>放棄目前的進度</b>，沒辦法復原。</p>
+          <div class="confirm-btns">
+            <MenuItem onClick={() => { setConfirm(null); onContinue(); }} hot>繼續目前的冒險</MenuItem>
+            <MenuItem onClick={() => { const g = confirm.go; setConfirm(null); g(); }}>放棄進度，開始{confirm.k === 'daily' ? '每日挑戰' : '新的冒險'}</MenuItem>
+          </div>
+        </Win>
+      ) : stars ? (
         <Win class="big-panel" title="選擇潮位（難度）" onClose={() => setStars(false)}>
           <div class="star-pick">
             {Array.from({ length: maxStar + 1 }, (_, i) => (
@@ -91,8 +105,8 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
         <div class="dock-center">
           <Win class="title-menu">
             {hasSave && <MenuItem onClick={onContinue} hot>繼續冒險</MenuItem>}
-            <MenuItem onClick={() => (maxStar > 0 ? setStars(true) : onNew())} hot={!hasSave} sub={maxStar > 0 && (meta.star ?? 0) > 0 ? '★'.repeat(meta.star ?? 0) : undefined}>新的冒險</MenuItem>
-            {meta.runs > 0 && <MenuItem onClick={onDaily} sub={daily ? `今日最佳 ${daily.best} 站${daily.win ? '・通關' : ''}` : '今天還沒挑戰'}>每日挑戰</MenuItem>}
+            <MenuItem onClick={guard('new', openNew)} hot={!hasSave} sub={maxStar > 0 && (meta.star ?? 0) > 0 ? '★'.repeat(meta.star ?? 0) : undefined}>新的冒險</MenuItem>
+            {meta.runs > 0 && <MenuItem onClick={guard('daily', onDaily)} sub={daily ? `今日最佳 ${daily.best} 站${daily.win ? '・通關' : ''}` : '今天還沒挑戰'}>每日挑戰</MenuItem>}
             {meta.bay.length > 0 && <MenuItem onClick={onBay} sub={`${meta.bay.length}/${bayCap(meta)}`}>棲息灣</MenuItem>}
             <MenuItem onClick={onPort} sub={claimable(meta, achStats(meta, dex)) ? `● 成就可領　◆ ${meta.pearls}` : `◆ ${meta.pearls}`}>港口</MenuItem>
             <MenuItem onClick={onDex} sub={`${dex.caught.length}/${Object.keys(FORMS).length}`}>圖鑑</MenuItem>
