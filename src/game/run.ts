@@ -484,7 +484,11 @@ export interface Dex { seen: string[]; caught: string[]; bestStation: number; cl
 export function loadDex(): Dex {
   try {
     const d = JSON.parse(localStorage.getItem(DEX_KEY) || 'null');
-    if (d && Array.isArray(d.seen)) return d;
+    if (d && Array.isArray(d.seen)) {
+      // 舊存檔：以前自己進化出的形態沒有登記，補成已收服
+      for (const f of d.evolved ?? []) { if (!d.seen.includes(f)) d.seen.push(f); if (!d.caught.includes(f)) d.caught.push(f); }
+      return d;
+    }
   } catch { /* 略過 */ }
   return { seen: [], caught: [], bestStation: 0, clears: 0 };
 }

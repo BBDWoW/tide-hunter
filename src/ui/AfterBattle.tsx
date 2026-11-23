@@ -162,6 +162,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
         onDone={(learn) => {
           const m = find(cur.uid)!;
           updateDex((d) => { d.evolved = [...new Set([...(d.evolved ?? []), cur.to])]; });
+          markCaught(cur.to);
           const branch = Object.values(FORMS).flatMap((f) => f.evolve ?? []).find((e) => e.to === cur.to && (e.style || e.zone));
           const why = branch?.zone ? `（受到${ZONES[branch.zone as ZoneId]?.name ?? ''}的環境影響）` : branch?.style ? `（依戰鬥風格走向${branch.style === 'guard' ? '守護型' : '攻擊型'}）` : '';
           note(m.uid, `進化成了 ${formOf(m).name}！${why}`);
