@@ -631,7 +631,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
         {d.form === 'godhand' ? <InfTag /> : rarity && <RarityTag r={rarity} />}
         {boss && <span class="boss-tag">霸主</span>}
         {!!crewLeft && <span class="crew-left" title="船隊剩下的夥伴">{'●'.repeat(crewLeft)}</span>}
-        <span class="lv">Lv{d.lv}</span>
+        {d.form !== 'godhand' && <span class="lv">Lv{d.lv}</span>}
       </div>
       <div class="hud-sub"><Elems list={f.elems} />{f.id === 'godhand' && <span class="st st-shield">無屬性・異常無效</span>}{d.status && <span class={`st st-${d.status}`}>{statusLabel(d.status)}{turns ? ` ${turns >= 90 ? '∞' : turns}` : ''}</span>}{d.shield > 0 && <span class="st st-shield">護盾 {d.shield}</span>}{(d.trap ?? 0) > 0 && <span class="st st-trap">暗礁 {d.trap}</span>}{charged && <span class="st st-charge">蓄力</span>}{locked && <span class="st st-lock">鎖定</span>}</div>
       <Bar value={d.hp} max={d.max} />
@@ -656,7 +656,7 @@ function InfoPanel({ bs, side, boss, onClose }: { bs: BattleState; side: SideId;
       <div class="pick">
         <Sprite form={m.form} size={96} mutant={m.mutant} />
         <span class="grow">
-          <span class="row-gap"><b class="big-name">{m.mutant ? '✦ ' : ''}{f.name}</b>{m.form === 'godhand' ? <InfTag /> : <RarityTag r={f.rarity} />}<StageTag form={m.form} /><span class="num">Lv{m.lv}</span></span>
+          <span class="row-gap"><b class="big-name">{m.mutant ? '✦ ' : ''}{f.name}</b>{m.form === 'godhand' ? <InfTag /> : <RarityTag r={f.rarity} />}{m.form !== 'godhand' && <><StageTag form={m.form} /><span class="num">Lv{m.lv}</span></>}</span>
           <span class="row-gap"><Elems list={f.elems} /><span class="small dim">{f.category}</span>{mine && <IvStars iv={m.iv} />}</span>
           <Bar value={m.hp} max={mx} />
           <span class="row-gap">{mine && <span class="small">{Math.max(0, m.hp)}/{mx}</span>}<Energy value={v.energy} max={MAX_ENERGY} /></span>
