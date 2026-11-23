@@ -13,6 +13,7 @@ import type { BattleResult } from './Battle';
 import { AbilityLines, Bar, Elems, IvStars, EnvHint, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
+import { sfx } from '../audio/engine';
 import { drawDeep, drawSea } from '../render/scene';
 
 type Task =
@@ -68,6 +69,9 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
     }
     setLines(out);
     setTasks(q);
+    // 結算音效：貝殼幣、升級
+    if (out.some((l) => l.uid === '_coins')) sfx('coin');
+    if (out.some((l) => l.text.includes('升到了'))) setTimeout(() => sfx('levelup'), 350);
   }, []);
 
   const find = (uid: string) => run.party.find((m) => m.uid === uid);
@@ -187,6 +191,7 @@ function EvolveScene({ mon, to, onDone }: { mon: Mon; to: string; onDone: (learn
   const learned = useRef<string[]>([]);
   useEffect(() => {
     if (phase !== 'play') return;
+    sfx('buff'); setTimeout(() => sfx('reveal'), 3000);
     return playEvolution(ref.current!, from, to, () => {
       learned.current = evolve(mon, to);
       setPhase('done');

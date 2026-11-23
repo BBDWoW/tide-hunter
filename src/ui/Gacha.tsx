@@ -8,6 +8,7 @@ import { drawGacha, TIER_COLOR, type GachaView } from '../render/scene';
 import { RarityTag, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
+import { sfx } from '../audio/engine';
 
 const rank = (t: Tier) => TIERS.indexOf(t);
 
@@ -30,6 +31,7 @@ export function Gacha({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
     const res = pending.current; if (!res) return;
     pending.current = null;
     const best = res.reduce((a, b) => (rank(b.tier) > rank(a.tier) ? b : a));
+    sfx(best.form ? 'reveal' : 'escape');
     set({ phase: best.form ? 'reveal' : 'miss', rod: best.tier, pool: best.path.length ? best.tier : null, form: best.form, mutant: best.mutant });
     res.forEach((r) => r.form && markCaught(r.form));
     setResults(res); setBusy(false); setMeta(loadMeta());
@@ -47,17 +49,18 @@ export function Gacha({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
     // 用這次最好的結果來演出
     const best = res.reduce((a, b) => (rank(b.tier) > rank(a.tier) ? b : a));
     view.current.parts = [];
+    sfx('cast'); later(500, () => sfx('splash'));
     set({ phase: 'cast', rod: best.rod, pool: null, form: null, mutant: best.mutant });
     setMsg(`拿出了${ROD_NAME[best.rod]}……${best.rod === 'broken' ? '看起來不太妙。' : best.rod === 'SSR' ? '釣竿發出了耀眼的金光！' : best.rod === 'S' ? '釣竿冒出了紅色的火花！' : ''}`);
     let t = 700;
     later(t, () => { set({ phase: 'wait' }); setMsg('等待上鉤……'); });
     t += 1100;
     for (const step of best.path) {
-      later(t, () => { set({ phase: 'turn', pool: step, rod: step }); setMsg(`水面變色了！……變成了${ROD_NAME[step]}！`); });
+      later(t, () => { sfx('turn'); set({ phase: 'turn', pool: step, rod: step }); setMsg(`水面變色了！……變成了${ROD_NAME[step]}！`); });
       t += 1200;
     }
     if (best.tier === 'broken') { later(t, () => { set({ phase: 'miss' }); setMsg('啪！釣線斷了……'); }); t += 900; }
-    else { later(t, () => { set({ phase: 'bite' }); setMsg('咬鉤了！'); }); t += 600; }
+    else { later(t, () => { sfx('bite'); set({ phase: 'bite' }); setMsg('咬鉤了！'); }); t += 600; }
     later(t, finish);
   };
 

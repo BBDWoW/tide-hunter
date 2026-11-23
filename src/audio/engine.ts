@@ -3,11 +3,11 @@
 import { CHORDS, FLAVORS, SONGS, type Flavor, type Lead, type Song, type SongId } from './songs';
 
 // ── 設定（記在這台裝置上） ──
-export interface SoundSettings { music: number; amb: number; muted: boolean }
+export interface SoundSettings { music: number; amb: number; sfx: number; muted: boolean }
 const KEY = 'tidehunter.sound';
 export function loadSound(): SoundSettings {
-  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s) return { music: 0.7, amb: 0.7, muted: false, ...s }; } catch { /* 略過 */ }
-  return { music: 0.7, amb: 0.7, muted: false };
+  try { const s = JSON.parse(localStorage.getItem(KEY) || 'null'); if (s) return { music: 0.7, amb: 0.7, sfx: 0.8, muted: false, ...s }; } catch { /* 略過 */ }
+  return { music: 0.7, amb: 0.7, sfx: 0.8, muted: false };
 }
 let settings = loadSound();
 export function saveSound(s: SoundSettings) {
@@ -18,7 +18,7 @@ export function saveSound(s: SoundSettings) {
 
 // ── 節點 ──
 let ctx: AudioContext | null = null;
-let master: GainNode, musicBus: GainNode, musicFade: GainNode, ambBus: GainNode, verbSend: GainNode, verb: ConvolverNode;
+let sfxBus: GainNode, master: GainNode, musicBus: GainNode, musicFade: GainNode, ambBus: GainNode, verbSend: GainNode, verb: ConvolverNode;
 let pulse25: PeriodicWave, pulse50: PeriodicWave, noise: AudioBuffer;
 let unlocked = false;
 let meter: AnalyserNode | null = null;
@@ -53,6 +53,7 @@ function build() {
   meter = ctx.createAnalyser(); meter.fftSize = 2048; master.connect(meter);
   musicBus = ctx.createGain(); musicFade = ctx.createGain(); musicFade.connect(musicBus); musicBus.connect(master);
   ambBus = ctx.createGain(); ambBus.connect(master);
+  sfxBus = ctx.createGain(); sfxBus.connect(master);
   verb = ctx.createConvolver(); verb.buffer = makeVerb(ctx, 1.8); verbSend = ctx.createGain(); verbSend.connect(verb); verb.connect(musicBus);
   pulse25 = pulseWave(ctx, 0.25); pulse50 = pulseWave(ctx, 0.5);
   noise = ctx.createBuffer(2, ctx.sampleRate * 3, ctx.sampleRate);
@@ -66,6 +67,7 @@ function applyVolumes() {
   master.gain.setTargetAtTime(settings.muted ? 0 : 1, t, 0.05);
   musicBus.gain.setTargetAtTime(settings.music * 0.9, t, 0.05);
   ambBus.gain.setTargetAtTime(settings.amb * 0.9, t, 0.05);
+  sfxBus.gain.setTargetAtTime(settings.sfx * 0.9, t, 0.05);
 }
 
 /** 第一次點擊／按鍵時呼叫：建立音訊並開始播放目前場景的音樂 */
@@ -256,3 +258,86 @@ export const audioDebug = () => {
 (window as unknown as { __audio?: typeof audioDebug }).__audio = audioDebug;
 /** 停止環境音的排程（目前沒用到，留給之後的設定） */
 export const stopSurf = () => { window.clearInterval(surfTimer); };
+
+// ── 音效：全部即時合成 ──
+export type SfxId =
+  | 'select' | 'confirm' | 'back' | 'hit' | 'crit' | 'super' | 'weak' | 'dodge' | 'block' | 'heal' | 'buff' | 'debuff' | 'status'
+  | 'faint' | 'enter' | 'enrage' | 'cast' | 'splash' | 'nibble' | 'bite' | 'shake' | 'catch' | 'escape' | 'levelup' | 'coin' | 'win' | 'lose'
+  | 'turn' | 'reveal' | 'item' | 'energy'
+  | `skill:${string}`;
+
+function tone(t: number, type: OscillatorType | 'p25' | 'p50', f0: number, f1: number, dur: number, vol: number, attack = 0.004) {
+  const c = ctx!, o = c.createOscillator(), g = c.createGain();
+  if (type === 'p25') o.setPeriodicWave(pulse25); else if (type === 'p50') o.setPeriodicWave(pulse50); else o.type = type;
+  o.frequency.setValueAtTime(f0, t);
+  if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+  o.connect(g); g.connect(sfxBus); o.start(t); o.stop(t + dur + 0.02);
+}
+function hiss(t: number, dur: number, vol: number, type: BiquadFilterType, f0: number, f1 = f0, q = 1) {
+  const c = ctx!, s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+  s.buffer = noise; f.type = type; f.Q.value = q;
+  f.frequency.setValueAtTime(f0, t); if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(Math.max(30, f1), t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0005, t + dur);
+  s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t, Math.random() * 2, dur + 0.05);
+}
+const notes = (t: number, list: number[], step: number, type: OscillatorType | 'p25' | 'p50', vol: number, len = step * 1.6) =>
+  list.forEach((m, i) => tone(t + i * step, type, hz(m), hz(m), len, vol));
+
+const lastPlayed: Record<string, number> = {};
+/** 播放音效（同一個音效 40ms 內只會響一次，避免疊在一起爆音） */
+export function sfx(id: SfxId) {
+  if (!ctx || !unlocked || settings.muted || settings.sfx <= 0) return;
+  const t = ctx.currentTime + 0.005;
+  if (lastPlayed[id] && t - lastPlayed[id] < 0.04) return;
+  lastPlayed[id] = t;
+  switch (id) {
+    case 'select': tone(t, 'p25', 1320, 1320, 0.035, 0.08); break;
+    case 'confirm': tone(t, 'p25', 990, 990, 0.05, 0.1); tone(t + 0.05, 'p25', 1480, 1480, 0.08, 0.1); break;
+    case 'back': tone(t, 'p25', 880, 660, 0.08, 0.08); break;
+    case 'hit': hiss(t, 0.12, 0.5, 'lowpass', 2400, 400); tone(t, 'sine', 160, 55, 0.16, 0.55); break;
+    case 'weak': hiss(t, 0.08, 0.3, 'lowpass', 900, 300); tone(t, 'sine', 110, 60, 0.1, 0.35); break;
+    case 'super': hiss(t, 0.16, 0.55, 'lowpass', 3200, 500); tone(t, 'sine', 180, 50, 0.2, 0.6); tone(t + 0.02, 'square', 660, 1320, 0.12, 0.08); break;
+    case 'crit': hiss(t, 0.2, 0.7, 'lowpass', 4200, 300); tone(t, 'sine', 200, 40, 0.28, 0.7); tone(t, 'p50', 1760, 1700, 0.25, 0.09); tone(t + 0.03, 'p50', 2640, 2600, 0.2, 0.05); break;
+    case 'dodge': hiss(t, 0.22, 0.35, 'bandpass', 600, 3200, 2); break;
+    case 'block': tone(t, 'square', 320, 300, 0.09, 0.14); tone(t, 'square', 470, 460, 0.12, 0.1); hiss(t, 0.05, 0.25, 'highpass', 3000); break;
+    case 'heal': notes(t, [72, 76, 79, 84], 0.06, 'sine', 0.18, 0.18); break;
+    case 'buff': tone(t, 'p25', 330, 990, 0.25, 0.1); tone(t + 0.12, 'p25', 660, 1320, 0.18, 0.07); break;
+    case 'debuff': tone(t, 'p25', 880, 220, 0.3, 0.1); break;
+    case 'status': tone(t, 'triangle', 300, 200, 0.12, 0.18); tone(t + 0.12, 'triangle', 280, 160, 0.14, 0.16); break;
+    case 'faint': tone(t, 'p50', 440, 70, 0.6, 0.14); hiss(t + 0.1, 0.5, 0.25, 'lowpass', 1200, 150); break;
+    case 'enter': hiss(t, 0.18, 0.3, 'bandpass', 400, 2400, 1.5); tone(t + 0.12, 'p25', 660, 990, 0.08, 0.08); break;
+    case 'enrage': tone(t, 'sawtooth', 70, 50, 0.9, 0.35, 0.05); tone(t, 'sawtooth', 105, 72, 0.9, 0.2, 0.05); hiss(t, 0.8, 0.35, 'lowpass', 600, 200); break;
+    case 'cast': hiss(t, 0.3, 0.35, 'bandpass', 2500, 500, 2); break;
+    case 'splash': hiss(t, 0.35, 0.45, 'highpass', 1200, 400); tone(t, 'sine', 300, 120, 0.12, 0.2); break;
+    case 'nibble': tone(t, 'sine', 900, 700, 0.05, 0.12); break;
+    case 'bite': tone(t, 'p25', 1320, 1320, 0.06, 0.14); tone(t + 0.07, 'p25', 1760, 1760, 0.1, 0.14); hiss(t, 0.2, 0.3, 'highpass', 1500); break;
+    case 'shake': tone(t, 'sine', 180, 120, 0.08, 0.3); hiss(t, 0.05, 0.15, 'bandpass', 1200); break;
+    case 'catch': notes(t, [72, 76, 79, 84, 79, 84], 0.09, 'p25', 0.12, 0.2); break;
+    case 'escape': notes(t, [76, 72, 67], 0.1, 'p25', 0.11, 0.18); break;
+    case 'levelup': notes(t, [67, 71, 74, 79], 0.07, 'p25', 0.11, 0.16); tone(t + 0.3, 'sine', hz(86), hz(86), 0.4, 0.08); break;
+    case 'coin': tone(t, 'p25', 1976, 1976, 0.05, 0.08); tone(t + 0.05, 'p25', 2637, 2637, 0.14, 0.08); break;
+    case 'win': notes(t, [67, 72, 76, 79, 84], 0.1, 'p25', 0.12, 0.22); break;
+    case 'lose': notes(t, [67, 63, 60, 55], 0.16, 'triangle', 0.18, 0.3); break;
+    case 'turn': tone(t, 'sine', 400, 1600, 0.4, 0.12); notes(t + 0.3, [84, 88, 91], 0.06, 'sine', 0.12, 0.2); break;
+    case 'reveal': notes(t, [72, 79, 84, 88, 91], 0.07, 'p25', 0.11, 0.3); hiss(t, 0.6, 0.15, 'highpass', 5000); break;
+    case 'item': tone(t, 'sine', 600, 900, 0.12, 0.15); break;
+    case 'energy': tone(t, 'p25', 1200, 1800, 0.08, 0.06); break;
+    default: skillSfx(t, id.slice(6));
+  }
+}
+/** 使用技能：依屬性有不同的聲音 */
+function skillSfx(t: number, elem: string) {
+  switch (elem) {
+    case 'fire': hiss(t, 0.35, 0.4, 'bandpass', 800, 2400, 0.8); hiss(t + 0.05, 0.25, 0.2, 'highpass', 4000); break;
+    case 'water': hiss(t, 0.35, 0.4, 'bandpass', 2400, 500, 1.2); tone(t, 'sine', 500, 200, 0.2, 0.15); break;
+    case 'elec': for (let i = 0; i < 5; i++) tone(t + i * 0.035, 'square', 200 + Math.random() * 1600, 100 + Math.random() * 800, 0.04, 0.07); break;
+    case 'ice': notes(t, [96, 91, 98, 93], 0.04, 'sine', 0.07, 0.15); hiss(t, 0.2, 0.15, 'highpass', 6000); break;
+    case 'grass': hiss(t, 0.3, 0.3, 'bandpass', 1500, 3000, 3); break;
+    case 'rock': tone(t, 'sine', 90, 40, 0.25, 0.5); hiss(t, 0.2, 0.35, 'lowpass', 700, 200); break;
+    case 'dark': tone(t, 'sawtooth', 110, 55, 0.4, 0.12, 0.05); hiss(t, 0.4, 0.18, 'lowpass', 500, 150); break;
+    case 'data': for (let i = 0; i < 6; i++) tone(t + i * 0.03, 'square', [880, 1320, 660, 1760][i % 4], [880, 1320, 660, 1760][i % 4], 0.025, 0.06); break;
+    case 'fly': hiss(t, 0.3, 0.35, 'bandpass', 700, 2600, 2.5); break;
+    default: hiss(t, 0.15, 0.3, 'bandpass', 1500, 600, 1);
+  }
+}

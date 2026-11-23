@@ -209,7 +209,19 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .st-burn { background: #e2512a; } .st-para { background: #c9a10f; } .st-poison { background: #9b4fd0; } .st-freeze { background: #4fa8d0; } .st-glitch { background: #1fae9a; } .st-sleep { background: #6a6ab8; } .st-shield { background: #5f7ad8; }
 @media (max-width: 480px) { .portrait .hud-sub { display: none; } }
 .pop { position: absolute; z-index: 3; transform: translate(-50%, 0); font-family: var(--f-num); font-size: max(11px, calc(var(--u) * 4.4)); color: #fff; text-shadow: calc(var(--u) * 0.5) calc(var(--u) * 0.5) 0 #121a36; pointer-events: none; animation: rise 1s ease-out forwards; }
-.pop.super { color: var(--amber); font-size: max(13px, calc(var(--u) * 5.4)); } .pop.crit { color: #ff8a5a; font-size: max(13px, calc(var(--u) * 5.6)); } .pop.weak { color: #c8d2e8; } .pop.heal { color: var(--good); }
+.pop { display: flex; flex-direction: column; align-items: center; line-height: 1; -webkit-text-stroke: calc(var(--u) * 0.25) #121a36; animation: dmg-pop 1s cubic-bezier(.2,.8,.3,1) forwards; }
+.pop small { font-family: var(--f-pixel); font-size: 0.55em; font-weight: bold; text-shadow: 1px 0 #121a36, -1px 0 #121a36, 0 1px #121a36, 0 -1px #121a36, 1px 1px #121a36, -1px -1px #121a36; letter-spacing: 0.05em; margin-bottom: 0.15em; -webkit-text-stroke: 0; }
+.pop.big { font-size: max(12px, calc(var(--u) * 5)); }
+.pop.super { color: var(--amber); font-size: max(14px, calc(var(--u) * 6)); animation-duration: 1.3s; }
+.pop.crit { color: #ff6a3a; font-size: max(15px, calc(var(--u) * 7)); animation: dmg-crit 1.3s cubic-bezier(.2,.8,.3,1) forwards; }
+.pop.crit small { color: #fff3a0; }
+.pop.weak { color: #c8d2e8; font-size: max(10px, calc(var(--u) * 3.8)); }
+.pop.heal { color: var(--good); animation-name: heal-pop; }
+.pop.miss { color: #e0eaff; font-size: max(10px, calc(var(--u) * 3.6)); animation-name: heal-pop; }
+.pop.block { color: #9ec8ff; font-size: max(10px, calc(var(--u) * 3.6)); }
+@keyframes dmg-pop { 0% { opacity: 0; transform: translate(-50%, 0) scale(0.4); } 12% { opacity: 1; transform: translate(-50%, calc(var(--u) * -3)) scale(1.35); } 26% { transform: translate(-50%, calc(var(--u) * -2)) scale(1); } 70% { opacity: 1; transform: translate(-50%, calc(var(--u) * -4)) scale(1); } 100% { opacity: 0; transform: translate(-50%, calc(var(--u) * -8)) scale(0.9); } }
+@keyframes dmg-crit { 0% { opacity: 0; transform: translate(-50%, 0) scale(0.3) rotate(-8deg); } 10% { opacity: 1; transform: translate(-50%, calc(var(--u) * -4)) scale(1.6) rotate(4deg); } 18% { transform: translate(-48%, calc(var(--u) * -3)) scale(1.1) rotate(-3deg); } 26% { transform: translate(-52%, calc(var(--u) * -3)) scale(1.15) rotate(2deg); } 34% { transform: translate(-50%, calc(var(--u) * -3)) scale(1.1) rotate(0); } 75% { opacity: 1; transform: translate(-50%, calc(var(--u) * -5)) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, calc(var(--u) * -9)) scale(1); } }
+@keyframes heal-pop { 0% { opacity: 0; transform: translate(-50%, calc(var(--u) * 2)); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, calc(var(--u) * -8)); } }
 @keyframes rise { from { opacity: 1; transform: translate(-50%, 0); } to { opacity: 0; transform: translate(-50%, calc(var(--u) * -8)); } }
 .speed { position: absolute; top: calc(var(--u) * 3); right: calc(var(--u) * 3); background: rgba(5, 10, 32, 0.6); border: 1px solid var(--bevel); color: var(--ink); font-size: max(10px, calc(var(--u) * 3.2)); padding: 0.2em 0.6em; cursor: pointer; }
 .log { display: grid; gap: calc(var(--u) * 1); }
@@ -459,3 +471,8 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
   background: rgba(16, 40, 34, 0.94); border: 2px solid #5fdc8c; padding: 0.5em 0.8em; font-size: 0.85em; animation: pop-in 0.3s ease-out; pointer-events: none; }
 .item-toast b { color: #9cf5b8; display: block; margin-bottom: 0.2em; }
 .item-toast .grow { display: flex; flex-direction: column; gap: 0.2em; }
+/* 減少特效：關掉閃光與震動 */
+.reduce-fx .flash { display: none; }
+.reduce-fx .pop { animation-duration: 1.2s; }
+.fx-row input[type=checkbox] { width: 1.3em; height: 1.3em; accent-color: #ffcf4a; }
+.fx-row { grid-template-columns: 7em auto 1fr; }

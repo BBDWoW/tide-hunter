@@ -207,7 +207,7 @@ const F: Form[] = [
     base: { hp: 112, atk: 112, def: 104, spd: 50 }, ability: 'colossal', extra: ['blazing'],
     learn: [[1, 'roar'], [1, 'lavaflow'], [1, 'obsidianedge'], [1, 'eruption'], [16, 'lavafloor'], [20, 'coreburst']], desc: '心臟是一顆熔岩核心的巨獸，傳說裂谷就是牠翻身時撕開的。' },
   { id: 'lavadragon', name: '熔岩海龍王', family: 'lavadragon', stage: 3, rarity: 'A', category: '龍', elems: ['fire', 'water'], sprite: 'lavadragon', pal: 'lavaeel',
-    base: { hp: 100, atk: 82, def: 78, spd: 58 }, ability: 'colossal',
+    base: { hp: 100, atk: 78, def: 76, spd: 58 }, ability: 'colossal',
     learn: [[1, 'heatup'], [1, 'tidewave'], [1, 'lavaflow'], [1, 'eruption'], [1, 'lavafloor']], desc: '熔岩裂谷的霸主，在岩漿與海水的交界處沉睡。' },
   // ── 美術包新增角色（31 隻） ──
   { id: 'thunder_wyrmling', name: '雷靈幼龍', family: 'thunderline', stage: 1, rarity: 'S', category: '龍', elems: ['elec', 'fly'], sprite: 'thunder_wyrmling', pal: 'water',

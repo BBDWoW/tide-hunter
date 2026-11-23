@@ -8,7 +8,8 @@ import { bringBackSlots, releaseValue, achStats, ACHIEVEMENTS, bayCap, bringBack
 import { MAX_STAR, STAR_RULES, todayKey, campHealMul, heldPrice, campSearch, campTrain, buyHeld, equipHeld, refreshCost, refreshShop, shopHeld, canUseOutside, enterSpecial, FINAL_ZONE, ZONE_CHOICES, healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
 import { APP_VERSION, CHANGELOG, hasUnreadNews, markNewsRead } from '../game/version';
-import { loadSound, saveSound, type SoundSettings } from '../audio/engine';
+import { loadSound, saveSound, sfx, type SoundSettings } from '../audio/engine';
+import { fx, setReduceFx } from '../render/fx';
 import { BOONS, LURES } from '../data/boons';
 import { HELD, resonance, type HeldId } from '../data/held';
 import { chartPos, drawChart, drawDeep, drawPort, drawSea, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
@@ -17,7 +18,7 @@ import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 
 export function MenuItem({ children, onClick, disabled, hot, sel, sub, onHover }: { children: ComponentChildren; onClick: () => void; disabled?: boolean; hot?: boolean; sel?: boolean; sub?: ComponentChildren; onHover?: () => void }) {
   return (
-    <button class={`mi ${hot ? 'hot' : ''} ${sel ? 'sel' : ''}`} onClick={onClick} disabled={disabled} onMouseEnter={onHover} onFocus={onHover} aria-pressed={sel}>
+    <button class={`mi ${hot ? 'hot' : ''} ${sel ? 'sel' : ''}`} onClick={() => { sfx('select'); onClick(); }} disabled={disabled} onMouseEnter={onHover} onFocus={onHover} aria-pressed={sel}>
       <span class="cursor">▶</span><span class="mi-main">{children}</span>{sub && <span class="mi-sub">{sub}</span>}
     </button>
   );
@@ -34,6 +35,7 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
   const [news, setNews] = useState(false);
   const [sound, setSound] = useState(false);
   const [snd, setSnd] = useState(loadSound);
+  const [reduce, setReduce] = useState(fx.reduce);
   const updSnd = (p: Partial<SoundSettings>) => { const n = { ...snd, ...p }; setSnd(n); saveSound(n); };
   const [unread, setUnread] = useState(hasUnreadNews);
   const openNews = () => { setNews(true); setUnread(false); markNewsRead(); };
@@ -44,7 +46,7 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
         <div class="title-logo"><span class="title-en">TIDE HUNTER</span><h1>潮汐獵手</h1><span class="title-sub">釣起潮靈 · 收服 · 進化 · 挑戰霸主</span>{titleOf(meta) && <span class="title-badge">🏅 {titleOf(meta)}</span>}</div>
         <div class="title-tools">
           <button class="tool-btn" onClick={onHelp} aria-label="玩法說明">❓</button>
-          <button class="tool-btn" onClick={() => { setNews(false); setSound(!sound); }} aria-label="聲音設定">{snd.muted ? '🔇' : '🔊'}</button>
+          <button class="tool-btn" onClick={() => { setNews(false); setSound(!sound); }} aria-label="聲音與特效設定">{snd.muted ? '🔇' : '🔊'}</button>
           <button class="tool-btn news-btn" onClick={() => { setSound(false); news ? setNews(false) : openNews(); }} aria-label="更新通知">📢 通知{unread && <i class="news-dot" aria-label="有新消息" />}</button>
         </div>
         <span class="app-version">v{APP_VERSION}</span>
@@ -64,9 +66,11 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
           <MenuItem onClick={begin} hot>出航！</MenuItem>
         </Win>
       ) : sound ? (
-        <Win class="big-panel sound-panel" title="聲音設定">
+        <Win class="big-panel sound-panel" title="聲音與特效設定">
           <label class="snd-row"><span>背景音樂</span><input type="range" min="0" max="100" value={Math.round(snd.music * 100)} onInput={(e) => updSnd({ music: Number((e.target as HTMLInputElement).value) / 100 })} /><b>{Math.round(snd.music * 100)}</b></label>
           <label class="snd-row"><span>海浪與環境音</span><input type="range" min="0" max="100" value={Math.round(snd.amb * 100)} onInput={(e) => updSnd({ amb: Number((e.target as HTMLInputElement).value) / 100 })} /><b>{Math.round(snd.amb * 100)}</b></label>
+          <label class="snd-row"><span>音效</span><input type="range" min="0" max="100" value={Math.round(snd.sfx * 100)} onInput={(e) => updSnd({ sfx: Number((e.target as HTMLInputElement).value) / 100 })} onChange={() => sfx('hit')} /><b>{Math.round(snd.sfx * 100)}</b></label>
+          <label class="snd-row fx-row"><span>減少特效</span><input type="checkbox" checked={reduce} onChange={(e) => { const v = (e.target as HTMLInputElement).checked; setReduce(v); setReduceFx(v); }} /><span class="small dim">關掉畫面震動與閃光、減少粒子</span></label>
           <MenuItem onClick={() => updSnd({ muted: !snd.muted })} hot={snd.muted}>{snd.muted ? '🔇 目前靜音，點一下開啟聲音' : '🔊 點一下靜音'}</MenuItem>
           <p class="small dim">聲音會在第一次點擊畫面後開始播放。電腦上也可以按 M 鍵切換靜音。</p>
           <MenuItem onClick={() => setSound(false)}>關閉</MenuItem>

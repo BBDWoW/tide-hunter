@@ -18,6 +18,7 @@ import { Tip, AbilityLines, Bar, ElemChip, Elems, Energy, IvStars, RarityTag, Sk
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
 import { Reel } from './Reel';
+import { sfx } from '../audio/engine';
 
 export interface BattleResult { outcome: 'win' | 'lose' | 'caught' | 'fled'; enemy: Mon; participants: string[]; team?: Mon[] }
 /** 對手下一步的預告 */
@@ -25,7 +26,7 @@ interface Intent { key: string; act: Action; icon: string; name: string; elem: E
 
 type Mode = 'busy' | 'main' | 'skills' | 'switch' | 'force' | 'items' | 'itemTarget' | 'reel' | 'lifestone';
 interface Disp { form: string; lv: number; hp: number; max: number; energy: number; status: StatusId | null; shield: number; trap?: number; mutant?: boolean }
-interface Popup { id: number; side: SideId; text: string; cls: string }
+interface Popup { id: number; side: SideId; text: string; cls: string; label?: string; dx: number }
 
 const SPEED_KEY = 'tidehunter.speed';
 const DASH = 0.5; // 近戰衝刺的時間（秒）
@@ -98,16 +99,21 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     mons: [mkView(0, disp.current[0].form), mkView(1, disp.current[1].form)] as MonView[],
     lungeT: [0, 0], dashT: [0, 0], shakeT: [0, 0], fade: [1, 1] as number[], enter: [0, 0] as number[],
     parts: [] as Particle[], beams: [] as Beam[],
+    quake: 0, flash: 0, flashColor: '#ffffff',
   });
+  // 開發用：網址加 ?field=storm 可以直接看場地特效
+  const fieldRef = useRef<string | null>(import.meta.env.DEV ? new URLSearchParams(location.search).get('field') : null);
 
   const hurry = useRef(false); // 點訊息框：這一輪的演出加速
   const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, hurry.current ? ms * 0.15 : fastRef.current ? ms * 0.45 : ms));
   const say = (text: string) => setLog((l) => [...l.slice(-30), text]);
-  const pop = (side: SideId, text: string, cls: string) => {
+  const pop = (side: SideId, text: string, cls: string, label?: string) => {
     const id = Math.random();
-    setPopups((p) => [...p, { id, side, text, cls }]);
-    setTimeout(() => setPopups((p) => p.filter((x) => x.id !== id)), 1000);
+    setPopups((p) => [...p, { id, side, text, cls, label, dx: (Math.random() - 0.5) * 8 }]);
+    setTimeout(() => setPopups((p) => p.filter((x) => x.id !== id)), cls === 'crit' || cls === 'super' ? 1300 : 1000);
   };
+  /** 畫面震動、全畫面閃光 */
+  const jolt = (quake: number, flash = 0, color = '#ffffff') => { const a = anim.current; a.quake = Math.max(a.quake, quake); if (flash) { a.flash = flash; a.flashColor = color; } };
 
   // 每一格畫面：更新動畫狀態後繪製
   const draw = (ctx: CanvasRenderingContext2D, t: number, dt: number) => {
@@ -132,8 +138,13 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       a.shakeT[side] = Math.max(0, a.shakeT[side] - dt);
       v.shake = a.shakeT[side] > 0 ? 1 : 0;
       v.alpha = e * a.fade[side];
+      v.enter = a.enter[side] < 1 ? a.enter[side] : undefined;
+      const dd = disp.current[side]; v.low = dd.hp > 0 && dd.hp / dd.max < 0.25;
     }
-    drawBattle(ctx, t, dt, a.mons, a.parts, a.beams, zoneOf(run).theme);
+    // 震動、閃光慢慢消退
+    const q = a.quake, fl = a.flash;
+    a.quake = Math.max(0, a.quake - dt * 14); a.flash = Math.max(0, a.flash - dt * 2.2);
+    drawBattle(ctx, t, dt, a.mons, a.parts, a.beams, zoneOf(run).theme, { field: fieldRef.current, quake: q, flash: fl, flashColor: a.flashColor });
     if (net.current) { const c = monSlot(1, a.mons[1].form); const n = net.current; n.glow = Math.max(0, n.glow - dt); drawNet(ctx, c.cx, c.cy + 6, n.wob, n.glow); }
   };
 
@@ -141,6 +152,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   useEffect(() => {
     (async () => {
       const ef = FORMS[enc.mon.form];
+      sfx('enter');
+      if (boss) { setTimeout(() => { sfx('enrage'); jolt(4, 0.3, '#200010'); }, 350); }
       await wait(500);
       if (crew) { say(`「${enc.crew}」的船隊攔住了去路！（${enc.team!.length} 隻）`); await wait(500); say(`${enc.crew}派出了 ${ef.name}！`); }
       else if (boss) { for (const line of BOSS_INTRO[enc.mon.form] ?? []) { say(line); await wait(900); } say(`霸主「${ef.name}」擋住了去路！`); }
@@ -166,6 +179,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         const sk = SKILLS[e.skill] ?? { anim: 'hit', elem: null };
         const foe: SideId = e.side === 0 ? 1 : 0, c = center(foe), me = center(e.side);
         const kind = sk.anim ?? 'hit';
+        sfx(kind === 'buff' ? 'buff' : kind === 'heal' ? 'item' : `skill:${sk.elem ?? 'none'}`);
         if (kind === 'buff' || kind === 'heal') { burst(a.parts, me.x, me.y, kind, sk.elem); }
         else if (kind === 'hit' && (sk as { power?: number }).power && !RANGED_HIT.has(e.skill)) {
           // 近戰招式：衝過去打
@@ -180,25 +194,33 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         await wait(260); break;
       }
       case 'miss': break;
-      case 'dodge': { a.shakeT[e.side] = 0.15; pop(e.side, '閃避！', 'weak'); await wait(200); break; }
-      case 'block': { pop(e.side, '格擋', 'weak'); break; }
+      case 'dodge': { sfx('dodge'); a.shakeT[e.side] = 0.15; a.lungeT[e.side] = 0.25; pop(e.side, '閃避！', 'miss'); await wait(200); break; }
+      case 'block': { sfx('block'); pop(e.side, '格擋', 'block'); break; }
       case 'dmg': {
         d[e.side].hp = e.hp; d[e.side].shield = e.shield;
         a.mons[e.side].flash = 0.35; a.shakeT[e.side] = 0.3;
-        pop(e.side, `-${e.amount}`, e.crit ? 'crit' : e.eff >= 2 ? 'super' : e.eff < 1 ? 'weak' : '');
-        rerender(); await wait(420); break;
+        // 打擊感：暴擊與效果絕佳會震動畫面、閃光，並停頓一下（hit-stop）
+        const big = e.amount >= d[e.side].max * 0.25;
+        if (e.crit) { sfx('crit'); jolt(3.5, 0.35); }
+        else if (e.eff >= 2) { sfx('super'); jolt(2.5, 0.22, '#ffe08a'); }
+        else if (e.eff > 0 && e.eff < 1) sfx('weak');
+        else { sfx('hit'); if (big) jolt(1.5); }
+        pop(e.side, `-${e.amount}`, e.crit ? 'crit' : e.eff >= 2 ? 'super' : e.eff < 1 ? 'weak' : big ? 'big' : '', e.crit ? '暴擊！' : e.eff >= 2 ? '效果絕佳' : e.eff > 0 && e.eff < 1 ? '效果不好' : undefined);
+        rerender();
+        if (e.crit || e.eff >= 2) await new Promise((r) => setTimeout(r, 110)); // 停頓不受快速模式影響
+        await wait(420); break;
       }
       case 'heal': {
         d[e.side].hp = e.hp; const c = center(e.side);
-        if (e.amount > 0) { burst(a.parts, c.x, c.y, 'heal', null); pop(e.side, `+${e.amount}`, 'heal'); }
+        if (e.amount > 0) { sfx('heal'); burst(a.parts, c.x, c.y, 'heal', null); pop(e.side, `+${e.amount}`, 'heal'); }
         rerender(); await wait(300); break;
       }
       case 'shield': d[e.side].shield = e.amount; rerender(); break;
-      case 'status': d[e.side].status = e.status; rerender(); break;
-      case 'stat': { const c = center(e.side); if (e.delta > 0) burst(a.parts, c.x, c.y, 'buff', null); else a.shakeT[e.side] = 0.2; pop(e.side, e.delta > 0 ? '▲' : '▼', e.delta > 0 ? 'heal' : 'weak'); break; }
+      case 'status': if (e.status) sfx('status'); d[e.side].status = e.status; rerender(); break;
+      case 'stat': { sfx(e.delta > 0 ? 'buff' : 'debuff'); const c = center(e.side); if (e.delta > 0) burst(a.parts, c.x, c.y, 'buff', null); else a.shakeT[e.side] = 0.2; pop(e.side, e.delta > 0 ? '▲' : '▼', e.delta > 0 ? 'heal' : 'weak'); break; }
       case 'energy': d[e.side].energy = e.value; rerender(); break;
       case 'faint': {
-        const c = center(e.side); burst(a.parts, c.x, c.y, 'faint', null);
+        sfx('faint'); const c = center(e.side); burst(a.parts, c.x, c.y, 'faint', null);
         for (let i = 0; i < 10; i++) { a.fade[e.side] = 1 - (i + 1) / 10; await wait(40); }
         break;
       }
@@ -208,13 +230,17 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         a.mons[e.side] = { ...a.mons[e.side], form: e.form, scale: monSlot(e.side, e.form).scale, y: monSlot(e.side, e.form).y, aura: auraColor(e.form), mutant: bs.sides[e.side].team[e.index].mutant };
         const m = bs.sides[e.side].team[e.index];
         d[e.side] = { form: e.form, lv: m.lv, hp: e.hp, max: maxHp(m), energy: e.energy, status: e.status, shield: 0, mutant: m.mutant };
+        sfx('enter');
+        // 落地時濺起水花
+        setTimeout(() => { const c = center(e.side); burst(a.parts, c.x, c.y + 14, 'splash', 'water'); }, 380);
         rerender(); await wait(350); break;
       }
-      case 'field': setField(e.id ? { id: e.id, turns: e.turns } : null); break;
+      case 'field': if (e.id && e.id !== fieldRef.current) { sfx('buff'); jolt(1, 0.2, '#ffffff'); } fieldRef.current = e.id; setField(e.id ? { id: e.id, turns: e.turns } : null); break;
       case 'trap': d[e.side].trap = e.turns; rerender(); break;
       case 'item': {
         // 用道具的結果：固定顯示 2.5 秒（不受快速、加速影響），看得清楚回了多少
         if (e.side !== 0) break;
+        sfx('heal');
         const m = bs.sides[0].team[e.target], id = Math.random();
         setToast({ id, text: e.text, form: m.form, from: e.from, hp: e.hp, max: e.max });
         setTimeout(() => setToast((t) => (t?.id === id ? null : t)), 2500);
@@ -222,7 +248,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       }
       case 'enrage': {
         const c = center(e.side), v = a.mons[e.side];
-        v.aura = '#ff3040'; v.flash = 0.6; a.shakeT[e.side] = 0.8;
+        v.aura = '#ff3040'; v.flash = 0.6; a.shakeT[e.side] = 0.8; sfx('enrage'); jolt(5, 0.4, '#ff2030');
         burst(a.parts, c.x, c.y, 'faint', 'fire'); burst(a.parts, c.x, c.y, 'buff', 'fire');
         pop(e.side, '狂暴！', 'crit'); await wait(700); break;
       }
@@ -242,9 +268,10 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   async function finish(caught = false) {
     const over = bs.over;
     let outcome: BattleResult['outcome'] = caught ? 'caught' : over?.fled ? 'fled' : over?.winner === 0 ? 'win' : 'lose';
-    if (outcome === 'win') { say('戰鬥勝利！'); }
+    if (outcome === 'win') { sfx('win'); say('戰鬥勝利！'); }
+    if (outcome === 'caught') sfx('catch');
     if (outcome === 'lose') {
-      say('你的隊伍全部倒下了……');
+      sfx('lose'); say('你的隊伍全部倒下了……');
       if ((run.lifeStones ?? 0) > 0) { await wait(500); say(`要使用生命石讓全隊復活嗎？（剩 ${run.lifeStones} 顆）`); setMode('lifestone'); return; }
     }
     await wait(1100);
@@ -300,9 +327,10 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     const a = anim.current, c = center(1);
     for (let i = 0; i < 10; i++) { a.fade[1] = 1 - (i + 1) / 10; await wait(30); }
     net.current = { wob: 0, glow: 0 };
-    say(`收線成功！${name} 被網住了……`);
+    sfx('splash'); say(`收線成功！${name} 被網住了……`);
     await wait(700);
     for (let i = 0; i < shakes.length; i++) {
+      sfx('shake');
       for (const w of [-1, 1, -0.6, 0.6, 0]) { net.current.wob = w; await wait(110); }
       if (!shakes[i]) break;
       say(['晃動了一下……', '又晃了一下……', '再一下……！'][i]);
@@ -317,7 +345,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     } else {
       net.current = null; burst(a.parts, c.x, c.y + 6, 'splash', 'water');
       a.fade[1] = 1;
-      say(`可惡！${name} 掙脫了網子！`);
+      sfx('escape'); say(`可惡！${name} 掙脫了網子！`);
       await wait(500);
       await submit({ type: 'pass' });
     }
@@ -348,7 +376,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const toggleFast = () => { const v = !fast; setFast(v); try { localStorage.setItem(SPEED_KEY, v ? 'fast' : 'normal'); } catch { /* 略過 */ } };
 
   const reel = <Reel rarity={FORMS[foe.form].rarity} hpRatio={foe.hp / maxHp(foe)} hasStatus={!!foe.status} name={FORMS[foe.form].name} zoneBonus={boon(run, 'reelzone') * 0.15 + (run.perks?.reel ?? 0)} onDone={onReel} />;
-  const startReel = () => { if (run.catchBait <= 0) return; run.catchBait--; setMode('reel'); };
+  const startReel = () => { if (run.catchBait <= 0) return; sfx('cast'); run.catchBait--; setMode('reel'); };
   const picking = mode === 'switch' || mode === 'force' || mode === 'itemTarget';
   const hs = (mode === 'main' || mode === 'skills') && peek >= 0 ? SKILLS[me.skills[peek]] : null;
   const hi = mode === 'items' ? (Object.keys(ITEMS) as ItemId[])[hover] : null;
@@ -361,7 +389,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         <HudBox onOpen={() => setInfo(0)} side={0} d={dp} charged={volOf(bs, 0).charged} locked={volOf(bs, 0).lockOn} turns={active(bs, 0).statusTurns} />
         {popups.map((p) => {
           const c = monSlot(p.side, disp.current[p.side].form);
-          return <span key={p.id} class={`pop ${p.cls}`} style={{ left: `${(c.cx / W) * 100}%`, top: `${((c.cy - 30) / H) * 100}%` }}>{p.text}</span>;
+          return <span key={p.id} class={`pop ${p.cls}`} style={{ left: `${((c.cx + p.dx) / W) * 100}%`, top: `${((c.cy - 30) / H) * 100}%` }}>{p.label && <small>{p.label}</small>}{p.text}</span>;
         })}
         {field && <div class="field-chip" style={{ borderColor: FIELDS[field.id].color }} title={FIELDS[field.id].desc}><i style={{ background: FIELDS[field.id].color }} />{FIELDS[field.id].name}<span>剩 {field.turns} 回合</span></div>}
         <button class="speed" onClick={toggleFast} aria-pressed={fast}>{fast ? '▶▶ 快速' : '▶ 一般'}</button>

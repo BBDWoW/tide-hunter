@@ -3,6 +3,7 @@ import { FORMS, recolorOf } from '../data/creatures';
 import { ELEM, type Elem } from '../data/types';
 import { drawSprite, PAL, spriteSize } from './pixel';
 import { sceneArt } from './art';
+import { fx, partMul } from './fx';
 
 export const W = 256, H = 144;
 /** 橫向延伸：bleed = 左右各多畫幾個像素；wide = 這一格已經畫了延伸的背景 */
@@ -342,7 +343,9 @@ function foamRing(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: num
   }
 }
 
-export interface MonView { form: string; x: number; y: number; flip: boolean; flash: number; shake: number; lunge: number; alpha: number; scale: number; tint?: string; aura?: string; mutant?: boolean }
+export interface MonView { form: string; x: number; y: number; flip: boolean; flash: number; shake: number; lunge: number; alpha: number; scale: number; tint?: string; aura?: string; mutant?: boolean; enter?: number; low?: boolean }
+/** 戰鬥畫面的額外演出：場地、畫面震動、全畫面閃光 */
+export interface BattleFx { field?: string | null; quake?: number; flash?: number; flashColor?: string }
 export interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; g?: number }
 export interface Beam { x0: number; y0: number; x1: number; y1: number; life: number; color: string }
 
@@ -366,8 +369,13 @@ function shadow(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: number
   for (let y = -2; y <= 2; y++) { const hw = Math.round(w * Math.sqrt(1 - (y * y) / 6.5)); ctx.fillRect(cx - hw, cy + y, hw * 2, 1); }
 }
 
-export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number, mons: (MonView | null)[], parts: Particle[], beams: Beam[], theme: ThemeId = 'day') {
+export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number, mons: (MonView | null)[], parts: Particle[], beams: Beam[], theme: ThemeId = 'day', bfx: BattleFx = {}) {
+  // 畫面震動（減少特效時關掉）
+  const q = fx.reduce ? 0 : bfx.quake ?? 0;
+  ctx.save();
+  if (q > 0) ctx.translate(Math.round((Math.random() - 0.5) * q * 2), Math.round((Math.random() - 0.5) * q * 2));
   drawBattleBg(ctx, t, theme);
+  if (bfx.field) drawFieldBack(ctx, t, bfx.field);
   for (const [i, m] of mons.entries()) {
     if (!m || m.alpha <= 0) continue;
     const base = i === 0 ? BATTLE.player : BATTLE.enemy;
@@ -379,8 +387,14 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
     const f = FORMS[m.form];
     const fr = Math.floor(t * 3 + i) % 2;
     const sx = m.x + m.lunge * (m.flip ? -1 : 1) + (m.shake ? Math.round(Math.sin(t * 60) * 2) : 0);
-    const sy = m.y + Math.round(Math.sin(t * 2.4 + i) * 1.2);
-    const white = m.flash > 0 && Math.floor(m.flash * 20) % 2 === 0;
+    // 待機：呼吸般上下浮動，偶爾小跳一下；HP 很低時動作變慢、會發抖
+    const ph = (t + i * 1.7) % (m.low ? 5 : 3.4);
+    const hop = !m.low && ph < 0.32 ? -Math.round(Math.sin((ph / 0.32) * Math.PI) * 2) : 0;
+    const shiver = m.low && ph < 0.4 ? Math.round(Math.sin(t * 50)) : 0;
+    const sy = m.y + Math.round(Math.sin(t * (m.low ? 1.4 : 2.4) + i) * 1.2) + hop;
+    const sxx = sx + shiver;
+    // 登場：前半段是白色剪影
+    const white = (m.flash > 0 && Math.floor(m.flash * 20) % 2 === 0) || (m.enter !== undefined && m.enter < 0.55);
     const rc = recolorOf(m.form, m.mutant);
     if (m.aura) {
       // 光環：脈動的發光外框＋上升的能量粒子
@@ -390,7 +404,7 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
       }
       if (Math.random() < dt * 14) parts.push({ x: sx + n * (0.15 + Math.random() * 0.7), y: sy + n * (0.5 + Math.random() * 0.4), vx: (Math.random() - 0.5) * 6, vy: -18 - Math.random() * 16, life: 0.9, max: 0.9, color: Math.random() < 0.5 ? m.aura : '#ffffff', size: Math.random() < 0.3 ? 2 : 1 });
     }
-    drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(sx), Math.round(sy), { f: fr, flip: m.flip, alpha: m.alpha, scale: m.scale, tint: white ? '#ffffff' : m.tint, recolor: rc });
+    drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(sxx), Math.round(sy), { f: fr, flip: m.flip, alpha: m.alpha, scale: m.scale, tint: white ? '#ffffff' : m.tint, recolor: rc });
   }
   for (const b of beams) {
     ctx.globalAlpha = Math.min(1, b.life * 4);
@@ -406,11 +420,58 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
   }
   ctx.globalAlpha = 1;
   for (let i = parts.length - 1; i >= 0; i--) if (parts[i].life <= 0) parts.splice(i, 1);
+  if (bfx.field) drawFieldFront(ctx, t, dt, bfx.field, parts);
+  ctx.restore();
+  // 全畫面閃光（效果絕佳、暴擊、狂暴）
+  if (!fx.reduce && (bfx.flash ?? 0) > 0) { ctx.globalAlpha = Math.min(0.55, bfx.flash!); ctx.fillStyle = bfx.flashColor ?? '#ffffff'; ctx.fillRect(-view.bleed, 0, W + view.bleed * 2, H); ctx.globalAlpha = 1; }
+}
+
+// ── 場地特效 ──
+function drawFieldBack(ctx: CanvasRenderingContext2D, t: number, id: string) {
+  const L = -view.bleed, WW = W + view.bleed * 2;
+  ctx.save();
+  if (id === 'storm') { ctx.globalAlpha = 0.28; ctx.fillStyle = '#141a3a'; ctx.fillRect(L, 0, WW, H); }
+  if (id === 'abyss') { ctx.globalAlpha = 0.42; ctx.fillStyle = '#120a2a'; ctx.fillRect(L, 0, WW, H); ctx.globalAlpha = 0.35; ctx.fillStyle = '#05020f'; for (let y = 0; y < H; y++) { const e = Math.max(0, 40 - y) + Math.max(0, y - 110); if (e) ctx.fillRect(L, y, WW, 1); } }
+  if (id === 'lava') { ctx.globalAlpha = 0.24 + Math.sin(t * 2) * 0.05; ctx.fillStyle = '#ff4a1a'; ctx.fillRect(L, 60, WW, H - 60); ctx.globalAlpha = 0.5; ctx.fillStyle = '#ffb03a'; for (let x = L; x < W + view.bleed; x += 3) { if (Math.sin(x * 0.3 + t * 1.5) > 0.6) ctx.fillRect(x, 70 + ((x * 7) % 70), 2, 1); } }
+  if (id === 'tide') { // 水位上漲：波浪線在畫面下半部起伏
+    ctx.globalAlpha = 0.2; ctx.fillStyle = '#3a9be0'; ctx.fillRect(L, 98, WW, H - 98);
+    for (const [yy, a] of [[98, 0.8], [112, 0.5], [126, 0.4]] as const) { ctx.globalAlpha = a; ctx.fillStyle = '#d8f4ff'; for (let x = L; x < W + view.bleed; x += 2) { const y = yy + Math.round(Math.sin(x * 0.09 + t * 2.2 + yy) * 2); ctx.fillRect(x, y, 2, 1); } }
+  }
+  if (id === 'aurora') { // 天空的極光帶
+    for (let b = 0; b < 3; b++) {
+      ctx.globalAlpha = 0.38 + Math.sin(t + b) * 0.08; ctx.fillStyle = ['#7fffd0', '#7fd8ff', '#c89aff'][b];
+      for (let x = L; x < W + view.bleed; x += 2) { const y = 6 + b * 8 + Math.round(Math.sin(x * 0.04 + t * 0.8 + b) * 5); ctx.fillRect(x, y, 2, 5); }
+    }
+  }
+  if (id === 'grid') { ctx.globalAlpha = 0.16; ctx.fillStyle = '#3affd0'; for (let x = (Math.floor(L / 16) * 16) + Math.round(t * 6) % 16; x < W + view.bleed; x += 16) ctx.fillRect(x, 50, 1, H - 50); for (let y = 54 + Math.round(t * 4) % 12; y < H; y += 12) ctx.fillRect(L, y, WW, 1); }
+  if (id === 'grove') { ctx.globalAlpha = 0.16; ctx.fillStyle = '#7ee36a'; ctx.fillRect(L, 0, WW, H); ctx.globalAlpha = 0.3; ctx.fillStyle = '#fff6b0'; for (let i = 0; i < 4; i++) { const x = L + 30 + i * 70 + Math.round(Math.sin(t * 0.5 + i) * 6); for (let y = 0; y < 90; y += 2) ctx.fillRect(x + y * 0.3, y, 6, 2); } }
+  ctx.restore();
+}
+function drawFieldFront(ctx: CanvasRenderingContext2D, t: number, dt: number, id: string, parts: Particle[]) {
+  const L = -view.bleed, WW = W + view.bleed * 2, k = partMul();
+  const spawn = (rate: number, mk: () => Particle) => { if (Math.random() < dt * rate * k) parts.push(mk()); };
+  if (id === 'storm') {
+    ctx.save(); ctx.globalAlpha = 0.45; ctx.fillStyle = '#c8d8ff';
+    for (let i = 0; i < 40 * k; i++) { const x = (i * 37 + Math.floor(t * 220)) % (WW + 40) + L - 20, y = (i * 53 + Math.floor(t * 260)) % H; ctx.fillRect(x, y, 1, 4); }
+    ctx.restore();
+    if (!fx.reduce && (t % 4.3) < 0.08) { ctx.globalAlpha = 0.35; ctx.fillStyle = '#fff8c0'; ctx.fillRect(L, 0, WW, H); ctx.globalAlpha = 1; }
+  }
+  if (id === 'fog') {
+    ctx.save();
+    for (let b = 0; b < 4; b++) { ctx.globalAlpha = 0.18; ctx.fillStyle = '#e4ecf6'; const y = 40 + b * 22, x = ((t * (6 + b * 3) + b * 70) % (WW + 120)) + L - 120; ctx.fillRect(Math.round(x), y, 120, 10); ctx.fillRect(Math.round(x) + 14, y - 3, 90, 16); }
+    ctx.restore();
+  }
+  if (id === 'lava') spawn(26, () => ({ x: L + Math.random() * WW, y: H, vx: (Math.random() - 0.5) * 6, vy: -18 - Math.random() * 20, life: 2, max: 2, color: Math.random() < 0.5 ? '#ffb03a' : '#ff5a1a', size: 1 }));
+  if (id === 'grove') spawn(10, () => ({ x: L + Math.random() * WW, y: -2, vx: 8 + Math.random() * 8, vy: 10 + Math.random() * 8, life: 6, max: 6, color: Math.random() < 0.5 ? '#7ee36a' : '#ffd0e8', size: 2 }));
+  if (id === 'abyss') spawn(12, () => ({ x: L + Math.random() * WW, y: 60 + Math.random() * 80, vx: 0, vy: -4 - Math.random() * 4, life: 3, max: 3, color: Math.random() < 0.6 ? '#7a5ad0' : '#c89aff', size: 1 }));
+  if (id === 'aurora') spawn(4, () => ({ x: L + Math.random() * WW, y: Math.random() * 40, vx: 0, vy: 3, life: 2.5, max: 2.5, color: '#ffffff', size: 1 }));
+  if (id === 'grid') spawn(8, () => ({ x: L + Math.random() * WW, y: 50 + Math.random() * 90, vx: 0, vy: 0, life: 0.5, max: 0.5, color: Math.random() < 0.5 ? '#3affd0' : '#ffffff', size: 2 }));
+  if (id === 'tide') spawn(5, () => ({ x: L + Math.random() * WW, y: 112 + Math.random() * 30, vx: 0, vy: -8, life: 1.2, max: 1.2, color: '#d8f4ff', size: 1 }));
 }
 
 export function burst(parts: Particle[], x: number, y: number, kind: 'hit' | 'splash' | 'buff' | 'heal' | 'beam' | 'faint', elem: Elem | null) {
   const col = elem ? ELEM[elem].color : '#ffffff';
-  const n = kind === 'faint' ? 34 : 18;
+  const n = Math.max(4, Math.round((kind === 'faint' ? 34 : 18) * partMul()));
   for (let i = 0; i < n; i++) {
     const a = Math.random() * Math.PI * 2, sp = 24 + Math.random() * 56;
     if (kind === 'buff') parts.push({ x: x - 14 + Math.random() * 28, y: y + 12, vx: 0, vy: -26 - Math.random() * 20, life: 0.8, max: 0.8, color: i % 2 ? '#ffcf4a' : '#ffffff', size: 2 });
@@ -418,6 +479,24 @@ export function burst(parts: Particle[], x: number, y: number, kind: 'hit' | 'sp
     else if (kind === 'splash') parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30, g: 140, life: 0.6, max: 0.6, color: i % 3 ? col : '#ffffff', size: 2 });
     else if (kind === 'faint') parts.push({ x: x - 16 + Math.random() * 32, y: y - 16 + Math.random() * 32, vx: (Math.random() - 0.5) * 20, vy: -10 - Math.random() * 30, life: 1, max: 1, color: i % 2 ? '#5ff1e0' : '#ffffff', size: 1 + (i % 2) });
     else parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.4, max: 0.4, color: i % 2 ? col : '#ffffff', size: i % 4 ? 1 : 2 });
+  }
+  if ((kind === 'hit' || kind === 'splash' || kind === 'beam') && elem) elemBurst(parts, x, y, elem);
+}
+/** 屬性專屬的命中特效 */
+function elemBurst(parts: Particle[], x: number, y: number, e: Elem) {
+  const n = Math.max(3, Math.round(14 * partMul())), r = Math.random;
+  for (let i = 0; i < n; i++) {
+    switch (e) {
+      case 'fire': parts.push({ x: x - 10 + r() * 20, y: y + 4 - r() * 8, vx: (r() - 0.5) * 20, vy: -30 - r() * 40, life: 0.7, max: 0.7, color: ['#ffef7a', '#ffb03a', '#ff5a1a'][i % 3], size: i % 3 ? 1 : 2 }); break;
+      case 'water': parts.push({ x, y, vx: (r() - 0.5) * 90, vy: -40 - r() * 50, g: 220, life: 0.8, max: 0.8, color: i % 2 ? '#7fd0ff' : '#ffffff', size: 2 }); break;
+      case 'elec': { const a = r() * Math.PI * 2; for (let k = 0; k < 4; k++) parts.push({ x: x + Math.cos(a) * k * 4 + (r() - 0.5) * 3, y: y + Math.sin(a) * k * 4 + (r() - 0.5) * 3, vx: 0, vy: 0, life: 0.18 + k * 0.03, max: 0.3, color: k % 2 ? '#fff6a0' : '#ffd21a', size: 1 }); break; }
+      case 'ice': parts.push({ x: x - 14 + r() * 28, y: y - 14 + r() * 20, vx: (r() - 0.5) * 30, vy: 10 + r() * 20, life: 0.9, max: 0.9, color: i % 2 ? '#dff8ff' : '#7fd8e8', size: 2 }); break;
+      case 'grass': parts.push({ x, y, vx: (r() - 0.5) * 80, vy: -20 - r() * 30, g: 40, life: 1, max: 1, color: i % 2 ? '#7ee36a' : '#3aa84a', size: 2 }); break;
+      case 'rock': parts.push({ x, y, vx: (r() - 0.5) * 100, vy: -50 - r() * 40, g: 260, life: 0.8, max: 0.8, color: i % 2 ? '#a08060' : '#6c5f50', size: 2 + (i % 2) }); break;
+      case 'dark': parts.push({ x: x - 12 + r() * 24, y: y - 8 + r() * 16, vx: (r() - 0.5) * 14, vy: -6 - r() * 10, life: 1, max: 1, color: i % 2 ? '#5b3a9a' : '#2a1a4a', size: 3 }); break;
+      case 'data': parts.push({ x: x - 16 + r() * 32, y: y - 16 + r() * 32, vx: 0, vy: 0, life: 0.2 + r() * 0.4, max: 0.6, color: ['#3affd0', '#ffffff', '#1fae9a'][i % 3], size: 2 + (i % 2) }); break;
+      case 'fly': parts.push({ x: x - 20 + r() * 10, y: y - 12 + r() * 24, vx: 90 + r() * 60, vy: 0, life: 0.3, max: 0.3, color: '#ffffff', size: 1 }); break;
+    }
   }
 }
 

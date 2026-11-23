@@ -5,6 +5,7 @@ import { castTarget, judgeLanding, landingZones, nodeOf, rollShadows, rollTreasu
 import { drawFishing, type FishPhase, type FishView } from '../render/scene';
 import { useTap } from './input';
 import { Tip } from './components';
+import { sfx } from '../audio/engine';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
 
@@ -58,7 +59,7 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
     setMsg('換個位置再拋一次！');
     setP('choose');
   };
-  const startCast = () => { st.current.t = Math.random() * 2; setP('cast'); setMsg('停在黃色區域！紅色是完美落點。'); };
+  const startCast = () => { sfx('select'); st.current.t = Math.random() * 2; setP('cast'); setMsg('停在黃色區域！紅色是完美落點。'); };
 
   const draw = (ctx: CanvasRenderingContext2D, t: number, dt: number) => {
     const s = st.current, v = s.view; s.t += dt;
@@ -68,6 +69,7 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
     } else if (v.phase === 'flying') {
       v.castT += dt;
       if (v.castT >= 0.6) {
+        sfx('splash');
         setP('wait');
         // 甩太偏，魚會被嚇到：等比較久、假咬鉤比較多
         const spook = s.land === 'far' ? 2 : s.land === 'miss' ? 1 : 0;
@@ -77,8 +79,8 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
     } else if (v.phase === 'wait') {
       s.wait -= dt;
       if (s.wait <= 0) {
-        if (s.nibbles > 0) { s.nibbles--; s.nib = 0.55; setP('nibble'); }
-        else { setP('bite'); s.bite = 0.9; setMsg('咬鉤了！'); }
+        if (s.nibbles > 0) { s.nibbles--; s.nib = 0.55; sfx('nibble'); setP('nibble'); }
+        else { sfx('bite'); setP('bite'); s.bite = 0.9; setMsg('咬鉤了！'); }
       }
     } else if (v.phase === 'nibble') {
       s.nib -= dt;
@@ -100,13 +102,14 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
       s.q = s.land === 'perfect' ? 1 : 0.5;
       // 浮標落在實際甩到的位置（太大力會甩過頭，太小力會不夠遠）
       v.bobX = Math.max(80, Math.min(236, x + (v.power - castTarget(x)) * 180)); v.castT = 0;
+      sfx('cast'); if (s.land === 'perfect') setTimeout(() => sfx('confirm'), 120);
       setP('flying');
       setMsg(s.land === 'perfect' ? '★ 完美落點！' : s.land === 'good' ? '不錯的落點！' : s.land === 'miss' ? '甩偏了……' : '甩太偏了！');
     } else if (v.phase === 'wait' || v.phase === 'nibble') {
       s.wait = 1.6 + Math.random(); s.nibbles = Math.floor(Math.random() * 2); setP('wait');
       setMsg(v.phase === 'nibble' ? '那只是試探！' : '太早了！');
     } else if (v.phase === 'bite') {
-      s.done = true; setP('hooked');
+      s.done = true; setP('hooked'); sfx('splash'); sfx('confirm');
       const sh = shadows[sel];
       if (sh.kind === 'fish') {
         setMsg(boss ? '！！巨大的身影浮上來了！' : PULL[sh.size]);
