@@ -3,7 +3,7 @@ import type { ComponentChildren } from 'preact';
 import { FORMS, STARTERS } from '../data/creatures';
 import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/types';
 import { ITEMS, statusLabel, type ItemId } from '../game/battle';
-import { ancestryOf, formOf, maxHp, xpToNext, type Mon } from '../game/creature';
+import { ancestryOf, blockRate, dodgeRate, formOf, maxHp, xpToNext, type Mon } from '../game/creature';
 import { achStats, ACHIEVEMENTS, bayCap, bringBack, buyUpgrade, claimable, claimAchievement, loadMeta, saveMeta, titleOf, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
 import { canUseOutside, enterSpecial, FINAL_ZONE, ZONE_CHOICES, healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
@@ -42,6 +42,7 @@ export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp, onPort, o
         </div>
         <span class="app-version">v{APP_VERSION}</span>
       </>}
+      onPanelClose={sound || news ? () => { setSound(false); setNews(false); } : undefined}
       panel={sound ? (
         <Win class="big-panel sound-panel" title="聲音設定">
           <label class="snd-row"><span>背景音樂</span><input type="range" min="0" max="100" value={Math.round(snd.music * 100)} onInput={(e) => updSnd({ music: Number((e.target as HTMLInputElement).value) / 100 })} /><b>{Math.round(snd.music * 100)}</b></label>
@@ -139,6 +140,7 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
   const refresh = () => { setMeta(loadMeta()); force((n) => n + 1); };
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawPort(c, t, meta.bay.map((b) => b.form))} label="港口與棲息灣" />}
+      onPanelClose={onBack}
       panel={
         <Win class="big-panel port" title={`港口　珍珠 ◆ ${meta.pearls}`}>
           <div class="tabs">
@@ -226,12 +228,18 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
       overlay={<>
         <Win class="banner left"><span class="eyebrow">{zoneOf(run).special ? '特殊區域' : `海域 ${run.zoneNo + 1}`} · {zoneOf(run).name}</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b></Win>
         <Win class="banner right"><span class="res">🐚 {run.shells}</span><span class="res">捕捉餌 {run.catchBait}</span></Win>
+        <div class="voy-tools">
+          <button class={`tool-btn ${panel === 'party' ? 'on' : ''}`} onClick={() => setPanel(panel === 'party' ? null : 'party')}>👥 隊伍</button>
+          <button class={`tool-btn ${panel === 'items' ? 'on' : ''}`} onClick={() => setPanel(panel === 'items' ? null : 'items')}>🎒 背包</button>
+          <button class="tool-btn" onClick={onQuit}>💾 存檔</button>
+        </div>
         {run.picked === null && opts.map((o, j) => {
           const [x, y] = chartPos(run.station, j, opts.length);
           return <button key={j} class="hit" aria-label={NODE_INFO[o.kind].name} onMouseEnter={() => setHover(j)} onClick={() => choose(j)}
             style={{ left: `${((x - 10) / 256) * 100}%`, top: `${((y - 18) / 144) * 100}%`, width: `${(20 / 256) * 100}%`, height: `${(20 / 144) * 100}%` }} />;
         })}
       </>}
+      onPanelClose={panel && panel !== 'shop' ? () => setPanel(null) : undefined}
       panel={panel && (
         <Win class="big-panel" title={panel === 'party' ? `隊伍 ${run.party.length}/6` : panel === 'shop' ? `漂流商店　🐚 ${run.shells}` : '背包'}>
           {panel === 'party' && <PartyList run={run} onChange={() => force((n) => n + 1)} />}
@@ -259,9 +267,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
             <div class="cmd-grid">
               {node && action ? <><MenuItem onClick={() => { run.notice = undefined; action!.fn(); }} hot>{action.btn}</MenuItem>{action.alt && <MenuItem onClick={action.alt.fn}>{action.alt.btn}</MenuItem>}</>
                 : opts.map((o, j) => <MenuItem key={j} hot={j === hover} onHover={() => setHover(j)} onClick={() => choose(j)}>{NODE_INFO[o.kind].name}{o.kind === 'fish' || o.kind === 'elite' ? `・${spotName(run, o.spot).name}` : ''}</MenuItem>)}
-              <MenuItem onClick={() => setPanel(panel === 'party' ? null : 'party')}>隊伍</MenuItem>
-              {!action?.alt && <MenuItem onClick={() => setPanel(panel === 'items' ? null : 'items')}>背包</MenuItem>}
-              <MenuItem onClick={onQuit}>存檔離開</MenuItem>
+
             </div>
           </Win>
         </div>
@@ -293,6 +299,7 @@ function PartyList({ run, onChange }: { run: RunState; onChange: () => void }) {
             <div class="grow">
               <div class="row-gap"><b class="name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={m.form} />{m.mutant && <span class="mutant-tag">✦ 異變</span>}<span class="num">Lv{m.lv}</span></div>
               <div class="row-gap"><Elems list={f.elems} /><span class="small dim">{f.category}</span><IvStars iv={m.iv} detail /></div>
+              <span class="small dim">閃避 {Math.round(dodgeRate(f) * 100)}%・格擋 {Math.round(blockRate(f) * 100)}%</span>
               <StyleMeter mon={m} /><EnvHint mon={m} />
               <div class="hp-row"><Bar value={m.hp} max={mx} /><span class="num">{Math.max(0, m.hp)}/{mx}</span></div>
               <Bar value={m.xp} max={xpToNext(m.lv)} kind="xp" />
@@ -363,6 +370,7 @@ export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
   const f = sel ? FORMS[sel] : null;
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={drawDeep} label="海底" />}
+      onPanelClose={onBack}
       panel={
         <Win class="big-panel" title={`圖鑑　見過 ${dex.seen.length} · 收服 ${dex.caught.length} · 共 ${all.length}`}>
           {f && (
@@ -399,6 +407,7 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
   const els = Object.keys(ELEM) as Elem[];
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={drawDeep} label="海底" />}
+      onPanelClose={onBack}
       panel={
         <Win class="big-panel help" title="玩法說明">
           <h3>一場遭遇</h3>
@@ -423,6 +432,8 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
             <li><b>灼傷</b>：每回合扣 1/16 HP，攻擊力下降。<b>中毒</b>：每回合扣 1/10 HP。<b>流血</b>：每回合扣 1/12 HP（岩、數碼、骷髏不會流血）。</li>
             <li><b>麻痺</b>：速度減半，25% 無法行動。<b>冰凍</b>：無法行動，最多 3 回合。<b>睡眠</b>：無法行動，睡著時防禦 +1。</li>
             <li><b>致盲</b>：命中率 ×0.6，換下場時解除。<b>資料錯亂</b>：30% 使出別的技能。</li>
+            <li>灼傷 4 回合、中毒 5 回合、流血 4 回合、麻痺／致盲／資料錯亂 3 回合，時間到會自動解除，狀態欄會顯示剩下幾回合。</li>
+            <li><b>閃避</b>：速度越快越容易整招躲開（2%～15%）。<b>格擋</b>：防禦越高越容易擋下 40% 傷害（2%～15%）。麻痺、冰凍、睡著時沒辦法閃避。</li>
           </ul>
           <h3>場地與連鎖</h3>
           <p class="small">漲潮、熔岩地面、濃霧、雷暴雲、極光、資料網格、聖林等場地會持續 5 回合，影響雙方。有些技能在對手處於特定異常狀態時更強，例如「導電」對麻痺的對手必定擊中要害、「凍裂」對冰凍的對手威力提升。</p>

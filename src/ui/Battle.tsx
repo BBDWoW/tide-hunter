@@ -7,13 +7,13 @@ import {
   active, aiChoose, aiForcedSwitch, canAfford, createBattle, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, resolveTurn, statusLabel, volOf,
   type Action, type BattleState, type BEvent, type ItemId, type SideId,
 } from '../game/battle';
-import { formOf, maxHp, type Mon } from '../game/creature';
+import { blockRate, dodgeRate, formOf, maxHp, statsOf, type Mon } from '../game/creature';
 import { makeRng, next } from '../game/rng';
 import { catchChance, rollShakes } from '../game/capture';
-import { battleMods, boon, zoneOf } from '../game/run';
+import { battleMods, boon, LANDING_BONUS, zoneOf } from '../game/run';
 import type { Encounter, RunState } from '../game/run';
 import { auraColor, burst, drawBattle, drawNet, H, monSlot, W, type Beam, type MonView, type Particle } from '../render/scene';
-import { Bar, ElemChip, Elems, Energy, RarityTag, Sprite } from './components';
+import { AbilityLines, Bar, ElemChip, Elems, Energy, IvStars, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
 import { Reel } from './Reel';
@@ -25,6 +25,11 @@ interface Disp { form: string; lv: number; hp: number; max: number; energy: numb
 interface Popup { id: number; side: SideId; text: string; cls: string }
 
 const SPEED_KEY = 'tidehunter.speed';
+const DASH = 0.5; // 近戰衝刺的時間（秒）
+// 觸控裝置（沒有滑鼠移過去）：第一下看說明，再點一次才使用
+const TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(hover: none)').matches;
+// 動畫是「hit」但其實是丟出去／從遠處打的招式，不衝過去
+const RANGED_HIT = new Set(['ember', 'pebble', 'icepebble', 'rockslide', 'microquake', 'bigquake']);
 const readSpeed = () => { try { return localStorage.getItem(SPEED_KEY) === 'fast'; } catch { return false; } };
 
 export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunState; enc: Encounter; boss: boolean; onEnd: (r: BattleResult) => void }) {
@@ -49,6 +54,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const fastRef = useRef(fast); fastRef.current = fast;
   const participants = useRef(new Set<string>([active(bs, 0).uid]));
   const [hover, setHover] = useState(0);
+  const [armed, setArmed] = useState(-1); // 觸控：已經點過一下、等第二下確認的選項
+  const [info, setInfo] = useState<SideId | null>(null); // 查看雙方資料
   const net = useRef<{ wob: number; glow: number } | null>(null);
 
   const mkView = (side: SideId, form: string): MonView => {
@@ -57,7 +64,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   };
   const anim = useRef({
     mons: [mkView(0, disp.current[0].form), mkView(1, disp.current[1].form)] as MonView[],
-    lungeT: [0, 0], shakeT: [0, 0], fade: [1, 1] as number[], enter: [0, 0] as number[],
+    lungeT: [0, 0], dashT: [0, 0], shakeT: [0, 0], fade: [1, 1] as number[], enter: [0, 0] as number[],
     parts: [] as Particle[], beams: [] as Beam[],
   });
 
@@ -77,6 +84,15 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       a.enter[side] = Math.min(1, a.enter[side] + dt * 2.2);
       const p = monSlot(side, v.form), e = 1 - Math.pow(1 - a.enter[side], 3);
       v.x = p.x + (1 - e) * (side === 0 ? -90 : 90);
+      v.y = p.y;
+      // 近戰：衝到對手面前再退回來
+      a.dashT[side] = Math.max(0, a.dashT[side] - dt);
+      if (a.dashT[side] > 0) {
+        const other: SideId = side === 0 ? 1 : 0, tg = monSlot(other, a.mons[other].form);
+        const k = Math.sin((1 - a.dashT[side] / DASH) * Math.PI);
+        v.x += (tg.cx - p.cx - (side === 0 ? 28 : -28)) * k;
+        v.y += (tg.cy - p.cy) * k;
+      }
       a.lungeT[side] = Math.max(0, a.lungeT[side] - dt);
       v.lunge = Math.sin((a.lungeT[side] / 0.25) * Math.PI) * 12 * (a.lungeT[side] > 0 ? 1 : 0);
       v.flash = Math.max(0, v.flash - dt);
@@ -97,6 +113,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       if (enc.rarity === 'SSR') say('★ 傳說級的氣息！這可能是唯一的機會！');
       else if (enc.rarity === 'S') say('☆ 史詩級的稀有生物！');
       if (enc.mon.mutant) say('✦ 是異變個體！牠的顏色跟一般的不一樣！');
+      if (enc.landing === 'perfect' || enc.landing === 'good') { await wait(500); say(`${LANDING_BONUS[enc.landing].label}！釣鉤刺得很深，${ef.name} 的 HP 減少了，也比較好捕捉！`); }
       await wait(700);
       say(`上吧，${formOf(active(bs, 0)).name}！`);
       await wait(500);
@@ -115,7 +132,12 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         const foe: SideId = e.side === 0 ? 1 : 0, c = center(foe), me = center(e.side);
         const kind = sk.anim ?? 'hit';
         if (kind === 'buff' || kind === 'heal') { burst(a.parts, me.x, me.y, kind, sk.elem); }
-        else {
+        else if (kind === 'hit' && (sk as { power?: number }).power && !RANGED_HIT.has(e.skill)) {
+          // 近戰招式：衝過去打
+          a.dashT[e.side] = DASH;
+          setTimeout(() => burst(a.parts, c.x, c.y - 4, 'hit', sk.elem), DASH * 500);
+          await wait(DASH * 700); break;
+        } else {
           a.lungeT[e.side] = 0.25;
           if (kind === 'beam') a.beams.push({ x0: me.x, y0: me.y - 6, x1: c.x, y1: c.y - 6, life: 0.35, color: sk.elem ? '#ffffff' : '#ffffff' });
           setTimeout(() => burst(a.parts, c.x, c.y - 4, kind === 'splash' ? 'splash' : 'hit', sk.elem), 150);
@@ -123,6 +145,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         await wait(260); break;
       }
       case 'miss': break;
+      case 'dodge': { a.shakeT[e.side] = 0.15; pop(e.side, '閃避！', 'weak'); await wait(200); break; }
+      case 'block': { pop(e.side, '格擋', 'weak'); break; }
       case 'dmg': {
         d[e.side].hp = e.hp; d[e.side].shield = e.shield;
         a.mons[e.side].flash = 0.35; a.shakeT[e.side] = 0.3;
@@ -194,6 +218,13 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   }
   const giveUp = async () => { setMode('busy'); await wait(300); onEnd({ outcome: 'lose', enemy: enc.mon, participants: [...participants.current] }); };
 
+  /** 觸控：第一下選取並顯示說明，第二下才執行；有滑鼠時直接執行 */
+  const confirmTap = (i: number, act: () => void) => {
+    if (TOUCH && armed !== i) { setHover(i); setArmed(i); return; }
+    setArmed(-1); act();
+  };
+  useEffect(() => { setArmed(-1); }, [mode]);
+
   async function submit(a: Action) {
     setMode('busy');
     if (a.type === 'item') run.items[a.item]--;
@@ -212,7 +243,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       return;
     }
     // 收線成功 → 被網住，晃動三次
-    const chanceAll = catchChance(foe, quality, boon(run, 'shake'));
+    const chanceAll = Math.min(0.97, catchChance(foe, quality, boon(run, 'shake')) * (1 + LANDING_BONUS[enc.landing ?? 'miss'].catch));
     const shakes = rollShakes(bs.rng, chanceAll);
     const a = anim.current, c = center(1);
     for (let i = 0; i < 10; i++) { a.fade[1] = 1 - (i + 1) / 10; await wait(30); }
@@ -274,8 +305,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={draw} label="戰鬥畫面" />}
       overlay={<>
-        <HudBox side={1} d={de} rarity={FORMS[de.form].rarity} boss={boss} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} />
-        <HudBox side={0} d={dp} charged={volOf(bs, 0).charged} locked={volOf(bs, 0).lockOn} />
+        <HudBox onOpen={() => setInfo(1)} side={1} d={de} rarity={FORMS[de.form].rarity} boss={boss} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
+        <HudBox onOpen={() => setInfo(0)} side={0} d={dp} charged={volOf(bs, 0).charged} locked={volOf(bs, 0).lockOn} turns={active(bs, 0).statusTurns} />
         {popups.map((p) => {
           const c = monSlot(p.side, disp.current[p.side].form);
           return <span key={p.id} class={`pop ${p.cls}`} style={{ left: `${(c.cx / W) * 100}%`, top: `${((c.cy - 30) / H) * 100}%` }}>{p.text}</span>;
@@ -284,7 +315,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         <button class="speed" onClick={toggleFast} aria-pressed={fast}>{fast ? '▶▶ 快速' : '▶ 一般'}</button>
         {mode === 'reel' && !vp.portrait && reel}
       </>}
-      panel={picking && (
+      onPanelClose={info !== null ? () => setInfo(null) : mode === 'switch' || mode === 'itemTarget' ? () => setMode(mode === 'itemTarget' ? 'items' : 'main') : undefined}
+      panel={info !== null ? <InfoPanel bs={bs} side={info} boss={boss} onClose={() => setInfo(null)} /> : picking && (
         <Win class="big-panel" title={mode === 'force' ? '要派誰上場？' : mode === 'itemTarget' ? `對誰使用 ${ITEMS[itemPick!].name}？` : '換人'}>
           <div class="pick-grid">
             {run.party.map((m, i) => {
@@ -316,6 +348,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                 <div class="row-gap"><b class="big-name">{hs.name}</b>{hs.elem ? <ElemChip e={hs.elem} /> : <span class="chip neutral">無</span>}</div>
                 <p class="small">{hs.power ? (() => { const p = Math.round(effPower(bs, 0, 1, hs)); return p !== hs.power ? `威力 ${hs.power} → ${p}` : `威力 ${hs.power}`; })() : '變化技'} · 能量 {hs.cost} · 命中 {Math.round(Math.min(1, hitChance(bs, 0, hs)) * 100)}{hs.power > 0 && (() => { const e = effectiveness(hs.elem, formOf(foe).elems); return e >= 2 ? ' · 效果絕佳！' : e < 1 ? ' · 效果不好' : ''; })()}</p>
                 <p class="small dim">{hs.desc}</p>
+                {TOUCH && <p class="small accent">{armed === hover ? '再點一次使用這一招' : '點一下看說明，再點一次使用'}</p>}
               </div>
             ) : hi ? (
               <div class="skill-info"><b class="big-name">{ITEMS[hi].name}</b><p class="small dim">{ITEMS[hi].desc}</p></div>
@@ -348,7 +381,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                 {me.skills.map((id, i) => {
                   const sk = SKILLS[id], ok = canAfford(bs, 0, i);
                   return (
-                    <MenuItem key={id} disabled={!ok} onHover={() => setHover(i)} onClick={() => submit({ type: 'skill', slot: i })}
+                    <MenuItem key={id} disabled={!ok} sel={TOUCH && armed === i} onHover={() => setHover(i)} onClick={() => confirmTap(i, () => submit({ type: 'skill', slot: i }))}
                       sub={<span class="cost">{'◆'.repeat(sk.cost) || '—'}</span>}>
                       <i class="dot" style={{ background: sk.elem ? `var(--el-${sk.elem})` : '#c8d2e8' }} />{sk.name}
                     </MenuItem>
@@ -361,8 +394,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
             {mode === 'items' && (
               <div class="cmd-grid">
                 {(Object.keys(ITEMS) as ItemId[]).map((id, i) => (
-                  <MenuItem key={id} disabled={!run.items[id]} onHover={() => setHover(i)} sub={`×${run.items[id] ?? 0}`}
-                    onClick={() => { if (id === 'ether') submit({ type: 'item', item: id, target: bs.sides[0].active }); else { setItemPick(id); setMode('itemTarget'); } }}>
+                  <MenuItem key={id} disabled={!run.items[id]} sel={TOUCH && armed === i} onHover={() => setHover(i)} sub={`×${run.items[id] ?? 0}`}
+                    onClick={() => confirmTap(i, () => { if (id === 'ether') submit({ type: 'item', item: id, target: bs.sides[0].active }); else { setItemPick(id); setMode('itemTarget'); } })}>
                     {ITEMS[id].name}
                   </MenuItem>
                 ))}
@@ -375,17 +408,17 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   );
 }
 
-function HudBox({ side, d, rarity, boss, charged, locked }: { side: SideId; d: Disp; rarity?: keyof typeof RARITY; boss?: boolean; charged?: boolean; locked?: boolean }) {
+function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen }: { side: SideId; d: Disp; rarity?: keyof typeof RARITY; boss?: boolean; charged?: boolean; locked?: boolean; turns?: number; onOpen?: () => void }) {
   const f = FORMS[d.form];
   return (
-    <div class={`hud hud-${side}`}>
+    <div class={`hud hud-${side} clickable`} onClick={onOpen} role="button" aria-label={`查看 ${f.name} 的資料`}>
       <div class="hud-top">
         <b class="hud-name">{f.name}</b>{d.mutant && <span class="mutant-tag">✦</span>}
         {rarity && <RarityTag r={rarity} />}
         {boss && <span class="boss-tag">霸主</span>}
         <span class="lv">Lv{d.lv}</span>
       </div>
-      <div class="hud-sub"><Elems list={f.elems} />{d.status && <span class={`st st-${d.status}`}>{statusLabel(d.status)}</span>}{d.shield > 0 && <span class="st st-shield">護盾 {d.shield}</span>}{(d.trap ?? 0) > 0 && <span class="st st-trap">暗礁 {d.trap}</span>}{charged && <span class="st st-charge">蓄力</span>}{locked && <span class="st st-lock">鎖定</span>}</div>
+      <div class="hud-sub"><Elems list={f.elems} />{d.status && <span class={`st st-${d.status}`}>{statusLabel(d.status)}{turns ? ` ${turns}` : ''}</span>}{d.shield > 0 && <span class="st st-shield">護盾 {d.shield}</span>}{(d.trap ?? 0) > 0 && <span class="st st-trap">暗礁 {d.trap}</span>}{charged && <span class="st st-charge">蓄力</span>}{locked && <span class="st st-lock">鎖定</span>}</div>
       <Bar value={d.hp} max={d.max} />
       <div class="hud-foot">
         <Energy value={d.energy} max={MAX_ENERGY} />
@@ -395,3 +428,37 @@ function HudBox({ side, d, rarity, boss, charged, locked }: { side: SideId; d: D
   );
 }
 
+
+// 戰鬥中查看資料：自己看得到技能，對手只看得到狀態與被動特性
+const STAGE_LABEL = { atk: '攻擊', def: '防禦', spd: '速度' } as const;
+function InfoPanel({ bs, side, boss, onClose }: { bs: BattleState; side: SideId; boss: boolean; onClose: () => void }) {
+  const m = active(bs, side), f = formOf(m), v = volOf(bs, side), mx = maxHp(m), st = statsOf(m);
+  const stages = (Object.keys(STAGE_LABEL) as (keyof typeof STAGE_LABEL)[]).filter((k) => v.stages[k]);
+  const mine = side === 0;
+  return (
+    <Win class="big-panel battle-info" title={mine ? '我方資料' : boss ? '霸主資料' : '對手資料'}>
+      <div class="pick">
+        <Sprite form={m.form} size={96} mutant={m.mutant} />
+        <span class="grow">
+          <span class="row-gap"><b class="big-name">{m.mutant ? '✦ ' : ''}{f.name}</b><RarityTag r={f.rarity} /><StageTag form={m.form} /><span class="num">Lv{m.lv}</span></span>
+          <span class="row-gap"><Elems list={f.elems} /><span class="small dim">{f.category}</span>{mine && <IvStars iv={m.iv} />}</span>
+          <Bar value={m.hp} max={mx} />
+          <span class="small">{mine ? `HP ${Math.max(0, m.hp)}/${mx}` : `HP 約 ${Math.round((Math.max(0, m.hp) / mx) * 100)}%`}・能量 {v.energy}/{MAX_ENERGY}</span>
+        </span>
+      </div>
+      <div class="row-gap">
+        {m.status ? <span class={`st st-${m.status}`}>{statusLabel(m.status)}{m.statusTurns ? ` 剩 ${m.statusTurns} 回合` : ''}</span> : <span class="small dim">沒有異常狀態</span>}
+        {stages.map((k) => <span key={k} class={`st ${v.stages[k] > 0 ? 'st-up' : 'st-down'}`}>{STAGE_LABEL[k]} {v.stages[k] > 0 ? '+' : ''}{v.stages[k]}</span>)}
+        {v.shield > 0 && <span class="st st-shield">護盾 {v.shield}</span>}
+        {v.charged && <span class="st st-charge">蓄力</span>}
+        {v.lockOn && <span class="st st-lock">鎖定</span>}
+      </div>
+      {mine && <p class="small">攻擊 {st.atk}・防禦 {st.def}・速度 {st.spd}</p>}
+      <p class="small dim">閃避 {Math.round(dodgeRate(f) * 100)}%・格擋 {Math.round(blockRate(f) * 100)}%</p>
+      <AbilityLines form={f.id} />
+      {mine ? <div class="skills-col">{m.skills.map((id) => <SkillLine id={id} key={id} />)}</div>
+        : <p class="small dim">對手的技能要在戰鬥中觀察才知道。</p>}
+      <MenuItem onClick={onClose} hot>關閉</MenuItem>
+    </Win>
+  );
+}

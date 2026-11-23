@@ -103,8 +103,9 @@ function extendSides(ctx: CanvasRenderingContext2D, c: HTMLCanvasElement, b: num
  * - dock：底部的訊息／指令區。橫式時疊在場景下緣，直式時移到下螢幕。
  * - panel：大型視窗（隊伍、圖鑑），橫式時置中浮在場景上，直式時放在下螢幕。
  */
-export function GameScreen({ vp, scene, overlay, dock, panel, dockTall, onScene, tappable }: {
+export function GameScreen({ vp, scene, overlay, dock, panel, dockTall, onScene, tappable, onPanelClose }: {
   vp: Viewport; scene: ComponentChildren; overlay?: ComponentChildren; dock?: ComponentChildren; panel?: ComponentChildren; dockTall?: boolean;
+  /** 有的話：點視窗外面的空白處就關閉視窗 */ onPanelClose?: () => void;
   onScene?: Record<string, unknown>; tappable?: boolean;
 }) {
   const lower = (dock || panel) && vp.portrait;
@@ -114,10 +115,11 @@ export function GameScreen({ vp, scene, overlay, dock, panel, dockTall, onScene,
   return (
     <div class={`console ${vp.portrait ? 'portrait' : 'landscape'}`}>
       {!vp.portrait && <canvas class="ambient" width={32} height={18} ref={setAmbient} aria-hidden="true" />}
+      {vp.portrait && panel && onPanelClose && <div class="portrait-closer" style={{ height: `${vp.h}px` }} onClick={onPanelClose} aria-label="關閉視窗" />}
       <div class={`frame ${tappable ? 'tappable' : ''} ${bleed ? 'bleed' : ''}`} style={{ width: `${vp.w}px`, height: `${vp.h}px`, '--u': `${vp.u}px`, '--bleed': `${bleed * vp.u}px` }} {...onScene}>
         {scene}
         <div class="overlay">{overlay}</div>
-        {!vp.portrait && panel && <div class={`panel-layer ${dock ? 'with-dock' : ''}`}>{panel}</div>}
+        {!vp.portrait && panel && <div class={`panel-layer ${dock ? 'with-dock' : ''} ${onPanelClose ? 'closable' : ''}`} onClick={(e) => { if (onPanelClose && e.target === e.currentTarget) onPanelClose(); }}>{panel}</div>}
         {!vp.portrait && dock && <div class={`dock ${dockTall ? 'tall' : ''}`}>{dock}</div>}
       </div>
       {lower && (

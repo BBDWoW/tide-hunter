@@ -65,6 +65,7 @@ export function Gacha({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={(c, t, dt) => { now.current = t; drawGacha(c, t, dt, view.current); }} label="招募：拋竿釣起新夥伴" />}
       overlay={<Win class="banner left"><span class="eyebrow">招募</span><b>珍珠 ◆ {meta.pearls}　棲息灣 {meta.bay.length}/{bayCap(meta)}</b></Win>}
+      onPanelClose={rates ? () => setRates(false) : results && results.length > 1 ? () => setResults(null) : undefined}
       panel={rates ? (
         <Win class="big-panel" title="釣竿與機率">
           <div class="item-list">

@@ -3,7 +3,7 @@
 // 所有隨機都走 state.rng，所以同樣的初始狀態＋同樣的行動序列一定得到同樣結果。
 import { FIELDS, SKILLS, type FieldId, type Skill, type StatKey, type StatusId } from '../data/skills';
 import { effectiveness, ELEM } from '../data/types';
-import { formOf, maxHp, statsOf, type Mon } from './creature';
+import { blockRate, dodgeRate, formOf, maxHp, statsOf, type Mon } from './creature';
 import { hasAb } from '../data/creatures';
 import { chance, int, next, range, type Rng } from './rng';
 
@@ -71,6 +71,8 @@ export type BEvent =
   | { t: 'energy'; side: SideId; value: number }
   | { t: 'faint'; side: SideId }
   | { t: 'switch'; side: SideId; index: number; form: string; hp: number; energy: number; status: StatusId | null }
+  | { t: 'dodge'; side: SideId }
+  | { t: 'block'; side: SideId }
   | { t: 'field'; id: FieldId | null; turns: number }
   | { t: 'trap'; side: SideId; turns: number }
   | { t: 'end'; winner: SideId };
@@ -78,6 +80,9 @@ export type BEvent =
 export const STRUGGLE: Skill = { id: 'struggle', name: '掙扎', elem: null, power: 35, cost: 0, acc: 100, desc: '能量不足時使用。', anim: 'hit' };
 export const MAX_ENERGY = 5;
 const STATUS_NAME: Record<StatusId, string> = { burn: '灼傷', para: '麻痺', poison: '中毒', freeze: '冰凍', glitch: '資料錯亂', sleep: '睡眠', blind: '致盲', bleed: '流血' };
+
+/** 異常狀態持續的回合數（冰凍、睡眠另外計算） */
+export const STATUS_TURNS: Partial<Record<StatusId, number>> = { burn: 4, poison: 5, bleed: 4, para: 3, blind: 3, glitch: 3 };
 
 export const active = (s: BattleState, side: SideId) => s.sides[side].team[s.sides[side].active];
 export const volOf = (s: BattleState, side: SideId) => s.sides[side].vol[active(s, side).uid];
@@ -230,6 +235,7 @@ function applyStatus(s: BattleState, side: SideId, st: StatusId, ev: BEvent[]): 
   if (st === 'para' && formOf(m).elems.includes('elec')) return false;
   if (st === 'bleed' && (formOf(m).elems.some((e) => e === 'rock' || e === 'data') || hasAb(formOf(m), 'undying'))) return false;
   m.status = st;
+  m.statusTurns = STATUS_TURNS[st] ?? 0;
   if (st === 'freeze') volOf(s, side).freezeTurns = 0;
   ev.push({ t: 'status', side, status: st });
   ev.push({ t: 'msg', text: `${nameOf(s, side)} ${STATUS_NAME[st]}了！` });
@@ -349,6 +355,13 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     v.charged = false; v.lockOn = false;
     return;
   }
+  // 閃避：被麻痺、冰凍、睡著時沒辦法閃
+  if (!sure && !['para', 'freeze', 'sleep'].includes(tgt.status ?? '') && chance(s.rng, dodgeRate(formOf(tgt)))) {
+    ev.push({ t: 'dodge', side: foe }); ev.push({ t: 'msg', text: `${nameOf(s, foe)} 靈巧地閃開了！` });
+    v.charged = false; v.lockOn = false;
+    if (fx.selfKO) selfKO(s, side, ev);
+    return;
+  }
   const chained = !!fx.chain && tgt.status === fx.chain.id;
   if (chained) ev.push({ t: 'msg', text: `趁對手${STATUS_NAME[fx.chain!.id]}，威力提升了！` });
   else if (fx.vsStatus && tgt.status) ev.push({ t: 'msg', text: '趁虛而入，威力提升了！' });
@@ -360,6 +373,11 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     if (target.hp <= 0 || me.hp <= 0) break;
     const r = calcDamage(s, side, foe, sk);
     landed++;
+    // 格擋：這一下傷害減少 40%
+    if (target.status !== 'freeze' && target.status !== 'sleep' && chance(s.rng, blockRate(formOf(target)))) {
+      r.dmg = Math.max(1, Math.floor(r.dmg * 0.6));
+      ev.push({ t: 'block', side: foe }); ev.push({ t: 'msg', text: `${nameOf(s, foe)} 擋下了一部分傷害！` });
+    }
     const real = dealDamage(s, foe, r.dmg, r.eff, r.crit, ev);
     total += real;
     afterHitAbilities(s, side, foe, ev);
@@ -527,6 +545,14 @@ function endOfTurn(s: BattleState, ev: BEvent[]) {
       ev.push({ t: 'msg', text: `${nameOf(s, side)} 受到${what}的傷害！` });
       checkFaints(s, ev);
       if (m.hp <= 0) continue;
+    }
+    // 異常狀態倒數，時間到就解除
+    if (m.status && STATUS_TURNS[m.status] && m.hp > 0) {
+      m.statusTurns = (m.statusTurns ?? STATUS_TURNS[m.status]!) - 1;
+      if (m.statusTurns <= 0) {
+        ev.push({ t: 'msg', text: `${nameOf(s, side)} 的${STATUS_NAME[m.status]}好了！` });
+        m.status = null; m.statusTurns = 0; ev.push({ t: 'status', side, status: null });
+      }
     }
     // 場地傷害：熔岩地面、暗礁
     const fe = f.elems;

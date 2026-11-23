@@ -11,6 +11,7 @@ export interface Mon {
   hp: number;
   skills: string[];
   status: StatusId | null;
+  statusTurns?: number; // 異常狀態剩幾回合（灼傷、中毒、流血、麻痺、致盲、資料錯亂）
   boss?: boolean;
   wild?: boolean; // 野生個體能力值較低；被收服後就會恢復正常
   bayId?: string; // 從棲息灣帶出來的夥伴
@@ -105,6 +106,13 @@ export function makeMon(formId: string, lv: number, boss = false, wild = false, 
   return m;
 }
 
+/** 閃避率、格擋率：看種族的速度與防禦（2%～15%） */
+const clampRate = (v: number) => Math.max(2, Math.min(15, v)) / 100;
+export const dodgeRate = (f: Form) => clampRate((f.base.spd - 40) / 6);
+export const blockRate = (f: Form) => clampRate((f.base.def - 40) / 6);
+
+/** 等級上限 */
+export const MAX_LV = 30;
 export const xpToNext = (lv: number) => 15 + lv * 8;
 export function xpReward(enemy: Mon): number {
   const f = formOf(enemy);
@@ -117,7 +125,7 @@ export interface LevelResult { levels: number; learnable: string[]; evolveTo: st
 export function gainXp(m: Mon, amount: number, zone?: string): LevelResult {
   const res: LevelResult = { levels: 0, learnable: [], evolveTo: null };
   m.xp += amount;
-  while (m.xp >= xpToNext(m.lv) && m.lv < 50) {
+  while (m.xp >= xpToNext(m.lv) && m.lv < MAX_LV) {
     const before = maxHp(m);
     m.xp -= xpToNext(m.lv);
     m.lv++;

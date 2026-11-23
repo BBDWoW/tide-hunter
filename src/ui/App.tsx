@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { boon, enterZone, zoneOf, FINAL_ZONE, leaveSpecial, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
+import { boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, leaveSpecial, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
 import { AfterBattle } from './AfterBattle';
 import { Battle, type BattleResult } from './Battle';
 import { Fishing } from './Fishing';
@@ -131,7 +131,14 @@ export function App() {
       body = <Voyage vp={vp} run={run!} onGo={() => (nodeOf(run!).kind === 'event' ? go({ k: 'event', ev: pickEvent(run!) }) : go({ k: 'fishing' }))} onNext={advance} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
       break;
     case 'fishing':
-      body = <Fishing vp={vp} run={run!} boss={boss} onDone={advance} onHook={(q, sh) => { const enc = devEncounter() ?? rollEncounter(run!, q, sh); markSeen(enc.mon.form); go({ k: 'battle', enc }); }} />;
+      body = <Fishing vp={vp} run={run!} boss={boss} onDone={advance} onHook={(q, sh, landing) => {
+        const enc = devEncounter() ?? rollEncounter(run!, q, sh);
+        // 甩竿落點：對手開場 HP 減少（霸主減半）
+        const cut = LANDING_BONUS[landing].hpCut * (boss ? 0.5 : 1);
+        if (cut > 0) enc.mon.hp = Math.max(1, Math.round(enc.mon.hp * (1 - cut)));
+        enc.landing = landing;
+        markSeen(enc.mon.form); go({ k: 'battle', enc });
+      }} />;
       break;
     case 'battle':
       body = <Battle vp={vp} run={run!} enc={screen.enc} boss={boss} onEnd={(result) => {

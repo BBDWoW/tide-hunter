@@ -46,7 +46,7 @@ export const ZONES: Record<ZoneId, ZoneInfo> = {
   },
   ice: {
     name: '冰封峽灣', desc: '冰與永恆的海。浮冰之間住著耐寒的潮靈，霸主是頭戴冰冠的巨型海豹。', theme: 'ice',
-    pool: ICE_POOL, boss: 'frostking', bossLv: 21, lvBase: 13,
+    pool: ICE_POOL, boss: 'frostking', bossLv: 18, lvBase: 11,
     spots: {
       shallow: { name: '浮冰區', desc: '大大小小的浮冰漂在海面上。' },
       reef: { name: '冰洞', desc: '海浪鑿出的冰洞，裡面閃著藍光。' },
@@ -57,7 +57,7 @@ export const ZONES: Record<ZoneId, ZoneInfo> = {
   },
   lava: {
     name: '熔岩裂谷', desc: '火與海交匯的灼熱之境。海底裂縫湧出岩漿，霸主是在交界處沉睡的海龍。', theme: 'lava',
-    pool: LAVA_POOL, boss: 'lavadragon', bossLv: 21, lvBase: 13,
+    pool: LAVA_POOL, boss: 'lavadragon', bossLv: 18, lvBase: 11,
     spots: {
       shallow: { name: '黑沙灘', desc: '火山灰堆成的黑色沙灘，沙子是溫的。' },
       reef: { name: '熔岩礁', desc: '冷卻的熔岩形成礁岩，縫隙還在發紅。' },
@@ -69,7 +69,7 @@ export const ZONES: Record<ZoneId, ZoneInfo> = {
   // ── 第三片海域 ──
   cyber: {
     name: '電子海域', desc: '海面是發光的網格，水裡流動著資料。霸主是由主機構成的機械海龍。', theme: 'cyber',
-    pool: CYBER_POOL, boss: 'mainframe_leviathan', bossLv: 30, lvBase: 22,
+    pool: CYBER_POOL, boss: 'mainframe_leviathan', bossLv: 25, lvBase: 17,
     spots: {
       shallow: { name: '訊號淺灘', desc: '網格海面上跳動著一格格光點。' },
       reef: { name: '電路礁', desc: '由電路板堆成的礁石，指示燈閃個不停。' },
@@ -80,7 +80,7 @@ export const ZONES: Record<ZoneId, ZoneInfo> = {
   },
   abyss: {
     name: '深淵', desc: '照不到光的海底，只有生物自己發出的光。霸主是全身佈滿傷痕的遠古巨鯨。', theme: 'abyss',
-    pool: ABYSS_POOL, boss: 'nether_whale', bossLv: 30, lvBase: 22,
+    pool: ABYSS_POOL, boss: 'nether_whale', bossLv: 25, lvBase: 17,
     spots: {
       shallow: { name: '海雪坡', desc: '細細的海雪不停落下，堆成白色的斜坡。' },
       reef: { name: '岩柱林', desc: '一根根黑色岩柱，縫隙裡有東西在發光。' },
@@ -248,7 +248,7 @@ export const totalStation = (run: RunState) => run.zoneNo * ROUTE_LEN + run.stat
 export const nodeOf = (run: RunState): RouteNode => run.route[run.station][run.picked ?? 0];
 export const isBoss = (run: RunState) => run.route[run.station]?.[0].kind === 'boss';
 
-export interface Encounter { mon: Mon; rarity: Rarity }
+export interface Encounter { mon: Mon; rarity: Rarity; landing?: Landing }
 
 // ── 魚影：拋竿前海面上的影子，大小暗示稀有度 ──
 export type ShadowKind = 'fish' | 'treasure' | 'junk';
@@ -317,6 +317,24 @@ export function rollEncounter(run: RunState, q: number, shadow: Shadow): Encount
 }
 
 export const perfectAt = (run: RunState) => 0.92 - boon(run, 'steady') * 0.05;
+
+// ── 甩竿落點：力量條要停在這個魚影的目標區 ──
+export type Landing = 'perfect' | 'good' | 'miss' | 'far';
+/** 魚影越遠，需要的力量越大 */
+export const castTarget = (x: number) => 0.22 + ((x - 118) / 100) * 0.56;
+/** 目標區的寬度（穩定手腕能力卡會變寬） */
+export const landingZones = (run: RunState) => ({ perfect: 0.045 + boon(run, 'steady') * 0.015, good: 0.11 + boon(run, 'steady') * 0.02 });
+export function judgeLanding(run: RunState, power: number, x: number): Landing {
+  const d = Math.abs(power - castTarget(x)), z = landingZones(run);
+  return d <= z.perfect ? 'perfect' : d <= z.good ? 'good' : d <= 0.25 ? 'miss' : 'far';
+}
+/** 落點帶來的好處：對手開場 HP 減少、比較好捕捉（霸主減半） */
+export const LANDING_BONUS: Record<Landing, { hpCut: number; catch: number; label: string }> = {
+  perfect: { hpCut: 0.25, catch: 0.15, label: '完美落點' },
+  good: { hpCut: 0.1, catch: 0.06, label: '不錯的落點' },
+  miss: { hpCut: 0, catch: 0, label: '' },
+  far: { hpCut: 0, catch: 0, label: '' },
+};
 
 // ── 寶物與垃圾 ──
 export interface Loot { title: string; text: string }
