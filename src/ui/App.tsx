@@ -5,7 +5,10 @@ import { Battle, type BattleResult } from './Battle';
 import { Fishing } from './Fishing';
 import { Dex, End, EventScreen, Help, Port, StarterPick, Title, Voyage, ZonePick } from './Screens';
 import { pickEvent, type GameEvent } from '../game/events';
-import { loadMeta, pearlsFor, returnFromRun, saveMeta } from '../game/meta';
+import { loadMeta, monFromBay, newBayMon, pearlsFor, returnFromRun, saveMeta, selectedBay } from '../game/meta';
+import { Bay } from './Bay';
+import { Gacha } from './Gacha';
+import type { Mon } from '../game/creature';
 import { useViewport } from './layout';
 import { makeMon, makeMutant } from '../game/creature';
 import { next } from '../game/rng';
@@ -15,7 +18,7 @@ import { setScene } from '../audio/engine';
 import type { SongId } from '../audio/songs';
 
 // 只在這些畫面自動更新（不在冒險途中），重新整理不會打斷遊戲
-const SAFE_TO_UPDATE = new Set(['title', 'port', 'dex', 'help']);
+const SAFE_TO_UPDATE = new Set(['title', 'port', 'dex', 'help', 'bay']);
 const CHECK_EVERY = 60_000;
 
 /** 每分鐘檢查一次有沒有新版本（只在正式網站）；回傳新版本號 */
@@ -65,7 +68,7 @@ type Screen =
   | { k: 'title' } | { k: 'starter' } | { k: 'voyage' } | { k: 'fishing' }
   | { k: 'battle'; enc: Encounter } | { k: 'after'; result: BattleResult }
   | { k: 'end'; win: boolean; pearls: number } | { k: 'dex' } | { k: 'help' } | { k: 'port' }
-  | { k: 'event'; ev: GameEvent } | { k: 'zonepick' };
+  | { k: 'event'; ev: GameEvent } | { k: 'zonepick' } | { k: 'bay'; hint?: string } | { k: 'gacha'; from: 'bay' | 'port' };
 
 export function App() {
   const vp = useViewport();
@@ -96,6 +99,15 @@ export function App() {
     go({ k: 'end', win, pearls });
   };
 
+  const startRun = (mon: Mon) => { const r = newRun(mon, loadMeta()); markCaught(mon.form); saveRun(r); setRun(r); go({ k: 'voyage' }); };
+  const onNew = () => {
+    const m = loadMeta();
+    if (!m.bay.length) { go({ k: 'starter' }); return; }
+    const b = selectedBay(m);
+    if (!b) { go({ k: 'bay', hint: '先選一隻「出航夥伴」再出海吧！點下面的夥伴，再按「設為出航夥伴」。' }); return; }
+    startRun(monFromBay(b));
+  };
+
   const advance = () => {
     if (!run) return;
     run.path.push(run.picked ?? 0);
@@ -108,12 +120,12 @@ export function App() {
   let body;
   switch (screen.k) {
     case 'title':
-      body = <Title vp={vp} hasSave={!!loadRun()} onNew={() => go({ k: 'starter' })}
+      body = <Title vp={vp} hasSave={!!loadRun()} onNew={onNew} onBay={() => go({ k: 'bay' })}
         onContinue={() => { const r = loadRun(); if (r) { setRun(r); go(r.pendingZone ? { k: 'zonepick' } : { k: 'voyage' }); } }}
         onDex={() => go({ k: 'dex' })} onHelp={() => go({ k: 'help' })} onPort={() => go({ k: 'port' })} />;
       break;
     case 'starter':
-      body = <StarterPick vp={vp} onBack={() => go({ k: 'title' })} onPick={(m) => { const r = newRun(m, loadMeta()); markCaught(m.form); saveRun(r); setRun(r); go({ k: 'voyage' }); }} />;
+      body = <StarterPick vp={vp} onBack={() => go({ k: 'title' })} onPick={(form) => { const m = loadMeta(); const b = newBayMon(form); m.bay.push(b); m.selected = b.id; saveMeta(m); startRun(monFromBay(b)); }} />;
       break;
     case 'voyage':
       body = <Voyage vp={vp} run={run!} onGo={() => (nodeOf(run!).kind === 'event' ? go({ k: 'event', ev: pickEvent(run!) }) : go({ k: 'fishing' }))} onNext={advance} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
@@ -164,7 +176,13 @@ export function App() {
       body = <ZonePick vp={vp} run={run!} onPick={(z) => { enterZone(run!, z); saveRun(run); go({ k: 'voyage' }); }} />;
       break;
     case 'port':
-      body = <Port vp={vp} onBack={() => go({ k: 'title' })} />;
+      body = <Port vp={vp} onBack={() => go({ k: 'title' })} onGacha={() => go({ k: 'gacha', from: 'port' })} />;
+      break;
+    case 'bay':
+      body = <Bay vp={vp} hint={screen.hint} onBack={() => go({ k: 'title' })} onGacha={() => go({ k: 'gacha', from: 'bay' })} />;
+      break;
+    case 'gacha':
+      body = <Gacha vp={vp} onBack={() => go(screen.from === 'bay' ? { k: 'bay' } : { k: 'port' })} />;
       break;
     case 'help':
       body = <Help vp={vp} onBack={() => go({ k: 'title' })} />;

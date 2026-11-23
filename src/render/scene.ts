@@ -753,3 +753,78 @@ export const sceneLayers = {
   shoal: (th: string) => shoal(th),
   reef: (th: string) => reef(th),
 };
+
+// ── 招募抽卡：像釣魚一樣拋竿，釣竿顏色代表稀有度 ──
+export type GachaTier = 'broken' | 'N' | 'B' | 'A' | 'S' | 'SSR';
+export const TIER_COLOR: Record<GachaTier, string> = { broken: '#7a6a5a', N: '#e8d8a8', B: '#5fdc6a', A: '#4aa8ff', S: '#ff4a5a', SSR: '#ffcf4a' };
+export type GachaPhase = 'idle' | 'cast' | 'wait' | 'turn' | 'bite' | 'reveal' | 'miss';
+export interface GachaView { phase: GachaPhase; since: number; rod: GachaTier; pool: GachaTier | null; form: string | null; mutant: boolean; parts: Particle[] }
+
+const POOL = { x: 176, y: 94 }; // 夕陽海面的海平線在 74，水池要在海面上
+function stepParts(ctx: CanvasRenderingContext2D, parts: Particle[], dt: number) {
+  for (const p of parts) {
+    p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; if (p.g) p.vy += p.g * dt;
+    ctx.globalAlpha = Math.max(0, Math.min(1, p.life / p.max * 1.4));
+    ctx.fillStyle = p.color; ctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+  for (let i = parts.length - 1; i >= 0; i--) if (parts[i].life <= 0) parts.splice(i, 1);
+}
+
+export function drawGacha(ctx: CanvasRenderingContext2D, t: number, dt: number, v: GachaView) {
+  drawSea(ctx, t, 'sunset');
+  const k = t - v.since, bob = Math.round(Math.sin(t * 1.5));
+  // 變色的水池：光暈＋往上冒的粒子
+  if (v.pool) {
+    const col = TIER_COLOR[v.pool], pulse = 0.55 + Math.sin(t * 6) * 0.2;
+    ctx.globalAlpha = pulse * 0.55;
+    pxEllipse(ctx, POOL.x, POOL.y + 2, 26, 7, (x, y, nx, ny) => (nx * nx + ny * ny > 0.55 || (x + y) % 2 ? col : null));
+    ctx.globalAlpha = 1;
+    if (Math.random() < dt * 40) v.parts.push({ x: POOL.x - 22 + Math.random() * 44, y: POOL.y + 2, vx: (Math.random() - 0.5) * 6, vy: -16 - Math.random() * 22, life: 1, max: 1, color: Math.random() < 0.6 ? col : '#ffffff', size: Math.random() < 0.3 ? 2 : 1 });
+  }
+  boat(ctx, bob);
+  // 釣竿：顏色＝稀有度
+  const hx = BOAT.x + 14, hy = BOAT.y - 16 + bob;
+  const casting = v.phase === 'cast' ? Math.min(1, k / 0.5) : 1;
+  const tipX = hx + 42 - (v.phase === 'cast' && k < 0.25 ? 40 : 0) * (1 - casting), tipY = hy - 34;
+  const col = TIER_COLOR[v.rod];
+  if (v.rod === 'SSR') { // 金色光芒
+    ctx.globalAlpha = 0.35 + Math.sin(t * 5) * 0.15;
+    for (const o of [-2, -1, 1, 2]) pxLine(ctx, hx + o, hy, tipX + o, tipY, '#fff2b0');
+    ctx.globalAlpha = 1;
+    if (Math.random() < dt * 30) { const q = Math.random(); v.parts.push({ x: hx + (tipX - hx) * q, y: hy + (tipY - hy) * q, vx: (Math.random() - 0.5) * 10, vy: -8 - Math.random() * 10, life: 0.8, max: 0.8, color: Math.random() < 0.5 ? '#ffcf4a' : '#ffffff', size: 1 }); }
+  }
+  if (v.rod === 'S' && Math.random() < dt * 26) { const q = Math.random(); v.parts.push({ x: hx + (tipX - hx) * q, y: hy + (tipY - hy) * q, vx: (Math.random() - 0.5) * 14, vy: -10 - Math.random() * 14, life: 0.7, max: 0.7, color: Math.random() < 0.6 ? '#ff4a5a' : '#ffb0a0', size: Math.random() < 0.3 ? 2 : 1 }); }
+  pxLine(ctx, hx, hy, tipX, tipY, '#2a1a10');
+  if (v.rod === 'broken') { // 破損：中間斷了一截，用膠帶纏著
+    const mx = Math.round((hx + tipX) / 2), my = Math.round((hy + tipY) / 2);
+    pxLine(ctx, hx + 1, hy, mx - 2, my + 2, col); pxLine(ctx, mx + 3, my - 3, tipX + 1, tipY, col);
+    ctx.fillStyle = '#d8d0b8'; ctx.fillRect(mx - 1, my - 2, 4, 3);
+  } else pxLine(ctx, hx + 1, hy, tipX + 1, tipY, col);
+  ctx.fillStyle = col; ctx.fillRect(tipX - 1, tipY - 1, 3, 3);
+  // 釣線與浮標
+  if (v.phase !== 'idle') {
+    let bx = POOL.x, by = POOL.y - 4;
+    if (v.phase === 'cast') { const q = Math.min(1, k / 0.6); bx = tipX + (POOL.x - tipX) * q; by = tipY + (POOL.y - 4 - tipY) * q - Math.sin(q * Math.PI) * 30; }
+    if (v.phase === 'bite') by += Math.floor(t * 12) % 2 ? 3 : 1;
+    if (v.phase !== 'reveal' && v.phase !== 'miss') {
+      ctx.globalAlpha = 0.8; pxLine(ctx, tipX, tipY, bx + 1, by, '#ffffff'); ctx.globalAlpha = 1;
+      ctx.fillStyle = '#ff3a4a'; ctx.fillRect(bx, by, 3, 2); ctx.fillStyle = '#ffffff'; ctx.fillRect(bx, by + 2, 3, 1);
+    }
+    if (v.phase === 'miss') { // 線斷了
+      ctx.globalAlpha = Math.max(0, 1 - k); pxLine(ctx, tipX, tipY, tipX + 10, tipY + 20 + k * 20, '#ffffff'); ctx.globalAlpha = 1;
+    }
+  }
+  // 釣上來的生物：從水裡躍出，背後有稀有度光環
+  if (v.phase === 'reveal' && v.form) {
+    const f = FORMS[v.form], n = spriteSize(f.sprite), q = Math.min(1, k / 0.7);
+    const cx = POOL.x + (128 - POOL.x) * q, cy = POOL.y + (50 - POOL.y) * q - Math.sin(q * Math.PI) * 20;
+    const glow = TIER_COLOR[v.pool ?? v.rod];
+    ctx.globalAlpha = 0.25 + q * 0.3;
+    for (let r = 30; r > 8; r -= 4) pxCircle(ctx, Math.round(cx), Math.round(cy), r, r % 8 ? glow : '#ffffff');
+    ctx.globalAlpha = 1;
+    drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(cx - n / 2), Math.round(cy - n / 2), { f: Math.floor(t * 3) % 2, recolor: recolorOf(v.form, v.mutant) });
+    if (k < 0.1) for (let i = 0; i < 24; i++) { const a = Math.random() * Math.PI * 2, sp = 20 + Math.random() * 50; v.parts.push({ x: POOL.x, y: POOL.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30, g: 120, life: 0.8, max: 0.8, color: i % 3 ? '#e8fbff' : glow, size: 2 }); }
+  }
+  stepParts(ctx, v.parts, dt);
+}

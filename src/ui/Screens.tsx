@@ -3,9 +3,8 @@ import type { ComponentChildren } from 'preact';
 import { FORMS, STARTERS } from '../data/creatures';
 import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/types';
 import { ITEMS, statusLabel, type ItemId } from '../game/battle';
-import { ancestryOf, formOf, makeMon, maxHp, xpToNext, type Mon } from '../game/creature';
-import { achStats, ACHIEVEMENTS, bayCap, bayStartLevel, bringBack, buyRecruit, buyUpgrade, claimable, claimAchievement, loadMeta, monFromBay, RECRUITS, recruitUnlocked, saveMeta, titleOf, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
-import { SKILLS } from '../data/skills';
+import { ancestryOf, formOf, maxHp, xpToNext, type Mon } from '../game/creature';
+import { achStats, ACHIEVEMENTS, bayCap, bringBack, buyUpgrade, claimable, claimAchievement, loadMeta, saveMeta, titleOf, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
 import { canUseOutside, enterSpecial, FINAL_ZONE, ZONE_CHOICES, healParty, loadDex, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
 import { APP_VERSION, CHANGELOG, hasUnreadNews, markNewsRead } from '../game/version';
@@ -24,7 +23,7 @@ export function MenuItem({ children, onClick, disabled, hot, sel, sub, onHover }
 }
 
 // ── 標題 ──
-export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp, onPort }: { vp: Viewport; hasSave: boolean; onNew: () => void; onContinue: () => void; onDex: () => void; onHelp: () => void; onPort: () => void }) {
+export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp, onPort, onBay }: { vp: Viewport; hasSave: boolean; onNew: () => void; onContinue: () => void; onDex: () => void; onHelp: () => void; onPort: () => void; onBay: () => void }) {
   const dex = loadDex(), meta = loadMeta();
   const [news, setNews] = useState(false);
   const [sound, setSound] = useState(false);
@@ -69,6 +68,7 @@ export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp, onPort }:
           <Win class="title-menu">
             {hasSave && <MenuItem onClick={onContinue} hot>繼續冒險</MenuItem>}
             <MenuItem onClick={onNew} hot={!hasSave}>新的冒險</MenuItem>
+            {meta.bay.length > 0 && <MenuItem onClick={onBay} sub={`${meta.bay.length}/${bayCap(meta)}`}>棲息灣</MenuItem>}
             <MenuItem onClick={onPort} sub={claimable(meta, achStats(meta, dex)) ? `● 成就可領　◆ ${meta.pearls}` : `◆ ${meta.pearls}`}>港口</MenuItem>
             <MenuItem onClick={onDex} sub={`${dex.caught.length}/${Object.keys(FORMS).length}`}>圖鑑</MenuItem>
             <MenuItem onClick={onHelp}>玩法說明</MenuItem>
@@ -80,18 +80,13 @@ export function Title({ vp, hasSave, onNew, onContinue, onDex, onHelp, onPort }:
 
 // ── 選初始：預設三隻＋已招募＋棲息灣 ──
 type StartOpt = { kind: 'base'; form: string } | { kind: 'bay'; bay: BayMon };
-export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (m: Mon) => void; onBack: () => void }) {
-  const meta = loadMeta();
-  const opts: StartOpt[] = [
-    ...STARTERS.map((form) => ({ kind: 'base', form }) as StartOpt),
-    ...meta.recruits.map((form) => ({ kind: 'base', form }) as StartOpt),
-    ...meta.bay.map((bay) => ({ kind: 'bay', bay }) as StartOpt),
-  ];
+export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (form: string) => void; onBack: () => void }) {
+  const opts: StartOpt[] = STARTERS.map((form) => ({ kind: 'base', form }) as StartOpt);
   const [sel, setSel] = useState(1);
   const cur = opts[sel];
   const formOfOpt = (o: StartOpt) => (o.kind === 'base' ? o.form : o.bay.root);
   const f = FORMS[formOfOpt(cur)];
-  const pick = () => onPick(cur.kind === 'base' ? makeMon(cur.form, 5 + upLv(meta, 'school')) : monFromBay(cur.bay));
+  const pick = () => onPick(formOfOpt(cur));
   const move = (d: number) => setSel((s0) => (s0 + d + opts.length) % opts.length);
   useEffect(() => {
     const on = (e: KeyboardEvent) => {
@@ -108,7 +103,7 @@ export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (m: 
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={(c, t) => drawStarterScene(c, t, win.map((o) => (o ? formOfOpt(o) : null)), 1)} label="可以選的夥伴站在礁石上" />}
       overlay={<>
-        <Win class="banner">選擇這次出海的夥伴　{sel + 1} / {opts.length}</Win>
+        <Win class="banner">第一次出海！選一隻成為你的第一位夥伴</Win>
         {PEDESTALS.map((p, i) => (
           <button class="hit" key={i} aria-label={i === 0 ? '上一隻' : i === 2 ? '下一隻' : f.name} onClick={() => i !== 1 && move(i - 1)}
             style={{ left: `${((p.x - 26) / 256) * 100}%`, top: `${((p.y - 50) / 144) * 100}%`, width: `${(52 / 256) * 100}%`, height: `${(56 / 144) * 100}%` }} />
@@ -118,14 +113,9 @@ export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (m: 
         <div class="dock-split">
           <Win class="info">
             <div class="row-gap"><b class="big-name">{f.name}</b><Elems list={f.elems} /><StageTag form={f.id} />{cur.kind === 'bay' && <span class="bay-tag">棲息灣</span>}</div>
-            {cur.kind === 'bay' ? <>
-              <p class="small">羈絆 <span class="hearts">{'❤'.repeat(Math.min(10, cur.bay.bond))}</span>（{cur.bay.bond}）· 起始等級 Lv{bayStartLevel(cur.bay)} · 經驗 +{Math.min(10, cur.bay.bond) * 5}%</p>
-              <p class="small">{cur.bay.legacy ? `傳承技能：${SKILLS[cur.bay.legacy]?.name}` : '還沒有傳承技能'}{cur.bay.evoMemory.length ? '　· 進化記憶：提早 2 級進化' : ''}</p>
-              <p class="small dim">上次的樣子：{FORMS[cur.bay.form]?.name}</p>
-            </> : <>
-              <AbilityLines form={f.id} />
-              <p class="small dim">{f.desc}</p>
-            </>}
+            <AbilityLines form={f.id} />
+            <p class="small dim">{f.desc}</p>
+            <p class="small accent">選好的夥伴會住進棲息灣，之後每次出海都可以帶牠。只有第一次可以選喔！</p>
           </Win>
           <Win class="cmd">
             <MenuItem onClick={pick} hot>就決定是你了！</MenuItem>
@@ -141,7 +131,7 @@ export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (m: 
 }
 
 // ── 港口 ──
-export function Port({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
+export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void; onGacha: () => void }) {
   const [meta, setMeta] = useState(loadMeta);
   const [tab, setTab] = useState<'up' | 'recruit' | 'bay' | 'ach'>('up');
   const dex = loadDex(), st = achStats(meta, dex), canClaim = claimable(meta, st);
@@ -152,7 +142,7 @@ export function Port({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
       panel={
         <Win class="big-panel port" title={`港口　珍珠 ◆ ${meta.pearls}`}>
           <div class="tabs">
-            {([['up', '設施升級'], ['recruit', '招募夥伴'], ['bay', `棲息灣 ${meta.bay.length}/${bayCap(meta)}`], ['ach', `成就${canClaim ? ` ●${canClaim}` : ''}`]] as const).map(([k, label]) => (
+            {([['up', '設施升級'], ['recruit', '招募夥伴'], ['ach', `成就${canClaim ? ` ●${canClaim}` : ''}`]] as const).map(([k, label]) => (
               <button key={k} class={`tab ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}>{label}</button>
             ))}
           </div>
@@ -171,34 +161,12 @@ export function Port({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
             </div>
           )}
           {tab === 'recruit' && (
-            <div class="pick-grid">
-              {RECRUITS.map((r) => {
-                const owned = meta.recruits.includes(r.form), f = FORMS[r.form], open = recruitUnlocked(r.form, dex.caught);
-                return (
-                  <button class="pick" key={r.form} disabled={owned || !open || meta.pearls < r.cost} onClick={() => { buyRecruit(meta, r.form, dex.caught); refresh(); }}>
-                    <Sprite form={r.form} size={48} silhouette={!open} still={!open} />
-                    <span class="grow"><span class="row-gap"><b>{open ? f.name : '？？？'}</b>{open && <RarityTag r={f.rarity} />}</span>{open && <Elems list={f.elems} />}
-                      <span class="small dim">{owned ? '已招募，可以選為初始夥伴' : open ? `◆ ${r.cost}` : '在冒險中收服過這一族才能招募'}</span></span>
-                  </button>
-                );
-              })}
+            <div class="item-list">
+              <p>在港口邊拋下釣竿，就有機會釣到新的夥伴！所有生物都可能出現，連霸主也是。</p>
+              <p class="small dim">一次 ◆ 200，十連 ◆ 1800。釣竿的顏色代表稀有度，水面變色就是「轉」，會再升一級。稀有的夥伴非常難釣到。</p>
+              <MenuItem onClick={onGacha} hot>🎣 前往招募</MenuItem>
             </div>
           )}
-          {tab === 'bay' && (meta.bay.length ? (
-            <div class="pick-grid">
-              {meta.bay.map((b) => (
-                <div class="pick" key={b.id}>
-                  <Sprite form={b.form} size={48} mutant={b.mutant} />
-                  <span class="grow">
-                    <span class="row-gap"><b>{FORMS[b.form].name}</b>{b.iv && <IvStars iv={b.iv} />}</span>
-                    <span class="small">羈絆 <span class="hearts">{'❤'.repeat(Math.min(10, b.bond))}</span> {b.bond}</span>
-                    <span class="small dim">出海時：{FORMS[b.root].name} Lv{bayStartLevel(b, meta)}{b.legacy ? `・傳承「${SKILLS[b.legacy]?.name}」` : ''}</span>
-                    <button class="chip-btn" onClick={() => { meta.bay = meta.bay.filter((x) => x.id !== b.id); saveMeta(meta); refresh(); }}>放生</button>
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : <p class="small dim">棲息灣還是空的。冒險結束時，可以帶一隻夥伴回來住。</p>)}
           {tab === 'ach' && (
             <div class="item-list">
               <p class="small dim">完成成就可以領取珍珠，也會解鎖稱號，顯示在主畫面上。{titleOf(meta) ? `目前稱號：「${titleOf(meta)}」` : ''}</p>
@@ -442,6 +410,9 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
           </ol>
           <h3>技能數量</h3>
           <p>幼體最多 2 招、成長體 3 招、完全體 4 招。有些生物會跳過成長體，也有些天生就是完全體。</p>
+          <h3>棲息灣與招募</h3>
+          <p class="small">第一次出海時從三隻初始夥伴選一隻，之後所有夥伴都住在主畫面的「棲息灣」。最上面的「出航夥伴」就是下次要帶出海的夥伴。冒險結束可以帶一隻新夥伴回來；多的夥伴可以分解成少量珍珠。</p>
+          <p class="small">在港口可以用珍珠「招募」：像釣魚一樣拋竿，釣竿顏色代表稀有度（破損＜普通 N＜綠 B＜藍 A＜紅 S＜金 SSR），水面變色就是「轉」，會再升一級。</p>
           <h3>個體值與分支進化</h3>
           <p class="small">每隻生物的 HP、攻擊、防禦、速度都有 ±10% 的個體差異，用 ★1～5 表示（霸主固定）。帶回棲息灣的夥伴會保留個體值。</p>
           <p class="small">初始三隻在 Lv18 進化時會分成兩種：戰鬥中常用攻擊技會成為<b>攻擊型</b>；變化技（強化、回復、護盾、場地、異常）用得夠多（35% 以上）會成為<b>守護型</b>。在隊伍畫面可以看到目前的傾向。</p>

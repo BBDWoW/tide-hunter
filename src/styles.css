@@ -347,3 +347,21 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .ach-row.ready { background: rgba(255, 207, 74, 0.1); }
 .ach-row.got b { color: var(--amber); }
 .title-badge { margin-top: calc(var(--u) * 1); font-size: max(10px, calc(var(--u) * 3.4)); color: #ffe9a0; background: rgba(5, 10, 32, 0.55); border: 1px solid rgba(255, 207, 74, 0.6); padding: 0.1em 0.8em; }
+
+/* ── 招募抽卡 ── */
+.gacha-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: calc(var(--u) * 1.5); }
+.portrait .gacha-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.gacha-card { display: grid; justify-items: center; gap: 2px; padding: calc(var(--u) * 1.2); border: 2px solid; background: rgba(5, 10, 32, 0.5); text-align: center; }
+.gacha-card.t-S { box-shadow: 0 0 10px rgba(255, 74, 90, 0.6); }
+.gacha-card.t-SSR { box-shadow: 0 0 14px rgba(255, 207, 74, 0.9); background: rgba(80, 60, 10, 0.5); }
+.broken-rod { font-size: 1.6em; opacity: 0.6; }
+
+/* ── 棲息灣 ── */
+.bay-sel { border: 1px solid rgba(255, 207, 74, 0.6); background: rgba(255, 207, 74, 0.08); }
+.bay-detail { display: grid; gap: calc(var(--u) * 1.5); padding: calc(var(--u) * 1.5); border: 1px solid var(--bevel); background: rgba(5, 10, 32, 0.4); }
+.bay-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 26), 1fr)); gap: calc(var(--u) * 1.5); }
+.bay-cell { position: relative; display: grid; justify-items: center; gap: 2px; padding: calc(var(--u) * 1); background: rgba(5, 10, 32, 0.45); border: 1px solid transparent; color: var(--ink); cursor: pointer; font-family: inherit; }
+.bay-cell.on { border-color: rgba(255, 207, 74, 0.8); }
+.bay-cell.cur { background: rgba(95, 241, 255, 0.15); border-color: #5ff1ff; }
+.bay-flag { position: absolute; top: 2px; right: 4px; }
+.chip-btn.danger { background: #8a2a3a; }

@@ -2,7 +2,8 @@
 import { FORMS } from '../data/creatures';
 import { SKILLS } from '../data/skills';
 import { STAGE_SLOTS } from '../data/types';
-import { ancestryOf, makeMon, maxHp, newUid, type Mon } from './creature';
+import { ancestryOf, makeMon, maxHp, newUid, rollIv, type Mon } from './creature';
+import type { Rarity } from '../data/types';
 
 export type UpgradeId = 'bait' | 'rod' | 'discount' | 'supply' | 'bay' | 'star' | 'school' | 'herbal' | 'kiln' | 'legend';
 export const UPGRADES: Record<UpgradeId, { name: string; desc: (lv: number) => string; costs: number[] }> = {
@@ -10,7 +11,7 @@ export const UPGRADES: Record<UpgradeId, { name: string; desc: (lv: number) => s
   rod: { name: '釣竿工坊', desc: (lv) => `收線時的捕捉區變寬 ${lv * 8}%`, costs: [25, 55, 95] },
   discount: { name: '漁具商會', desc: (lv) => `漂流商店打 ${10 - lv} 折`, costs: [30, 60, 100] },
   supply: { name: '補給庫', desc: (lv) => `開局多 ${lv} 個海藻藥膏、${lv * 20} 枚貝殼幣`, costs: [15, 35, 60] },
-  bay: { name: '棲息灣擴建', desc: (lv) => `棲息灣可以住 ${2 + lv} 隻夥伴`, costs: [30, 65, 110] },
+  bay: { name: '棲息灣擴建', desc: (lv) => `棲息灣可以住 ${10 + lv * 5} 隻夥伴`, costs: [80, 160, 260] },
   star: { name: '星光祭壇', desc: () => '開局獲得 1 個星光餌', costs: [120] },
   school: { name: '訓練所', desc: (lv) => `初始夥伴開局等級 +${lv}`, costs: [40, 85, 140] },
   herbal: { name: '藥草園', desc: (lv) => `營地休息多回復 ${lv * 15}% HP`, costs: [35, 75] },
@@ -67,6 +68,7 @@ export interface Meta {
   recruits: string[];
   bay: BayMon[];
   runs: number;
+  selected?: string; // 棲息灣裡「出航夥伴」的 id
   achieved?: string[]; // 已經領取獎勵的成就
   title?: string; // 目前顯示的稱號（成就 id）
 }
@@ -75,19 +77,91 @@ const KEY = 'tidehunter.meta.v1';
 export function loadMeta(): Meta {
   try {
     const m = JSON.parse(localStorage.getItem(KEY) || 'null');
-    if (m && m.version === 1) return m;
+    if (m && m.version === 1) return migrate(m);
   } catch { /* 略過 */ }
   return { version: 1, pearls: 0, totalPearls: 0, upgrades: {}, recruits: [], bay: [], runs: 0 };
 }
 export function saveMeta(m: Meta) { try { localStorage.setItem(KEY, JSON.stringify(m)); } catch { /* 略過 */ } }
 export const upLv = (m: Meta, id: UpgradeId) => m.upgrades[id] ?? 0;
-export const bayCap = (m: Meta) => 2 + upLv(m, 'bay');
+export const bayCap = (m: Meta) => 10 + upLv(m, 'bay') * 5;
+
+// 舊存檔：以前「招募」的夥伴改成直接住進棲息灣
+function migrate(m: Meta): Meta {
+  if (m.recruits?.length) {
+    for (const form of m.recruits) if (FORMS[form]) m.bay.push(newBayMon(form));
+    m.recruits = [];
+    saveMeta(m);
+  }
+  if (m.selected && !m.bay.some((b) => b.id === m.selected)) m.selected = undefined;
+  return m;
+}
+
+/** 新的一隻棲息灣夥伴（抽到的、第一次選的初始夥伴） */
+export function newBayMon(form: string, mutant = false): BayMon {
+  return { id: newUid(), form, root: ancestryOf(form)[0].id, bond: 0, legacy: null, evoMemory: [], iv: rollIv(), mutant };
+}
+export const selectedBay = (m: Meta) => m.bay.find((b) => b.id === m.selected) ?? null;
+
+// ── 分解：多出來的夥伴換成少量珍珠 ──
+export const DISMANTLE: Record<Rarity, number> = { N: 5, B: 10, A: 25, S: 50, SSR: 100 };
+export const dismantleValue = (b: BayMon) => DISMANTLE[FORMS[b.root]?.rarity ?? 'N'] * (b.mutant ? 2 : 1);
+export function dismantle(m: Meta, id: string): number {
+  const b = m.bay.find((x) => x.id === id);
+  if (!b || m.selected === id) return 0;
+  const v = dismantleValue(b);
+  m.bay = m.bay.filter((x) => x.id !== id); m.pearls += v; m.totalPearls += v;
+  saveMeta(m); return v;
+}
+
+// ── 招募抽卡 ──
+export const PULL_COST = 200, TEN_COST = 1800, BROKEN_REFUND = 30;
+export type Tier = 'broken' | Rarity;
+export const TIERS: Tier[] = ['broken', 'N', 'B', 'A', 'S', 'SSR'];
+/** 拋竿時拿到的釣竿（決定基本稀有度） */
+export const ROD_RATES: [Tier, number][] = [['broken', 10], ['N', 55], ['B', 25], ['A', 8], ['S', 1.6], ['SSR', 0.4]];
+/** 「轉」：水面變色、升一級的機率（可以連續轉） */
+export const TURN_RATES: Partial<Record<Tier, number>> = { broken: 0.15, N: 0.08, B: 0.06, A: 0.04, S: 0.03 };
+export const ROD_NAME: Record<Tier, string> = { broken: '破損釣竿', N: '普通釣竿', B: '綠色釣竿', A: '藍色釣竿', S: '紅色釣竿', SSR: '金色釣竿' };
+
+/** 可以抽到的生物：每一族的最初型態（包含霸主，不含環境形態） */
+export function gachaPool(r: Rarity): string[] {
+  const targets = new Set(Object.values(FORMS).flatMap((f) => (f.evolve ?? []).map((e) => e.to)));
+  return Object.values(FORMS).filter((f) => !targets.has(f.id) && !f.recolor && f.rarity === r).map((f) => f.id);
+}
+export interface PullResult { rod: Tier; path: Tier[]; tier: Tier; form: string | null; mutant: boolean; bayId?: string }
+export function rollPull(rnd: () => number = Math.random): PullResult {
+  const total = ROD_RATES.reduce((a, [, w]) => a + w, 0);
+  let x = rnd() * total, rod: Tier = 'N';
+  for (const [t, w] of ROD_RATES) { x -= w; if (x <= 0) { rod = t; break; } }
+  const path: Tier[] = [];
+  let tier = rod;
+  while (TURN_RATES[tier] !== undefined && rnd() < TURN_RATES[tier]!) { tier = TIERS[TIERS.indexOf(tier) + 1]; path.push(tier); }
+  if (tier === 'broken') return { rod, path, tier, form: null, mutant: false };
+  const pool = gachaPool(tier);
+  return { rod, path, tier, form: pool[Math.floor(rnd() * pool.length)], mutant: rnd() < 1 / 40 };
+}
+/** 抽 n 次：扣珍珠、結果直接住進棲息灣；破損釣竿退還少量珍珠 */
+export function doPulls(m: Meta, n: 1 | 10): PullResult[] | null {
+  const cost = n === 10 ? TEN_COST : PULL_COST;
+  if (m.pearls < cost || bayCap(m) - m.bay.length < n) return null;
+  m.pearls -= cost;
+  const res: PullResult[] = [];
+  for (let i = 0; i < n; i++) {
+    const r = rollPull();
+    if (r.form) { const b = newBayMon(r.form, r.mutant); m.bay.push(b); r.bayId = b.id; }
+    else m.pearls += BROKEN_REFUND;
+    res.push(r);
+  }
+  saveMeta(m);
+  return res;
+}
 
 export function buyUpgrade(m: Meta, id: UpgradeId): boolean {
   const lv = upLv(m, id), cost = UPGRADES[id].costs[lv];
   if (cost === undefined || m.pearls < cost) return false;
   m.pearls -= cost; m.upgrades[id] = lv + 1; saveMeta(m); return true;
 }
+/** @deprecated 招募改成抽卡，保留給舊程式相容 */
 export function buyRecruit(m: Meta, form: string, caught: string[] = []): boolean {
   const r = RECRUITS.find((x) => x.form === form);
   if (!r || m.recruits.includes(form) || m.pearls < r.cost || !recruitUnlocked(form, caught)) return false;
@@ -171,7 +245,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'mutant', title: '異色收藏家', desc: '收服一隻 ✦ 異變個體', reward: 40, check: (s) => s.mutants >= 1 },
   { id: 'guard', title: '守護之心', desc: '讓初始夥伴進化成守護型', reward: 30, check: (s) => s.evolved.some((id) => ['water3b', 'fire3b', 'grass3b'].includes(id)) },
   { id: 'env', title: '環境之子', desc: '讓夥伴進化成地區形態', reward: 30, check: (s) => s.evolved.some((id) => !!FORMS[id]?.recolor) },
-  { id: 'baylove', title: '棲息灣大家庭', desc: '棲息灣住滿 4 隻夥伴', reward: 30, check: (s) => s.bay >= 4 },
+  { id: 'baylove', title: '棲息灣大家庭', desc: '棲息灣住了 10 隻夥伴', reward: 30, check: (s) => s.bay >= 10 },
   { id: 'runs10', title: '老練的水手', desc: '出海 10 次', reward: 30, check: (s) => s.runs >= 10 },
 ];
 export function claimAchievement(m: Meta, id: string): boolean {
