@@ -2,7 +2,7 @@
 // 音高用 MIDI 編號（60 = 中央 C），拍點從 0 開始（4/4 拍，一小節 4 拍）。
 
 export type Note = [beat: number, dur: number, midi: number];
-export type SongId = 'bay' | 'voyage' | 'fish' | 'battle' | 'boss';
+export type SongId = 'bay' | 'voyage' | 'fish' | 'battle' | 'boss' | 'godhand' | 'godfight';
 
 export interface Song {
   bpm: number;
@@ -28,6 +28,12 @@ export const CHORDS: Record<string, { notes: number[]; root: number }> = {
   C: { notes: [64, 67, 72], root: 36 },
   Gm: { notes: [62, 67, 70], root: 43 },
   A: { notes: [61, 64, 69], root: 45 },
+  // 神之手：明亮、有點寂寞的利底亞色彩
+  Fmaj7: { notes: [65, 69, 76], root: 41 },
+  G: { notes: [62, 67, 71], root: 43 },
+  Em: { notes: [64, 67, 71], root: 40 },
+  Am: { notes: [64, 69, 72], root: 45 },
+  Cmaj7: { notes: [64, 67, 71], root: 36 },
 };
 
 const ISLAND: Song['strum'] = [[0, 'd', 1], [1, 'd', 0.7], [1.5, 'u', 0.55], [2.5, 'u', 0.6], [3, 'd', 0.75], [3.5, 'u', 0.5]];
@@ -107,6 +113,38 @@ export const SONGS: Record<SongId, Song> = {
     strum: [[0, 'd', 1], [1, 'd', 0.7], [2, 'd', 0.9], [3, 'd', 0.7]],
     bass: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5], kick: [0, 1, 2, 3], snare: [1, 3],
   },
+  // 神之手登場：音樂盒般的分解和弦，慢、空靈、有一點寂寞
+  godhand: {
+    bpm: 66, swing: 0, lead: 0.13, chord: 0.06,
+    bars: ['Fmaj7', 'G', 'Em', 'Am', 'Fmaj7', 'G', 'Cmaj7', 'Cmaj7'],
+    melody: [
+      [[0, 2, 81], [2, 1, 83], [3, 1, 84]],
+      [[0, 3, 83], [3, 1, 79]],
+      [[0, 2, 79], [2, 1, 76], [3, 1, 79]],
+      [[0, 4, 81]],
+      [[0, 1, 77], [1, 1, 81], [2, 1, 83], [3, 1, 88]],
+      [[0, 2, 86], [2, 2, 83]],
+      [[0, 1, 84], [1, 1, 83], [2, 2, 79]],
+      null,
+    ],
+    strum: null, arp: true, bass: [0],
+  },
+  // 陪神之手玩：同一段旋律，加上輕輕的心跳鼓
+  godfight: {
+    bpm: 92, swing: 0, lead: 0.14, chord: 0.06,
+    bars: ['Fmaj7', 'G', 'Em', 'Am', 'Fmaj7', 'G', 'Cmaj7', 'Cmaj7'],
+    melody: [
+      [[0, 1, 81], [1, 0.5, 83], [1.5, 0.5, 84], [2, 2, 83]],
+      [[0, 1.5, 79], [1.5, 0.5, 81], [2, 2, 83]],
+      [[0, 1, 79], [1, 1, 76], [2, 1, 79], [3, 1, 81]],
+      [[0, 3, 81], [3, 1, 76]],
+      [[0, 0.5, 77], [0.5, 0.5, 81], [1, 1, 83], [2, 1, 88], [3, 1, 86]],
+      [[0, 2, 86], [2, 1, 83], [3, 1, 79]],
+      [[0, 1, 84], [1, 1, 83], [2, 1, 79], [3, 1, 76]],
+      [[0, 4, 79]],
+    ],
+    strum: null, arp: true, bass: [0, 2], kick: [0, 0.5], shaker: false,
+  },
 };
 
 // 各海域的音色與環境音
@@ -126,5 +164,6 @@ export const FLAVORS: Record<string, Flavor> = {
   void: { lead: 'soft', surf: { base: 0.15, peak: 0.5, cutoff: 300, hiss: 0.1, period: [9, 13] }, reverb: 0.45, detune: -3 },
   core: { lead: 'saw', surf: { base: 0.1, peak: 0.4, cutoff: 600, hiss: 0.15, period: [6, 9] }, reverb: 0.3 },
   cyber: { lead: 'saw', surf: { base: 0.1, peak: 0.45, cutoff: 650, hiss: 0.2, period: [6, 9] }, reverb: 0.3 },
+  godhand: { lead: 'bell', surf: { base: 0.06, peak: 0.25, cutoff: 900, hiss: 0.1, period: [9, 13] }, reverb: 0.6, detune: 0 },
   abyss: { lead: 'soft', surf: { base: 0.3, peak: 0.75, cutoff: 160, hiss: 0, period: [10, 14] }, reverb: 0.5, detune: -5 },
 };

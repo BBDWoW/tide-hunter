@@ -91,9 +91,11 @@ export function App() {
   // 背景音樂：依畫面與所在海域切換
   useEffect(() => {
     const k = screen.k, theme = run && !['title', 'port', 'dex', 'help', 'starter', 'end'].includes(k) ? zoneTheme(run) : 'sunset';
+    const ghFight = k === 'battle' && !!(screen as { enc?: Encounter }).enc?.godhand;
+    if (k === 'godhand' || ghFight) { setScene(ghFight ? 'godfight' : 'godhand', 'godhand'); return; }
     const song: SongId = k === 'battle' ? (boss ? 'boss' : 'battle') : k === 'fishing' ? 'fish' : ['voyage', 'event', 'zonepick', 'after'].includes(k) ? 'voyage' : 'bay';
     setScene(song, theme);
-  }, [screen.k, run?.zone, boss]);
+  }, [screen.k, run?.zone, boss, n]);
   const go = (s: Screen) => { setScreen(s); setN((x) => x + 1); };
 
   // 冒險結束：結算珍珠、讓棲息灣的夥伴回港

@@ -638,7 +638,7 @@ export function applyItemOutside(run: RunState, item: ItemId, idx: number): stri
 
 // ── 超特殊事件：神之手 ──
 export const GODHAND_CHANCE = 0.005;
-export interface GodHandEvent { boss: string; lv: number; need: [Rarity, Rarity]; stage: 'offer' | 'ask' | 'fight' | 'won' | 'lost' | 'took' | 'left'; text?: string }
+export interface GodHandEvent { boss: string; lv: number; need: [Rarity, Rarity]; stage: 'offer' | 'ask' | 'fight' | 'won' | 'lost' | 'took' | 'left'; text?: string; introSeen?: boolean }
 /** 打倒霸主時擲骰：神之手要的兩隻夥伴的稀有度組合 */
 export function rollGodHand(run: RunState, boss: string, lv: number): GodHandEvent {
   const pick = () => weighted(run.rng, [['N', 30], ['B', 35], ['A', 25], ['S', 10]] as [Rarity, number][]);

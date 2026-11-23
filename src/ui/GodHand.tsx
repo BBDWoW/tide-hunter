@@ -1,6 +1,7 @@
 // 超特殊事件：神之手。打倒霸主後極低機率出現。
 // 犧牲兩隻指定稀有度的夥伴 → 神之手把霸主抓給你；拒絕 → 可以選擇陪它玩 20 回合。
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { fx } from '../render/fx';
 import { sfx } from '../audio/engine';
 import { FORMS } from '../data/creatures';
 import { RARITY } from '../data/types';
@@ -24,6 +25,95 @@ export function drawGodHand(c: CanvasRenderingContext2D, t: number, x: number, h
   // 飄落的金色光點
   for (let i = 0; i < 12; i++) { const p = (t * 0.25 + i / 12) % 1; c.fillStyle = `rgba(255,230,150,${1 - p})`; c.fillRect(Math.round(x - size / 2 + ((i * 41) % size)), Math.round(p * (handY + size * 0.5)), 1, 1); }
   if (hand) drawSprite(c, 'godhand', PAL.water, x - size / 2, handY + Math.sin(t * 1.4) * 2 - open * 2, { scale });
+}
+
+// ── 專屬登場動畫 ──
+const IW = 192, IH = 108;
+const rnd = (i: number) => { const v = Math.sin(i * 91.7 + 13.3) * 43758.5453; return v - Math.floor(v); };
+const seg = (p: number, a: number, b: number) => Math.min(1, Math.max(0, (p - a) / (b - a)));
+const ease = (x: number) => 1 - Math.pow(1 - x, 3);
+function cloud(c: CanvasRenderingContext2D, x: number, y: number, w: number, a: number) {
+  c.fillStyle = `rgba(236,232,252,${a})`;
+  for (let k = 0; k < 6; k++) { c.beginPath(); c.arc(x + (k - 2.5) * w * 0.16, y - Math.sin(k * 1.7) * w * 0.06, w * (0.14 + 0.04 * (k % 3)), 0, 7); c.fill(); }
+  c.fillStyle = `rgba(186,176,226,${a})`; c.fillRect(x - w * 0.45, y + w * 0.06, w * 0.9, 2);
+}
+function drawIntro(c: CanvasRenderingContext2D, t: number, D: number) {
+  const p = t / D;
+  // 1) 世界凝結、變暗
+  const dark = ease(seg(p, 0, 0.12));
+  const g = c.createLinearGradient(0, 0, 0, IH);
+  g.addColorStop(0, `rgb(${Math.round(20 - dark * 12)},${Math.round(30 - dark * 20)},${Math.round(70 - dark * 50)})`); g.addColorStop(1, '#03030c');
+  c.fillStyle = g; c.fillRect(0, 0, IW, IH);
+  for (let i = 0; i < 50; i++) { const tw = Math.sin(t * 2 + i) > 0.3 ? 1 : 0.4; c.fillStyle = `rgba(255,250,230,${0.6 * tw * dark})`; c.fillRect(Math.round(rnd(i) * IW), Math.round(rnd(i + 7) * IH * 0.6), 1, 1); }
+  // 2) 天空裂開一道金縫，光倒下來
+  const crack = ease(seg(p, 0.12, 0.32)), open = ease(seg(p, 0.3, 0.5));
+  if (crack > 0) {
+    c.save(); c.translate(IW / 2, 0);
+    const w = 1 + open * 40;
+    const lg = c.createLinearGradient(0, 0, 0, IH);
+    lg.addColorStop(0, `rgba(255,236,170,${0.9 * crack})`); lg.addColorStop(1, 'rgba(255,236,170,0)');
+    c.fillStyle = lg; c.beginPath(); c.moveTo(-w / 2, 0); c.lineTo(w / 2, 0); c.lineTo(w * 1.6, IH); c.lineTo(-w * 1.6, IH); c.fill();
+    c.fillStyle = `rgba(255,255,240,${crack})`; c.fillRect(-1, 0, 2, 40 * crack + open * 70);
+    for (let k = 0; k < 6; k++) { const yy = 6 + k * 7; if (yy < 40 * crack) { c.fillRect(-3 - (k % 2) * 2, yy, 2, 1); c.fillRect(2 + (k % 2), yy + 3, 2, 1); } }
+    c.restore();
+  }
+  // 3) 金色光環降下、雲從兩邊湧進來
+  const halo = ease(seg(p, 0.38, 0.62)), clouds = ease(seg(p, 0.4, 0.66));
+  if (halo > 0) {
+    const hy = -10 + halo * 16;
+    c.strokeStyle = `rgba(255,214,110,${halo})`; c.lineWidth = 2; c.beginPath(); c.ellipse(IW / 2, hy, 30, 6, 0, 0, 7); c.stroke();
+    c.strokeStyle = `rgba(255,250,220,${halo})`; c.lineWidth = 1; c.beginPath(); c.ellipse(IW / 2, hy, 30, 6, 0, 0, 7); c.stroke();
+    c.fillStyle = `rgba(255,255,240,${halo})`; c.fillRect(IW / 2 - 1, hy - 10, 2, 20); c.fillRect(IW / 2 - 8, hy - 1, 16, 2);
+  }
+  if (clouds > 0) {
+    cloud(c, -40 + clouds * 90, 82, 70, clouds); cloud(c, IW + 40 - clouds * 90, 86, 70, clouds);
+    cloud(c, -30 + clouds * 70, 96, 60, clouds * 0.9); cloud(c, IW + 30 - clouds * 70, 98, 60, clouds * 0.9);
+  }
+  // 4) 神之手從雲裡升起，石柱圍著轉
+  const rise = ease(seg(p, 0.58, 0.82));
+  if (rise > 0) {
+    const sz = 96 * 0.9, hy = IH - rise * (IH + 4) + Math.sin(t * 1.5) * 1.5;
+    c.save(); c.globalAlpha = rise; drawSprite(c, 'godhand', PAL.water, IW / 2 - sz / 2, hy, { scale: 0.9 }); c.restore();
+    for (let i = 0; i < 18; i++) { const a = t * 0.8 + i; c.fillStyle = `rgba(255,230,150,${rise * (0.5 + 0.5 * Math.sin(t * 4 + i))})`; c.fillRect(Math.round(IW / 2 + Math.cos(a) * (40 + (i % 4) * 6)), Math.round(hy + 40 + Math.sin(a * 1.3) * 26), 1, 1); }
+  }
+  // 5) 一道白光
+  const fl = seg(p, 0.8, 0.84) - seg(p, 0.84, 0.95);
+  if (fl > 0) { c.fillStyle = `rgba(255,255,255,${fl})`; c.fillRect(0, 0, IW, IH); }
+}
+
+/** 神之手登場：天空凝結 → 裂縫 → 光環 → 雲 → 手 → 字卡 */
+export function GodHandIntro({ onDone }: { onDone: () => void }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [card, setCard] = useState(false);
+  const done = useRef(false), t0 = useRef(performance.now());
+  const finish = () => { if (performance.now() - t0.current < 700 || done.current) return; done.current = true; onDone(); };
+  useEffect(() => {
+    const c = ref.current!.getContext('2d')!; c.imageSmoothingEnabled = false;
+    const D = fx.reduce ? 2.5 : 6.2; let raf = 0;
+    const timers = [
+      window.setTimeout(() => sfx('reveal'), 900),
+      window.setTimeout(() => sfx('energy'), 2400),
+      window.setTimeout(() => sfx('fanfare'), D * 830),
+      window.setTimeout(() => setCard(true), D * 840),
+    ];
+    const loop = (now: number) => { drawIntro(c, Math.min((now - t0.current) / 1000, D * 1.5), D); raf = requestAnimationFrame(loop); };
+    raf = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(raf); timers.forEach(clearTimeout); };
+  }, []);
+  return (
+    <div class="zone-cut gh-intro" onClick={finish} role="dialog" aria-label="神之手登場">
+      <canvas ref={ref} width={IW} height={IH} />
+      {card && (
+        <div class="zc-card">
+          <span class="zc-eyebrow">超特殊事件</span>
+          <span class="gh-inf">∞</span>
+          <b class="zc-name">神之手</b>
+          <span class="zc-line">從天上伸下來的一隻手，擁有壓垮世界的力量。<br />但其實，它只是想有人陪。</span>
+        </div>
+      )}
+      <span class="zc-skip">點一下{card ? '繼續' : '跳過'}</span>
+    </div>
+  );
 }
 
 const RAR_ORDER = ['SSR', 'S', 'A', 'B', 'N'];
@@ -116,9 +206,13 @@ export function GodHandScreen({ vp, run, onFight, onDone }: { vp: Viewport; run:
       <MenuItem onClick={() => { run.godHand = undefined; saveRun(run); onDone(); }} hot>繼續</MenuItem>
     </>
   );
+  const intro = !gh.introSeen;
   return (
-    <GameScreen vp={vp} scene={<SceneCanvas draw={scene} label="從天上伸下來的白色巨手" />}
-      panel={<Win class="big-panel godhand-panel" title="？？？　神之手">{body}</Win>} />
+    <>
+      <GameScreen vp={vp} scene={<SceneCanvas draw={scene} label="從天上伸下來的白色巨手" />}
+        panel={!intro && <Win class="big-panel godhand-panel" title="？？？　神之手">{body}</Win>} />
+      {intro && <GodHandIntro onDone={() => { gh.introSeen = true; saveRun(run); force((n) => n + 1); }} />}
+    </>
   );
 }
 
