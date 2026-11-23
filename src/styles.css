@@ -643,3 +643,7 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .console, .console * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
 .console input, .console textarea { -webkit-user-select: text; user-select: text; }
 html.holding, html.holding body { touch-action: none; overscroll-behavior: none; }
+
+/* 橫向：頁面鎖住，不會被拖動 */
+html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
+.panel-layer, .win, .lower-panel { overscroll-behavior: contain; }

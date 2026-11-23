@@ -116,6 +116,21 @@ export function GameScreen({ vp, scene, overlay, dock, panel, dockTall, onScene,
     window.addEventListener('keydown', on);
     return () => window.removeEventListener('keydown', on);
   }, []);
+  // 橫向：整個頁面固定不動，避免 iOS 拖一下整個畫面跟著上下滑
+  useEffect(() => {
+    const de = document.documentElement;
+    de.classList.toggle('lock', !vp.portrait);
+    if (vp.portrait) return;
+    const guard = (e: TouchEvent) => {
+      for (let el = e.target as HTMLElement | null; el && el !== document.body; el = el.parentElement) {
+        const oy = getComputedStyle(el).overflowY, ox = getComputedStyle(el).overflowX;
+        if (((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) || ((ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth + 1)) return;
+      }
+      e.preventDefault();
+    };
+    document.addEventListener('touchmove', guard, { passive: false });
+    return () => document.removeEventListener('touchmove', guard);
+  }, [vp.portrait]);
   const lower = (dock || panel) && vp.portrait;
   // 橫向：算出左右要延伸多少（用整個螢幕寬，連瀏海兩側也鋪滿）
   const full = typeof document !== 'undefined' ? document.documentElement.clientWidth || window.innerWidth : vp.w;
