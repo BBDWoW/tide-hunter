@@ -1,6 +1,7 @@
 // 回合制戰鬥引擎（純邏輯，不碰畫面）。
 // 兩邊都是「Side」，由誰操作（玩家、AI、之後的連線玩家）由外部決定。
 // 所有隨機都走 state.rng，所以同樣的初始狀態＋同樣的行動序列一定得到同樣結果。
+import { DOMAINS, type DomainId } from '../data/domains';
 import { FIELDS, SKILLS, type FieldId, type Skill, type StatKey, type StatusId } from '../data/skills';
 import { effectiveness, ELEM } from '../data/types';
 import { blockRate, dodgeRate, formOf, maxHp, statsOf, type Mon } from './creature';
@@ -47,6 +48,7 @@ export interface BattleState {
   needSwitch: [boolean, boolean];
   field?: { id: FieldId; turns: number } | null; // 場地／天候
   traps?: [number, number]; // 各自場地上的暗礁剩餘回合
+  domain?: DomainId; // 特殊區域的領域效果（整場戰鬥都在）
 }
 
 export type Action =
@@ -100,13 +102,13 @@ function freshVol(): Volatile {
 }
 
 type SideInit = { team: Mon[]; name: string; mods?: SideMods; boss?: boolean };
-export function createBattle(rng: Rng, a: SideInit, b: SideInit, wild: boolean): BattleState {
+export function createBattle(rng: Rng, a: SideInit, b: SideInit, wild: boolean, domain?: DomainId): BattleState {
   const mk = (x: SideInit): Side => {
     const vol: Record<string, Volatile> = {};
     x.team.forEach((m) => { vol[m.uid] = freshVol(); vol[m.uid].energy += (x.mods?.energy ?? 0) + (held(m, 'sparkcell') ? 1 : 0); });
     return { team: x.team, active: Math.max(0, x.team.findIndex((m) => m.hp > 0)), vol, name: x.name, mods: x.mods, boss: x.boss };
   };
-  const st: BattleState = { rng, turn: 1, sides: [mk(a), mk(b)], wild, over: null, needSwitch: [false, false], field: null, traps: [0, 0] };
+  const st: BattleState = { rng, turn: 1, sides: [mk(a), mk(b)], wild, over: null, needSwitch: [false, false], field: null, traps: [0, 0], domain };
   for (const side of [0, 1] as SideId[]) bubble(st, side);
   return st;
 }
@@ -156,7 +158,8 @@ export function resolveTurn(s: BattleState, actions: [Action, Action]): BEvent[]
   order.sort((x, y) => {
     const d = prio(y) - prio(x);
     if (d) return d;
-    const sp = effSpeed(s, y) - effSpeed(s, x);
+    // 顛倒法則：速度慢的先動
+    const sp = (effSpeed(s, y) - effSpeed(s, x)) * (s.domain === 'void' ? -1 : 1);
     return sp || (next(s.rng) < 0.5 ? -1 : 1);
   });
 
@@ -485,6 +488,7 @@ export function effPower(s: BattleState, side: SideId, foe: SideId, sk: Skill): 
   if (f === 'grid' && sk.elem === 'data') p *= 1.5;
   if (f === 'grove' && sk.elem === 'grass') p *= 1.5;
   if (f === 'abyss' && sk.elem === 'dark') p *= 1.5;
+  if (s.domain && sk.elem === DOMAINS[s.domain].elem) p *= 1.25;
   return p;
 }
 
@@ -633,8 +637,12 @@ function endOfTurn(s: BattleState, ev: BEvent[]) {
       const amt = Math.min(mx - m.hp, Math.max(1, Math.floor(mx / (fe.includes('grass') ? 8 : 16))));
       m.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: m.hp });
     }
+    if (s.domain === 'forest' && side === 0 && m.hp < mx && s.turn < VORTEX_TURN) {
+      const amt = Math.min(mx - m.hp, Math.max(1, Math.floor(mx / (fe.includes('grass') ? 10 : 16))));
+      m.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: m.hp });
+    }
     v.turnsIn++;
-    v.energy = Math.min(MAX_ENERGY, v.energy + 1 + (hasAb(f, 'tidegod') || hasAb(f, 'dragonpresence') ? 1 : 0));
+    v.energy = Math.min(MAX_ENERGY, v.energy + 1 + (s.domain === 'core' && side === 0 ? 1 : 0) + (hasAb(f, 'tidegod') || hasAb(f, 'dragonpresence') ? 1 : 0));
     ev.push({ t: 'energy', side, value: v.energy });
   }
   if (s.over) return;

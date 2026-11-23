@@ -1,3 +1,4 @@
+import { DOMAINS, isDomain } from '../data/domains';
 import { Icon } from './Icon';
 // 戰鬥畫面：把引擎吐出的事件依序播放成動畫，並提供玩家的選單
 import { HELD } from '../data/held';
@@ -56,7 +57,7 @@ const readSpeed = () => { try { return localStorage.getItem(SPEED_KEY) !== 'norm
 export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunState; enc: Encounter; boss: boolean; onEnd: (r: BattleResult) => void }) {
   const bsRef = useRef<BattleState | null>(null);
   if (!bsRef.current) {
-    bsRef.current = createBattle(makeRng((next(run.rng) * 2 ** 32) >>> 0), { team: run.party, name: '你', mods: battleMods(run) }, { team: enc.team ?? [enc.mon], name: boss ? '霸主' : enc.crew ?? '野生', boss, mods: foeMods(run) }, !enc.team);
+    bsRef.current = createBattle(makeRng((next(run.rng) * 2 ** 32) >>> 0), { team: run.party, name: '你', mods: battleMods(run) }, { team: enc.team ?? [enc.mon], name: boss ? '霸主' : enc.crew ?? '野生', boss, mods: foeMods(run) }, !enc.team, isDomain(run.zone) ? run.zone : undefined);
   }
   const bs = bsRef.current;
   const crew = !!enc.team; // 對手船隊：多隻敵人、不能收服
@@ -170,6 +171,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       else if (enc.rarity === 'S') say('☆ 史詩級的稀有生物！');
       if (enc.mon.mutant) say('✦ 是異變個體！牠的顏色跟一般的不一樣！');
       if (enc.landing === 'perfect' || enc.landing === 'good') { await wait(500); say(`${LANDING_BONUS[enc.landing].label}！${ef.name} 受了傷${boss || crew ? '' : '，比較好捕捉'}！`); }
+      if (bs.domain) { await wait(400); say(`領域效果「${DOMAINS[bs.domain].name}」：${DOMAINS[bs.domain].desc}`); await wait(900); }
       await wait(700);
       if (boss) { const a = anim.current; a.fade[0] = 1; a.enter[0] = 0; sfx('enter'); }
       say(`上吧，${formOf(active(bs, 0)).name}！`);
@@ -440,7 +442,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           const c = monSlot(p.side, disp.current[p.side].form);
           return <span key={p.id} class={`pop ${p.cls}`} style={{ left: `${((c.cx + p.dx) / W) * 100}%`, top: `${((c.cy - 30) / H) * 100}%` }}>{p.label && <small>{p.label}</small>}{p.text}</span>;
         })}
-        {field && <div class="field-chip" style={{ borderColor: FIELDS[field.id].color }} title={FIELDS[field.id].desc}><i style={{ background: FIELDS[field.id].color }} />{FIELDS[field.id].name}<span>剩 {field.turns} 回合</span></div>}
+        {bs.domain && <div class="domain-chip" style={{ borderColor: DOMAINS[bs.domain].color, color: DOMAINS[bs.domain].color }} title={DOMAINS[bs.domain].desc}><Icon name="sparkle" /> 領域・{DOMAINS[bs.domain].name}<span>{DOMAINS[bs.domain].short}</span></div>}
+        {field && <div class={`field-chip ${bs.domain ? 'below' : ''}`} style={{ borderColor: FIELDS[field.id].color }} title={FIELDS[field.id].desc}><i style={{ background: FIELDS[field.id].color }} />{FIELDS[field.id].name}<span>剩 {field.turns} 回合</span></div>}
         <button class="speed" onClick={toggleFast} aria-pressed={fast}>{fast ? '▶▶ 快速' : '▶ 一般'}</button>
         {mode === 'reel' && !vp.portrait && reel}
         {toast && <div class="item-toast" key={toast.id}><Sprite form={toast.form} size={48} /><span class="grow"><b><Icon name="heal" /> {toast.text}</b><Bar value={toast.hp} max={toast.max} /><span class="num small">HP {toast.from} → {toast.hp}/{toast.max}</span></span></div>}

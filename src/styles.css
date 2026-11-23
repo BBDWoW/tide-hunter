@@ -664,3 +664,66 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 .warn-text { color: #ffb0a0; }
 .warn-text b { color: #ff7a66; }
 .confirm-btns { display: grid; gap: calc(var(--u) * 1.5); }
+
+/* 特殊區域的領域效果標籤 */
+.domain-chip { position: absolute; top: calc(var(--u) * 3); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 0.4em; white-space: nowrap; background: rgba(5, 10, 32, 0.8); border: 1px solid; font-size: max(10px, calc(var(--u) * 3.4)); padding: 0.15em 0.6em; z-index: 3; text-shadow: 0 1px 0 #000; }
+.domain-chip span { color: #dfe8ff; opacity: 0.8; font-size: 0.85em; }
+.field-chip.below { top: calc(var(--u) * 10); }
+.portrait .domain-chip { top: auto; bottom: calc(var(--u) * 33); }
+
+/* ── 特殊區域過場動畫 ── */
+.zone-cut { position: fixed; inset: 0; z-index: 70; background: #000; cursor: pointer; overflow: hidden; display: grid; place-items: end center; padding-bottom: max(7vh, env(safe-area-inset-bottom)); }
+.zone-cut canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+.zc-card { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 0.35em; text-align: center; padding: 1em 2em; max-width: min(92vw, 640px);
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.62) 18%, rgba(0, 0, 0, 0.62) 82%, transparent); animation: zc-in 0.6s ease-out both; text-shadow: 0 2px 0 #000; }
+.zc-eyebrow { font-size: clamp(12px, 2.6vmin, 16px); letter-spacing: 0.3em; color: #fff; opacity: 0.8; }
+.zc-name { font-size: clamp(26px, 8vmin, 52px); letter-spacing: 0.12em; color: #fff; animation: bi-name 0.7s 0.1s ease-out both; }
+.zc-line { font-size: clamp(14px, 3.2vmin, 19px); color: #e8eeff; }
+.zc-domain { font-size: clamp(13px, 2.9vmin, 17px); background: rgba(0, 0, 0, 0.45); padding: 0.25em 0.7em; margin-top: 0.3em; display: inline-flex; gap: 0.3em; align-items: center; }
+.zc-forest .zc-name { text-shadow: 3px 3px 0 #0b3a12, 0 0 16px rgba(140, 255, 130, 0.7); }
+.zc-void .zc-name { text-shadow: 3px 3px 0 #22004a, 0 0 16px rgba(190, 140, 255, 0.8); }
+.zc-core .zc-name { text-shadow: 3px 3px 0 #002a40, 0 0 16px rgba(80, 230, 255, 0.8); }
+.zone-cut.win .zc-name { color: #fffbe8; }
+.zc-skip { position: absolute; right: max(16px, env(safe-area-inset-right)); bottom: max(12px, env(safe-area-inset-bottom)); font-size: 12px; color: rgba(255, 255, 255, 0.6); z-index: 1; }
+@keyframes zc-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.reduce-fx .zc-card, .reduce-fx .zc-name { animation: none; }
+
+/* 守護者的謝禮 */
+.guardian-panel { width: min(100%, calc(var(--u) * 210)); }
+.gr-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--u) * 2); }
+.portrait .gr-row { grid-template-columns: 1fr; }
+.gr-card { display: flex; flex-direction: column; align-items: center; gap: 0.3em; text-align: center; padding: 0.7em 0.5em; border: 2px solid; background: rgba(0, 0, 0, 0.3); cursor: pointer; font: inherit; color: #fff; min-height: 44px; }
+.portrait .gr-card { flex-direction: row; text-align: left; align-items: center; }
+.portrait .gr-card b { flex: none; }
+.gr-card:disabled { opacity: 0.4; cursor: default; }
+.gr-card:not(:disabled):hover, .gr-card:not(:disabled):focus-visible { background: rgba(255, 255, 255, 0.08); transform: translateY(-2px); }
+.gr-card.zc-forest { border-color: #6fdc6a; } .gr-card.zc-forest .gr-icon { color: #9cf08a; }
+.gr-card.zc-void { border-color: #b07aff; } .gr-card.zc-void .gr-icon { color: #d2b0ff; }
+.gr-card.zc-core { border-color: #4ee6ff; } .gr-card.zc-core .gr-icon { color: #9af2ff; }
+.gr-icon { display: grid; place-items: center; }
+
+/* ── 開寶箱 ── */
+.chest-reveal { position: absolute; left: 50%; top: 6%; transform: translateX(-50%); z-index: 5; display: flex; flex-direction: column; align-items: center; gap: calc(var(--u) * 1); pointer-events: none; width: 90%; }
+.chest-canvas { width: calc(var(--u) * 72); height: calc(var(--u) * 60); image-rendering: pixelated; }
+.chest-name { font-size: max(12px, calc(var(--u) * 4.4)); letter-spacing: 0.1em; color: #fff; text-shadow: 0 2px 0 #000; background: rgba(0, 0, 0, 0.45); padding: 0.1em 0.8em; }
+.tier-gold .chest-name { color: #ffe27a; text-shadow: 0 2px 0 #5a3a00, 0 0 10px rgba(255, 210, 90, 0.8); }
+.tier-silver .chest-name { color: #cfeaff; }
+.tier-junk .chest-name { color: #b8c2d4; }
+.chest-items { display: flex; flex-wrap: wrap; justify-content: center; gap: calc(var(--u) * 2); }
+.chest-item { display: flex; align-items: center; gap: 0.4em; background: rgba(8, 16, 48, 0.92); border: 2px solid var(--bevel, #6a8ad8); padding: 0.3em 0.8em; font-size: max(13px, calc(var(--u) * 4.4)); color: #fff; animation: chest-pop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+.tier-gold .chest-item { border-color: #ffcf4a; } .tier-gold .chest-item svg { color: #ffe27a; }
+.tier-silver .chest-item { border-color: #9fd4ff; } .tier-silver .chest-item svg { color: #bfe6ff; }
+.tier-wood .chest-item svg { color: #ffd9a0; }
+@keyframes chest-pop { from { opacity: 0; transform: translateY(14px) scale(0.6); } to { opacity: 1; transform: none; } }
+.reduce-fx .chest-item { animation: none; }
+
+/* ── 神秘事件：左邊文字、右邊插圖 ── */
+.console.landscape .panel-layer:has(.big-panel.event) { justify-items: start; }
+.console.landscape .big-panel.event { width: min(58%, calc(var(--u) * 150)); }
+.ev-chips { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 1.5); }
+.ev-chip { display: inline-flex; align-items: center; gap: 0.3em; padding: 0.15em 0.6em; border: 1px solid; font-size: 0.9em; animation: chest-pop 0.4s cubic-bezier(0.2, 1.6, 0.4, 1) both; background: rgba(0, 0, 0, 0.3); }
+.ev-chip.good { border-color: #6fdc6a; color: #c8ffbe; }
+.ev-chip.bad { border-color: #ff7a66; color: #ffc4b8; }
+.reduce-fx .ev-chip { animation: none; }
+.console.landscape .domain-chip { left: 57%; }
+.console.landscape .field-chip.below { left: 57%; }

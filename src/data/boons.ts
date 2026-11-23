@@ -16,6 +16,7 @@ export interface Boon {
   cat: BoonCat;
   max?: number; // 最多可疊幾層（沒寫 = 可無限疊加；instant 卡不計）
   instant?: boolean; // 選了立刻生效、不會留在身上
+  guardian?: boolean; // 只有打倒特殊區域守護者才拿得到（不會出現在一般能力卡）
 }
 
 const B: Boon[] = [
@@ -36,6 +37,10 @@ const B: Boon[] = [
   { id: 'spring', name: '海底溫泉', desc: '立刻讓全隊完全回復（包含倒下的夥伴）。', tier: 'rare', cat: '回復', instant: true },
   { id: 'supply', name: '補給：藥膏', desc: '立刻獲得海藻藥膏 ×2。', tier: 'common', cat: '回復', instant: true },
   { id: 'revive', name: '補給：復甦貝', desc: '立刻獲得復甦貝 ×1。', tier: 'rare', cat: '回復', instant: true },
+  // ── 守護者的祝福（特殊區域獎勵） ──
+  { id: 'g_forest', name: '林之恩惠', desc: '每場戰鬥後，倒下的夥伴會以 30% HP 醒來。', tier: 'epic', cat: '回復', max: 1, guardian: true },
+  { id: 'g_void', name: '虛空之眼', desc: '擊中要害的機率 +12%。', tier: 'epic', cat: '戰鬥', max: 2, guardian: true },
+  { id: 'g_core', name: '核心同步', desc: '每場戰鬥開始時能量 +1（可以和滿潮開局疊加）。', tier: 'epic', cat: '戰鬥', max: 2, guardian: true },
 ];
 export const BOONS: Record<string, Boon> = Object.fromEntries(B.map((b) => [b.id, b]));
 export const BOON_LIST = B;

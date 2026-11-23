@@ -1,17 +1,24 @@
+import { GuardianReward, ZoneCutscene } from './Special';
+import { ChestReveal } from './Treasure';
+import type { DomainId } from '../data/domains';
+// 開發用：網址加 ?cut=forest-enter 可以直接看過場動畫
+const devChest = import.meta.env.DEV ? new URLSearchParams(location.search).get('chest') : null;
+const devEv = import.meta.env.DEV ? new URLSearchParams(location.search).get('ev') : null;
+const devCut = import.meta.env.DEV ? new URLSearchParams(location.search).get('cut')?.split('-') ?? null : null;
 import { HandFilter } from './Icon';
 import { useEffect, useState } from 'preact/hooks';
-import { dailyPartner, MAX_STAR, pearlMul, todayKey, boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, leaveSpecial, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollCrew, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
+import { dailyPartner, MAX_STAR, pearlMul, todayKey, boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollCrew, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
 import { AfterBattle, ResumeBoon } from './AfterBattle';
 import { Battle, type BattleResult } from './Battle';
 import { Fishing } from './Fishing';
 import { Dex, End, EventScreen, Help, Port, StarterPick, Title, Voyage, ZonePick } from './Screens';
-import { pickEvent, type GameEvent } from '../game/events';
+import { EVENTS, pickEvent, type GameEvent } from '../game/events';
 import { loadMeta, monFromBay, newBayMon, pearlsFor, returnFromRun, saveMeta, selectedBay } from '../game/meta';
 import { Bay } from './Bay';
 import { Gacha } from './Gacha';
 import type { Mon } from '../game/creature';
 import { useViewport } from './layout';
-import { makeMon, makeMutant } from '../game/creature';
+import { makeMon, makeMutant, maxHp } from '../game/creature';
 import { next } from '../game/rng';
 import { FORMS } from '../data/creatures';
 import { APP_VERSION, fetchLatestVersion } from '../game/version';
@@ -69,7 +76,7 @@ type Screen =
   | { k: 'title' } | { k: 'starter' } | { k: 'voyage' } | { k: 'fishing' }
   | { k: 'battle'; enc: Encounter } | { k: 'after'; result: BattleResult }
   | { k: 'end'; win: boolean; pearls: number } | { k: 'dex' } | { k: 'help' } | { k: 'port' }
-  | { k: 'event'; ev: GameEvent } | { k: 'boon' } | { k: 'zonepick' } | { k: 'bay'; hint?: string } | { k: 'gacha'; from: 'bay' | 'port' };
+  | { k: 'event'; ev: GameEvent } | { k: 'boon' } | { k: 'zonepick' } | { k: 'bay'; hint?: string } | { k: 'gacha'; from: 'bay' | 'port' } | { k: 'guardian' };
 
 export function App() {
   const vp = useViewport();
@@ -129,11 +136,13 @@ export function App() {
     r.after = undefined;
     if (bossWin) {
       updateDex((d) => { d.bosses = [...new Set([...(d.bosses ?? []), bossWin])]; });
-      if (r.returnTo) { leaveSpecial(r); saveRun(r); go({ k: 'voyage' }); return; }
+      if (r.returnTo) { r.guardianWin = r.zone; saveRun(r); go({ k: 'guardian' }); return; }
       if (r.zoneNo < FINAL_ZONE) { r.pendingZone = true; saveRun(r); go({ k: 'zonepick' }); } else finishRun(true, r);
       return;
     }
     healParty(r, 0.15 + boon(r, 'breeze') * 0.15);
+    // 林之恩惠：倒下的夥伴會醒來
+    if (boon(r, 'g_forest')) for (const m of r.party) if (m.hp <= 0) m.hp = Math.ceil(maxHp(m) * 0.3);
     advance(r);
   };
 
@@ -141,14 +150,14 @@ export function App() {
   switch (screen.k) {
     case 'title':
       body = <Title vp={vp} hasSave={!!loadRun()} onNew={onNew} onDaily={() => { const day = todayKey(); startRun(dailyPartner(day), day); }} onBay={() => go({ k: 'bay' })}
-        onContinue={() => { const r = loadRun(); if (!r) return; setRun(r); if (r.after?.boons) go({ k: 'boon' }); else if (r.after) finishAfter(r); else go(r.pendingZone ? { k: 'zonepick' } : { k: 'voyage' }); }}
+        onContinue={() => { const r = loadRun(); if (!r) return; setRun(r); if (r.guardianWin) go({ k: 'guardian' }); else if (r.after?.boons) go({ k: 'boon' }); else if (r.after) finishAfter(r); else go(r.pendingZone ? { k: 'zonepick' } : { k: 'voyage' }); }}
         onDex={() => go({ k: 'dex' })} onHelp={() => go({ k: 'help' })} onPort={() => go({ k: 'port' })} />;
       break;
     case 'starter':
       body = <StarterPick vp={vp} onBack={() => go({ k: 'title' })} onPick={(form) => { const m = loadMeta(); const b = newBayMon(form); m.bay.push(b); m.selected = b.id; saveMeta(m); startRun(monFromBay(b)); }} />;
       break;
     case 'voyage':
-      body = <Voyage vp={vp} run={run!} onGo={() => { const k = nodeOf(run!).kind; if (k === 'event') go({ k: 'event', ev: pickEvent(run!) }); else if (k === 'crew') { const enc = rollCrew(run!); enc.team!.forEach((m) => markSeen(m.form)); saveRun(run); go({ k: 'battle', enc }); } else go({ k: 'fishing' }); }} onNext={() => advance()} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
+      body = <Voyage vp={vp} run={run!} onGo={() => { const k = nodeOf(run!).kind; if (k === 'event') go({ k: 'event', ev: (devEv && EVENTS.find((e) => e.id === devEv)) || pickEvent(run!) }); else if (k === 'crew') { const enc = rollCrew(run!); enc.team!.forEach((m) => markSeen(m.form)); saveRun(run); go({ k: 'battle', enc }); } else go({ k: 'fishing' }); }} onNext={() => advance()} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
       break;
     case 'fishing':
       body = <Fishing vp={vp} run={run!} boss={boss} onDone={advance} onHook={(q, sh, landing) => {
@@ -193,6 +202,9 @@ export function App() {
         advance();
       }} />;
       break;
+    case 'guardian':
+      body = <GuardianReward vp={vp} run={run!} onDone={() => go({ k: 'voyage' })} />;
+      break;
     case 'zonepick':
       body = <ZonePick vp={vp} run={run!} onPick={(z) => { enterZone(run!, z); saveRun(run); go({ k: 'voyage' }); }} />;
       break;
@@ -212,6 +224,8 @@ export function App() {
   return <>
     <HandFilter />
     <main class="app" key={n}>{body}</main>
+    {devChest && <div class="frame" style={{ position: 'fixed', inset: 0, zIndex: 100, '--u': `${vp.u}px` }}><ChestReveal loot={{ title: '', text: '', tier: devChest as 'gold', items: [{ icon: 'legendlure', name: '傳說餌 ×1' }, { icon: 'shell', name: '貝殼幣 ×128' }] }} /></div>}
+    {devCut && <ZoneCutscene zone={devCut[0] as DomainId} mode={devCut[1] as 'enter' | 'win'} onDone={() => {}} />}
     {newVersion && <UpdateToast version={newVersion} safe={SAFE_TO_UPDATE.has(screen.k)} />}
   </>;
 }

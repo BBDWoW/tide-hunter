@@ -135,6 +135,7 @@ export interface RunState {
   zone: ZoneId;
   zoneNo: number; // 第幾片海域（0 起算）
   pendingZone?: boolean; // 已打倒霸主、還沒選下一片海域
+  guardianWin?: ZoneId; // 打倒了守護者、還沒選獎勵（存檔後可以接著選）
   returnTo?: { zone: ZoneId; route: RouteNode[][]; station: number; path: number[] }; // 在特殊區域時，原本的航線
   specialLv?: number; // 特殊區域的基準等級（依進入時的位置決定）
   notice?: string; // 回到海圖時要顯示的訊息
@@ -274,8 +275,7 @@ export function leaveSpecial(run: RunState) {
   const name = ZONES[run.zone].name;
   run.zone = back.zone; run.route = back.route; run.path = back.path; run.station = back.station + 1; run.picked = null;
   run.returnTo = undefined; run.specialLv = undefined;
-  run.lures.legend += 1; run.shells += 60; run.catchBait += 1;
-  run.notice = `你從${name}回來了！守護者留下了謝禮：傳說餌 ×1、捕捉餌 ×1、60 枚貝殼幣。`;
+  run.notice = `你從${name}回來了！`;
 }
 
 // 打倒霸主後前往下一片海域：重新產生航線，全隊回復一半（倒下的也會醒來）
@@ -403,22 +403,55 @@ export const LANDING_BONUS: Record<Landing, { hpCut: number; catch: number; labe
 };
 
 // ── 寶物與垃圾 ──
-export interface Loot { title: string; text: string }
-export function rollTreasure(run: RunState, kind: 'treasure' | 'junk'): Loot {
+export type ChestTier = 'junk' | 'wood' | 'silver' | 'gold';
+export interface LootItem { icon: string; name: string }
+export interface Loot { title: string; text: string; tier: ChestTier; items: LootItem[] }
+export const CHEST_NAME: Record<ChestTier, string> = { junk: '垃圾', wood: '木頭寶箱', silver: '白銀寶箱', gold: '黃金寶箱' };
+/** 開一個寶箱：寶藏點和幸運浮標比較容易開到好箱子；黃金寶箱一次有兩樣 */
+export function rollTreasure(run: RunState, kind: 'treasure' | 'junk', bonus = 0): Loot {
   const r = run.rng;
   if (kind === 'junk') {
     const j = ['一隻舊靴子', '破掉的漁網', '生鏽的空罐', '一團海帶'][Math.floor(next(r) * 4)];
     run.shells += 5;
-    return { title: '釣到了垃圾……', text: `是${j}。賣給回收商換了 5 枚貝殼幣。` };
+    return { title: '釣到了垃圾……', text: `是${j}。賣給回收商換了 5 枚貝殼幣。`, tier: 'junk', items: [{ icon: 'broken', name: j }, { icon: 'shell', name: '貝殼幣 ×5' }] };
   }
-  const pick = weighted(r, [['shells', 34], ['bait', 22], ['potion', 16], ['held', 14], ['star', 8], ['revive', 6]] as [string, number][]);
-  if (pick === 'held') { const h = giveHeld(run); return { title: '釣到寶箱！', text: `裡面有攜帶道具「${HELD[h].name}」！到隊伍裡讓夥伴裝上吧。` }; }
-  if (pick === 'shells') { const n = int(r, 25, 60); run.shells += n; return { title: '釣到寶箱！', text: `裡面有 ${n} 枚貝殼幣。` }; }
-  if (pick === 'bait') { run.catchBait += 1; return { title: '釣到寶箱！', text: '裡面有一個捕捉餌！' }; }
-  if (pick === 'potion') { run.items.potion += 2; return { title: '釣到寶箱！', text: '裡面有海藻藥膏 ×2。' }; }
-  if (pick === 'star') { run.lures.star += 1; return { title: '釣到寶箱！', text: '裡面閃著光……是星光餌！' }; }
-  run.items.revive += 1; return { title: '釣到寶箱！', text: '裡面有一個復甦貝。' };
+  const node = run.route[run.station]?.[run.picked ?? 0];
+  const up = (node?.kind === 'treasure' ? 0.12 : 0) + boon(run, 'lucky') * 0.04 + bonus;
+  const x = next(r);
+  const tier: ChestTier = x < 0.12 + up ? 'gold' : x < 0.45 + up * 1.5 ? 'silver' : 'wood';
+  const items: LootItem[] = [];
+  const give = (k: string) => {
+    switch (k) {
+      case 'shellsS': { const n = int(r, 20, 40); run.shells += n; items.push({ icon: 'shell', name: `貝殼幣 ×${n}` }); break; }
+      case 'shellsM': { const n = int(r, 50, 85); run.shells += n; items.push({ icon: 'shell', name: `貝殼幣 ×${n}` }); break; }
+      case 'shellsL': { const n = int(r, 110, 160); run.shells += n; items.push({ icon: 'shell', name: `貝殼幣 ×${n}` }); break; }
+      case 'bait': run.catchBait += 1; items.push({ icon: 'bait', name: '捕捉餌 ×1' }); break;
+      case 'bait2': run.catchBait += 2; items.push({ icon: 'bait', name: '捕捉餌 ×2' }); break;
+      case 'potion': run.items.potion += 1; items.push({ icon: 'potion', name: '海藻藥膏 ×1' }); break;
+      case 'potion2': run.items.potion += 2; items.push({ icon: 'potion', name: '海藻藥膏 ×2' }); break;
+      case 'elixir': run.items.superpotion += 1; items.push({ icon: 'elixir', name: '珍珠精華 ×1' }); break;
+      case 'elixir2': run.items.superpotion += 2; items.push({ icon: 'elixir', name: '珍珠精華 ×2' }); break;
+      case 'revive': run.items.revive += 1; items.push({ icon: 'revive', name: '復甦貝 ×1' }); break;
+      case 'revive2': run.items.revive += 2; items.push({ icon: 'revive', name: '復甦貝 ×2' }); break;
+      case 'ether': run.items.ether += 1; items.push({ icon: 'ether', name: '能量海膽 ×1' }); break;
+      case 'star': run.lures.star += 1; items.push({ icon: 'starlure', name: '星光餌 ×1' }); break;
+      case 'legend': run.lures.legend += 1; items.push({ icon: 'legendlure', name: '傳說餌 ×1' }); break;
+      case 'life': run.lifeStones = (run.lifeStones ?? 0) + 1; items.push({ icon: 'lifestone', name: '生命石 ×1' }); break;
+      default: { const h = giveHeld(run); items.push({ icon: HELD[h].icon, name: HELD[h].name }); }
+    }
+  };
+  const W = (list: [string, number][]) => weighted(r, list);
+  if (tier === 'wood') give(W([['shellsS', 40], ['bait', 25], ['potion', 25], ['ether', 10]]));
+  else if (tier === 'silver') give(W([['shellsM', 26], ['held', 22], ['potion2', 14], ['bait2', 12], ['revive', 10], ['star', 10], ['elixir', 6]]));
+  else {
+    const first = W([['held', 40], ['legend', 18], ['star', 22], ['life', 10], ['elixir2', 10]]);
+    give(first);
+    give(W([['shellsL', 40], ['revive2', 25], ['bait2', 20], ['held', first === 'held' ? 0 : 15]]));
+  }
+  const title = tier === 'gold' ? '★ 釣到黃金寶箱！' : tier === 'silver' ? '釣到白銀寶箱！' : '釣到寶箱！';
+  return { title, text: `裡面有${items.map((i) => `「${i.name}」`).join('和')}！${items.some((i) => HELD_ICONS.has(i.icon)) ? '攜帶道具到隊伍裡讓夥伴裝上吧。' : ''}`, tier, items };
 }
+const HELD_ICONS = new Set(Object.values(HELD).map((h) => h.icon));
 
 // ── 能力卡 ──
 export const boon = (run: RunState, id: string) => run.boons?.[id] ?? 0;
@@ -426,7 +459,7 @@ export function rollBoons(run: RunState, better = false): string[] {
   const out: string[] = [];
   for (let guard = 0; out.length < 3 && guard < 80; guard++) {
     const tier = weighted(run.rng, Object.entries(BOON_TIER).map(([k, v]) => [k, better && k === 'common' ? v.weight * 0.25 : better ? v.weight * 2 : v.weight] as [string, number]));
-    const cands = BOON_LIST.filter((b) => b.tier === tier && !out.includes(b.id) && (b.instant || boon(run, b.id) < (b.max ?? 99)));
+    const cands = BOON_LIST.filter((b) => !b.guardian && b.tier === tier && !out.includes(b.id) && (b.instant || boon(run, b.id) < (b.max ?? 99)));
     if (cands.length) out.push(cands[Math.floor(next(run.rng) * cands.length)].id);
   }
   return out;
@@ -450,7 +483,7 @@ export function applyBoon(run: RunState, id: string): string {
   return `獲得「${b.name}」`;
 }
 export function battleMods(run: RunState) {
-  return { atk: 1 + boon(run, 'atk') * 0.1, def: 1 + boon(run, 'def') * 0.1, energy: boon(run, 'energy'), crit: boon(run, 'crit') * 0.06, reso: resonance(run.party.map((m) => FORMS[m.form].elems)) };
+  return { atk: 1 + boon(run, 'atk') * 0.1, def: 1 + boon(run, 'def') * 0.1, energy: boon(run, 'energy') + boon(run, 'g_core'), crit: boon(run, 'crit') * 0.06 + boon(run, 'g_void') * 0.12, reso: resonance(run.party.map((m) => FORMS[m.form].elems)) };
 }
 
 export function healParty(run: RunState, ratio: number, revive = false) {

@@ -1,3 +1,4 @@
+import { ChestReveal } from './Treasure';
 import { Icon } from './Icon';
 // 釣魚：選魚餌 → 對準海面的漣漪拋竿（力量條）→ 等待（小心假咬鉤）→ 咬鉤時點擊 → 上鉤後才知道是大是小
 import { useRef, useState } from 'preact/hooks';
@@ -30,6 +31,7 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
   const [sel, setSel] = useState(first.current?.i ?? 0);
   const spotX = useRef(first.current?.x ?? 170);
   const [loot, setLoot] = useState<Loot | null>(null);
+  const [opened, setOpened] = useState(false);
   const [msg, setMsg] = useState(boss ? '海面異常平靜……霸主就在這片水域。' : `${spotName(run, spot).name}：${spotName(run, spot).desc}`);
   const st = useRef({
     view: { phase: 'choose', power: 0, castT: 0, bobX: 170, shadows: [], sel: 0, spot: zoneOf(run).theme === 'day' ? spot : 'none', theme: zoneOf(run).theme, ripple: 170 } as FishView,
@@ -55,7 +57,7 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
   const fishAgain = () => {
     const s = st.current;
     s.done = false; s.t = 0; s.view.castT = 0; s.view.power = 0;
-    setLoot(null);
+    setLoot(null); setOpened(false);
     prepare(lureUsed.current, true);
     setMsg('換個位置再拋一次！');
     setP('choose');
@@ -134,11 +136,12 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
           return <div class="cast-meter" aria-hidden="true"><div class="zone-good" style={band(z.good)} /><div class="zone-perfect" style={band(z.perfect)} /><i ref={meter} /></div>;
         })()}
         {phase === 'hooked' && <div class="flash" />}
+        {phase === 'loot' && loot && <ChestReveal loot={loot} onOpened={() => setOpened(true)} />}
         {phase === 'choose' && !boss && <Tip id="fishing">點畫面拋竿，力量條停在黃色區域就會落在漣漪上（紅色是完美）。浮標猛地下沉時再點一次！落點越準，對手開場的 HP 越少、越好抓。</Tip>}
       </>}
       dock={
         <div class="dock-split">
-          <Win class="msg"><p class="msg-text">{phase === 'loot' && loot ? <><b>{loot.title}</b><br />{loot.text}</> : msg}</p></Win>
+          <Win class="msg"><p class="msg-text">{phase === 'loot' && loot ? (opened ? <><b>{loot.title}</b><br />{loot.text}</> : '打開來看看……') : msg}</p></Win>
           <Win class="cmd">
             {phase === 'lure' && <div class="cmd-grid">
               <MenuItem onClick={() => pickLure('normal')} hot sub="∞">普通餌</MenuItem>

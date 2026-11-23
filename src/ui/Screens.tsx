@@ -1,3 +1,6 @@
+import { ZoneCutscene } from './Special';
+import { drawEventArt, EVENT_ART } from '../render/eventArt';
+import { DOMAINS, isDomain, type DomainId } from '../data/domains';
 import { Icon } from './Icon';
 import { useEffect, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
@@ -235,6 +238,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
   const rested = run.camp?.key === campKey ? run.camp.text : null;
   const setRested = (text: string) => { run.camp = { key: campKey, text }; };
   const [panel, setPanel] = useState<'party' | 'items' | 'shop' | null>(null);
+  const [cut, setCut] = useState<DomainId | null>(null); // 進入特殊區域的過場動畫
   const [hover, setHover] = useState(0);
   const [, force] = useState(0);
   // 點路線：釣點、精英、寶藏、事件、船隊直接出發；營地、商店、入口要先看選項
@@ -255,7 +259,8 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
     else if (node.kind === 'boss') action = { text: `海面暗了下來……${zoneOf(run).name}的霸主就在前方。先整理好隊伍吧。`, btn: '挑戰霸主', fn: onGo };
     else if (node.kind === 'portal' && node.target) {
       const tz = ZONES[node.target];
-      action = { text: `海面裂開了一道發光的縫隙，裡面隱約看得到「${tz.name}」。${tz.desc}要進去嗎？（打倒守護者後會回到這條航線）`, btn: '進入', fn: () => { enterSpecial(run, node.target!); saveRun(run); force((n) => n + 1); },
+      const dm = isDomain(node.target) ? DOMAINS[node.target] : null;
+      action = { text: `海面裂開了一道發光的縫隙，裡面隱約看得到「${tz.name}」。${tz.desc}${dm ? `裡面有領域效果「${dm.name}」（${dm.short}）。` : ''}打倒守護者可以挑一樣特別的謝禮，之後回到這條航線。要進去嗎？`, btn: '進入', fn: () => { const t = node.target!; enterSpecial(run, t); saveRun(run); if (isDomain(t)) setCut(t); force((n) => n + 1); },
         alt: { btn: '不進入', fn: onNext } };
     }
     else if (node.kind === 'event') action = { text: '海面上好像發生了什麼事……要過去看看嗎？', btn: '前往查看', fn: onGo };
@@ -276,11 +281,11 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
   }
   const hv = opts[hover] ?? opts[0];
 
-  return (
+  return (<>
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={(c, t) => drawChart(c, t, run.route, run.station, run.picked, run.path, run.seed, zoneOf(run).theme)} label="海圖與航線" />}
       overlay={<>
-        <Win class="banner left"><span class="eyebrow">{run.daily ? '每日 · ' : ''}{run.star ? `${'★'.repeat(run.star)} · ` : ''}{zoneOf(run).special ? '特殊區域' : `海域 ${run.zoneNo + 1}`} · {zoneOf(run).name}</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b></Win>
+        <Win class="banner left"><span class="eyebrow">{run.daily ? '每日 · ' : ''}{run.star ? `${'★'.repeat(run.star)} · ` : ''}{zoneOf(run).special ? '特殊區域' : `海域 ${run.zoneNo + 1}`} · {zoneOf(run).name}{isDomain(run.zone) && <span class="voy-domain" style={{ color: DOMAINS[run.zone].color }}> · 領域「{DOMAINS[run.zone].name}」</span>}</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b></Win>
         <Win class="banner right"><span class="res"><Icon name="shell" /> {run.shells}</span><span class="res">捕捉餌 {run.catchBait}</span></Win>
         {run.picked === null && !panel && <Tip id="voyage">點海圖上的圖示選擇航線。釣點會遇到野生潮靈，精英更強，掛旗子的船隊會連續派出好幾隻。右上角可以看隊伍和背包。</Tip>}
         <div class="voy-tools">
@@ -326,6 +331,8 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
           </Win>
         </div>
       } />
+    {cut && <ZoneCutscene zone={cut} mode="enter" onDone={() => setCut(null)} />}
+  </>
   );
 }
 
@@ -704,19 +711,51 @@ export function End({ vp, run, win, pearls, onTitle }: { vp: Viewport; run: RunS
 }
 
 // ── 隨機事件 ──
+/** 事件前後比較：算出得到／失去了什麼，用圖示標出來 */
+type Snap = { shells: number; bait: number; star: number; legend: number; items: Record<string, number>; life: number; held: number; uids: string[]; hp: number; lv: number; boons: number };
+const sumOld = (r: RunState, uids: string[], f: (m: RunState['party'][number]) => number) => r.party.filter((m) => uids.includes(m.uid)).reduce((a, m) => a + f(m), 0);
+const snap = (r: RunState): Snap => ({ shells: r.shells, bait: r.catchBait, star: r.lures.star, legend: r.lures.legend, items: { ...r.items }, life: r.lifeStones ?? 0, held: r.heldBag?.length ?? 0,
+  uids: r.party.map((m) => m.uid), hp: r.party.reduce((a, m) => a + Math.max(0, m.hp), 0), lv: r.party.reduce((a, m) => a + m.lv, 0), boons: Object.values(r.boons ?? {}).reduce((a, b) => a + b, 0) });
+type Chip = { icon: string; text: string; good: boolean; form?: string };
+function diffChips(a: Snap, r: RunState): Chip[] {
+  const b = snap(r), out: Chip[] = [];
+  const n = (icon: string, name: string, d: number) => { if (d) out.push({ icon, text: `${name} ${d > 0 ? '+' : ''}${d}`, good: d > 0 }); };
+  n('shell', '貝殼幣', b.shells - a.shells); n('bait', '捕捉餌', b.bait - a.bait); n('starlure', '星光餌', b.star - a.star); n('legendlure', '傳說餌', b.legend - a.legend);
+  const IN: Record<string, [string, string]> = { potion: ['potion', '海藻藥膏'], superpotion: ['elixir', '珍珠精華'], revive: ['revive', '復甦貝'], ether: ['ether', '能量海膽'] };
+  for (const [k, [ic, nm]] of Object.entries(IN)) n(ic, nm, (b.items[k] ?? 0) - (a.items[k] ?? 0));
+  n('lifestone', '生命石', b.life - a.life);
+  for (const h of (r.heldBag ?? []).slice(a.held)) out.push({ icon: HELD[h].icon, text: HELD[h].name, good: true });
+  for (const m of r.party.filter((m) => !a.uids.includes(m.uid))) out.push({ icon: 'party', text: `${formOf(m).name} 加入`, good: true, form: m.form });
+  n('heart', 'HP', sumOld(r, a.uids, (m) => Math.max(0, m.hp)) - a.hp); n('train', '等級', sumOld(r, a.uids, (m) => m.lv) - a.lv);
+  if (b.boons > a.boons) out.push({ icon: 'sparkle', text: '新能力', good: true });
+  if (r.eventFight) out.push({ icon: 'attack', text: '戰鬥！', good: false });
+  return out;
+}
+
 export function EventScreen({ vp, run, ev, onDone }: { vp: Viewport; run: RunState; ev: GameEvent; onDone: () => void }) {
-  const [result, setResult] = useState<string | null>(null);
+  const [result, setResult] = useState<{ text: string; chips: Chip[] } | null>(null);
+  const art = EVENT_ART[ev.id] ?? 'boat';
+  const pick = (o: GameEvent['options'][number]) => {
+    const before = snap(run);
+    const text = o.act(run); saveRun(run);
+    const chips = diffChips(before, run);
+    sfx(chips.some((c) => c.good) ? 'coin' : chips.length ? 'debuff' : 'select');
+    setResult({ text, chips });
+  };
   return (
-    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawSea(c, t, zoneOf(run).theme)} label="海面" />}
+    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => { drawSea(c, t, zoneOf(run).theme); drawEventArt(c, t, art); }} label={ev.title} />}
       panel={
         <Win class="big-panel event" title={ev.title}>
           <p>{ev.text}</p>
           {result ? <>
-            <p class="accent">{result}</p>
+            <p class="accent">{result.text}</p>
+            {result.chips.length > 0 && <div class="ev-chips">{result.chips.map((c, i) => (
+              <span key={i} class={`ev-chip ${c.good ? 'good' : 'bad'}`} style={{ animationDelay: `${i * 0.08}s` }}>{c.form ? <Sprite form={c.form} size={24} still /> : <Icon name={c.icon} />}{c.text}</span>
+            ))}</div>}
             <MenuItem onClick={onDone} hot>{run.eventFight ? <><Icon name="attack" /> 開始戰鬥</> : '繼續航行'}</MenuItem>
           </> : ev.options.map((o, i) => {
             const ok = o.can ? o.can(run) : true;
-            return <MenuItem key={i} disabled={!ok} onClick={() => { setResult(o.act(run)); saveRun(run); }} sub={o.hint}>{o.label}</MenuItem>;
+            return <MenuItem key={i} disabled={!ok} onClick={() => pick(o)} sub={o.hint}>{o.label}</MenuItem>;
           })}
           <div class="party-strip">{run.party.map((m) => <div class={`slot ${m.hp <= 0 ? 'ko' : ''}`} key={m.uid}><Sprite form={m.form} size={48} mutant={m.mutant} /><Bar value={m.hp} max={maxHp(m)} /><span class="slot-lv">Lv{m.lv}</span></div>)}</div>
         </Win>
