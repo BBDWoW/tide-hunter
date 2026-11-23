@@ -1,3 +1,4 @@
+import { drawGodHand } from './GodHand';
 import { DOMAINS, isDomain } from '../data/domains';
 import { Icon } from './Icon';
 // 戰鬥畫面：把引擎吐出的事件依序播放成動畫，並提供玩家的選單
@@ -7,7 +8,7 @@ import { FORMS } from '../data/creatures';
 import { FIELDS, SKILLS, type FieldId, type StatusId } from '../data/skills';
 import { effectiveness, ELEM, RARITY, type Elem } from '../data/types';
 import {
-  active, aiChoose, aiForcedSwitch, canAfford, createBattle, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, resolveTurn, statusLabel, volOf,
+  active, aiChoose, aiForcedSwitch, canAfford, createBattle, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, resolveTurn, restorePulled, statusLabel, volOf,
   type Action, type BattleState, type BEvent, type ItemId, type SideId,
 } from '../game/battle';
 import { blockRate, dodgeRate, formOf, maxHp, statsOf, type Mon } from '../game/creature';
@@ -57,10 +58,14 @@ const readSpeed = () => { try { return localStorage.getItem(SPEED_KEY) !== 'norm
 export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunState; enc: Encounter; boss: boolean; onEnd: (r: BattleResult) => void }) {
   const bsRef = useRef<BattleState | null>(null);
   if (!bsRef.current) {
-    bsRef.current = createBattle(makeRng((next(run.rng) * 2 ** 32) >>> 0), { team: run.party, name: '你', mods: battleMods(run) }, { team: enc.team ?? [enc.mon], name: boss ? '霸主' : enc.crew ?? '野生', boss, mods: foeMods(run) }, !enc.team, isDomain(run.zone) ? run.zone : undefined);
+    bsRef.current = createBattle(makeRng((next(run.rng) * 2 ** 32) >>> 0), { team: run.party, name: '你', mods: battleMods(run) }, { team: enc.team ?? [enc.mon], name: boss ? '霸主' : enc.crew ?? '野生', boss, mods: foeMods(run) }, !enc.team, isDomain(run.zone) ? run.zone : undefined, !!enc.godhand);
   }
   const bs = bsRef.current;
   const crew = !!enc.team; // 對手船隊：多隻敵人、不能收服
+  const gh = !!enc.godhand; // 神之手之戰：撐過 20 回合
+  const tossLeft = useRef(0), tossTotal = useRef(0);
+  const [pulls, setPulls] = useState<{ id: number; names: string[] } | null>(null);
+  const [rewind, setRewind] = useState(0);
   const snap = (side: SideId): Disp => {
     const m = active(bs, side);
     return { form: m.form, lv: m.lv, hp: m.hp, max: maxHp(m), energy: volOf(bs, side).energy, status: m.status, shield: volOf(bs, side).shield, mutant: m.mutant };
@@ -155,6 +160,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     const q = a.quake, fl = a.flash;
     a.quake = Math.max(0, a.quake - dt * 14); a.flash = Math.max(0, a.flash - dt * 2.2);
     drawBattle(ctx, t, dt, a.mons, a.parts, a.beams, zoneOf(run).theme, { field: fieldRef.current, quake: q, flash: fl, flashColor: a.flashColor });
+    if (a.mons[1].form === 'godhand' && a.fade[1] > 0) { const c = monSlot(1, 'godhand'); drawGodHand(ctx, t, c.cx, a.mons[1].y ?? c.y, c.scale, 0, false); }
     if (net.current) { const c = monSlot(1, a.mons[1].form); const n = net.current; n.glow = Math.max(0, n.glow - dt); drawNet(ctx, c.cx, c.cy + 6, n.wob, n.glow); }
   };
 
@@ -166,6 +172,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       else { sfx('enter'); await wait(500); }
       if (crew) { say(`「${enc.crew}」的船隊攔住了去路！（${enc.team!.length} 隻）`); await wait(500); say(`${enc.crew}派出了 ${ef.name}！`); }
       else if (boss) { for (const line of BOSS_INTRO[enc.mon.form] ?? []) { say(line); await wait(900); } say(`霸主「${ef.name}」擋住了去路！`); }
+      else if (gh) { say('一隻巨大的白色手，從雲裡伸了下來。'); await wait(900); say('神之手：「陪我玩 20 回合……好不好？」'); }
       else say(`野生的 ${ef.name} 出現了！`);
       if (enc.rarity === 'SSR') say('★ 傳說級的氣息！這可能是唯一的機會！');
       else if (enc.rarity === 'S') say('☆ 史詩級的稀有生物！');
@@ -222,7 +229,26 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       case 'miss': break;
       case 'dodge': { sfx('dodge'); a.shakeT[e.side] = 0.15; a.lungeT[e.side] = 0.25; pop(e.side, '閃避！', 'miss'); await wait(200); break; }
       case 'block': { sfx('block'); pop(e.side, '格擋', 'block'); break; }
+      case 'toss': {
+        tossLeft.current = e.hits; tossTotal.current = e.hits; sfx('cast'); await wait(200); break;
+      }
+      case 'pull': {
+        sfx('enrage'); jolt(4, 0.4, '#ffffff'); a.shakeT[e.side] = 0.8;
+        setPulls({ id: Math.random(), names: e.skills }); await wait(1600); setPulls(null); rerender(); break;
+      }
+      case 'rewind': {
+        sfx('reveal'); jolt(2, 0.5, '#7ab8ff'); setRewind(Math.random()); await wait(900); setRewind(0); rerender(); break;
+      }
       case 'dmg': {
+        if (tossLeft.current > 0) {
+          // 拋接：每次 1 點，快速彈跳
+          tossLeft.current--;
+          d[e.side].hp = e.hp; const v = a.mons[e.side], base = monSlot(e.side, v.form).y;
+          v.y = base - 16 - Math.random() * 10; sfx('hit');
+          rerender(); await wait(90); v.y = base; await wait(50);
+          if (tossLeft.current === 0) { pop(e.side, `-${tossTotal.current}`, 'big', `拋接 ×${tossTotal.current}`); rerender(); await wait(400); }
+          break;
+        }
         d[e.side].hp = e.hp; d[e.side].shield = e.shield;
         a.mons[e.side].flash = 0.35; a.shakeT[e.side] = 0.3;
         // 打擊感：暴擊與效果絕佳會震動畫面、閃光，並停頓一下（hit-stop）
@@ -305,6 +331,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
 
   async function finish(caught = false) {
     const over = bs.over;
+    restorePulled(bs);
     let outcome: BattleResult['outcome'] = caught ? 'caught' : over?.fled ? 'fled' : over?.winner === 0 ? 'win' : 'lose';
     if (outcome === 'win' && boss) {
       // 霸主討伐：勝利字卡（點一下可以跳過）
@@ -420,6 +447,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
 
   const me = active(bs, 0), foe = active(bs, 1), [dp, de] = disp.current;
   const meAffordAny = me.skills.some((_, i) => canAfford(bs, 0, i));
+  const loveLock = !!bs.godhand && bs.godhand.loveTurn === bs.turn; // 無法忽視的愛：只能攻擊
   const toggleFast = () => { const v = !fast; setFast(v); try { localStorage.setItem(SPEED_KEY, v ? 'fast' : 'normal'); } catch { /* 略過 */ } };
 
   const reel = <Reel rarity={FORMS[foe.form].rarity} hpRatio={foe.hp / maxHp(foe)} hasStatus={!!foe.status} name={FORMS[foe.form].name} zoneBonus={boon(run, 'reelzone') * 0.15 + (run.perks?.reel ?? 0)} onDone={onReel} />;
@@ -442,6 +470,9 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           const c = monSlot(p.side, disp.current[p.side].form);
           return <span key={p.id} class={`pop ${p.cls}`} style={{ left: `${((c.cx + p.dx) / W) * 100}%`, top: `${((c.cy - 30) / H) * 100}%` }}>{p.label && <small>{p.label}</small>}{p.text}</span>;
         })}
+        {bs.godhand && <div class="gh-counter"><Icon name="heart" /> 陪神之手玩：第 <b>{Math.min(bs.turn, bs.godhand.survive)}</b> / {bs.godhand.survive} 回合{bs.godhand.rewinds > 0 && <span>（被倒退 {bs.godhand.rewinds} 次）</span>}{loveLock && <em>只能攻擊！</em>}</div>}
+        {pulls && <div class="gh-pulls" key={pulls.id}>{pulls.names.map((n, i) => <span key={i} style={{ animationDelay: `${i * 0.18}s` }}>{n}</span>)}</div>}
+        {rewind !== 0 && <div class="gh-rewind" key={rewind}>⟲ 時間倒退了</div>}
         {bs.domain && <div class="domain-chip" style={{ borderColor: DOMAINS[bs.domain].color, color: DOMAINS[bs.domain].color }} title={DOMAINS[bs.domain].desc}><Icon name="sparkle" /> 領域・{DOMAINS[bs.domain].name}<span>{DOMAINS[bs.domain].short}</span></div>}
         {field && <div class={`field-chip ${bs.domain ? 'below' : ''}`} style={{ borderColor: FIELDS[field.id].color }} title={FIELDS[field.id].desc}><i style={{ background: FIELDS[field.id].color }} />{FIELDS[field.id].name}<span>剩 {field.turns} 回合</span></div>}
         <button class="speed" onClick={toggleFast} aria-pressed={fast}>{fast ? '▶▶ 快速' : '▶ 一般'}</button>
@@ -517,10 +548,10 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                   {!meAffordAny && <MenuItem onClick={() => submit({ type: 'skill', slot: -1 })}>掙扎</MenuItem>}
                 </div>
                 <div class="act-row">
-                  {!boss && !crew && <button class="act-btn" onClick={startReel} disabled={run.catchBait <= 0}><Icon name="rod" /> 捕捉<small>×{run.catchBait}</small></button>}
-                  <button class="act-btn" onClick={() => setMode('switch')}><Icon name="swap" /> 換人</button>
-                  <button class="act-btn" onClick={() => { setHover(0); setMode('items'); }}><Icon name="bag" /> 道具</button>
-                  {!boss && <button class="act-btn" onClick={() => submit({ type: 'run' })}><Icon name="flee" /> 逃跑</button>}
+                  {!boss && !crew && !gh && <button class="act-btn" onClick={startReel} disabled={run.catchBait <= 0}><Icon name="rod" /> 捕捉<small>×{run.catchBait}</small></button>}
+                  <button class="act-btn" disabled={loveLock} onClick={() => setMode('switch')}><Icon name="swap" /> 換人</button>
+                  <button class="act-btn" disabled={loveLock} onClick={() => { setHover(0); setMode('items'); }}><Icon name="bag" /> 道具</button>
+                  {!boss && !gh && <button class="act-btn" onClick={() => submit({ type: 'run' })}><Icon name="flee" /> 逃跑</button>}
                 </div>
               </div>
             )}
@@ -598,7 +629,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
         {!!crewLeft && <span class="crew-left" title="船隊剩下的夥伴">{'●'.repeat(crewLeft)}</span>}
         <span class="lv">Lv{d.lv}</span>
       </div>
-      <div class="hud-sub"><Elems list={f.elems} />{d.status && <span class={`st st-${d.status}`}>{statusLabel(d.status)}{turns ? ` ${turns}` : ''}</span>}{d.shield > 0 && <span class="st st-shield">護盾 {d.shield}</span>}{(d.trap ?? 0) > 0 && <span class="st st-trap">暗礁 {d.trap}</span>}{charged && <span class="st st-charge">蓄力</span>}{locked && <span class="st st-lock">鎖定</span>}</div>
+      <div class="hud-sub"><Elems list={f.elems} />{f.id === 'godhand' && <span class="st st-shield">無屬性・異常無效</span>}{d.status && <span class={`st st-${d.status}`}>{statusLabel(d.status)}{turns ? ` ${turns >= 90 ? '∞' : turns}` : ''}</span>}{d.shield > 0 && <span class="st st-shield">護盾 {d.shield}</span>}{(d.trap ?? 0) > 0 && <span class="st st-trap">暗礁 {d.trap}</span>}{charged && <span class="st st-charge">蓄力</span>}{locked && <span class="st st-lock">鎖定</span>}</div>
       <Bar value={d.hp} max={d.max} />
       <div class="hud-foot">
         <Energy value={d.energy} max={MAX_ENERGY} />

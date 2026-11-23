@@ -1,13 +1,15 @@
 import { GuardianReward, ZoneCutscene } from './Special';
+import { GodHandScreen, settleGodHand } from './GodHand';
 import { ChestReveal } from './Treasure';
 import type { DomainId } from '../data/domains';
 // 開發用：網址加 ?cut=forest-enter 可以直接看過場動畫
 const devChest = import.meta.env.DEV ? new URLSearchParams(location.search).get('chest') : null;
 const devEv = import.meta.env.DEV ? new URLSearchParams(location.search).get('ev') : null;
+const devGH = import.meta.env.DEV && new URLSearchParams(location.search).has('godhand');
 const devCut = import.meta.env.DEV ? new URLSearchParams(location.search).get('cut')?.split('-') ?? null : null;
 import { HandFilter } from './Icon';
 import { useEffect, useState } from 'preact/hooks';
-import { dailyPartner, MAX_STAR, pearlMul, todayKey, boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollCrew, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
+import { GODHAND_CHANCE, rollGodHand, dailyPartner, MAX_STAR, pearlMul, todayKey, boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollCrew, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
 import { AfterBattle, ResumeBoon } from './AfterBattle';
 import { Battle, type BattleResult } from './Battle';
 import { Fishing } from './Fishing';
@@ -76,7 +78,7 @@ type Screen =
   | { k: 'title' } | { k: 'starter' } | { k: 'voyage' } | { k: 'fishing' }
   | { k: 'battle'; enc: Encounter } | { k: 'after'; result: BattleResult }
   | { k: 'end'; win: boolean; pearls: number } | { k: 'dex' } | { k: 'help' } | { k: 'port' }
-  | { k: 'event'; ev: GameEvent } | { k: 'boon' } | { k: 'zonepick' } | { k: 'bay'; hint?: string } | { k: 'gacha'; from: 'bay' | 'port' } | { k: 'guardian' };
+  | { k: 'event'; ev: GameEvent } | { k: 'boon' } | { k: 'zonepick' } | { k: 'bay'; hint?: string } | { k: 'gacha'; from: 'bay' | 'port' } | { k: 'guardian' } | { k: 'godhand' };
 
 export function App() {
   const vp = useViewport();
@@ -130,6 +132,18 @@ export function App() {
     saveRun(r);
     go({ k: 'voyage' });
   };
+  /** 打倒主海域霸主之後：選下一片海域，或通關 */
+  const afterBoss = (r: RunState) => {
+    if (r.zoneNo < FINAL_ZONE) { r.pendingZone = true; saveRun(r); go({ k: 'zonepick' }); } else finishRun(true, r);
+  };
+  /** 陪神之手玩：建立神之手的對手 */
+  const godHandFight = (r: RunState) => {
+    const gh = r.godHand!, hand = makeMon('godhand', gh.lv);
+    hand.skills = ['gh_toss', 'gh_love', 'gh_fire', 'gh_stay', 'gh_pull'];
+    hand.hpFixed = 1000 * Math.max(...r.party.map(maxHp)); hand.hp = hand.hpFixed;
+    markSeen('godhand');
+    go({ k: 'battle', enc: { mon: hand, rarity: 'SSR', godhand: true } });
+  };
   /** 戰鬥結算完、離開這一站（打倒霸主時前往下一片海域或通關） */
   const finishAfter = (r: RunState) => {
     const bossWin = r.after?.bossWin;
@@ -137,7 +151,9 @@ export function App() {
     if (bossWin) {
       updateDex((d) => { d.bosses = [...new Set([...(d.bosses ?? []), bossWin])]; });
       if (r.returnTo) { r.guardianWin = r.zone; saveRun(r); go({ k: 'guardian' }); return; }
-      if (r.zoneNo < FINAL_ZONE) { r.pendingZone = true; saveRun(r); go({ k: 'zonepick' }); } else finishRun(true, r);
+      // 超特殊事件：神之手（0.5%）
+      if (devGH || next(r.rng) < GODHAND_CHANCE) { r.godHand = rollGodHand(r, bossWin, zoneOf(r).bossLv + ((r.star ?? 0) >= 4 ? 2 : 0)); saveRun(r); go({ k: 'godhand' }); return; }
+      afterBoss(r);
       return;
     }
     healParty(r, 0.15 + boon(r, 'breeze') * 0.15);
@@ -150,7 +166,7 @@ export function App() {
   switch (screen.k) {
     case 'title':
       body = <Title vp={vp} hasSave={!!loadRun()} onNew={onNew} onDaily={() => { const day = todayKey(); startRun(dailyPartner(day), day); }} onBay={() => go({ k: 'bay' })}
-        onContinue={() => { const r = loadRun(); if (!r) return; setRun(r); if (r.guardianWin) go({ k: 'guardian' }); else if (r.after?.boons) go({ k: 'boon' }); else if (r.after) finishAfter(r); else go(r.pendingZone ? { k: 'zonepick' } : { k: 'voyage' }); }}
+        onContinue={() => { const r = loadRun(); if (!r) return; setRun(r); if (r.godHand) { if (r.godHand.stage === 'fight') r.godHand.stage = 'ask'; go({ k: 'godhand' }); } else if (r.guardianWin) go({ k: 'guardian' }); else if (r.after?.boons) go({ k: 'boon' }); else if (r.after) finishAfter(r); else go(r.pendingZone ? { k: 'zonepick' } : { k: 'voyage' }); }}
         onDex={() => go({ k: 'dex' })} onHelp={() => go({ k: 'help' })} onPort={() => go({ k: 'port' })} />;
       break;
     case 'starter':
@@ -170,7 +186,8 @@ export function App() {
       }} />;
       break;
     case 'battle':
-      body = <Battle vp={vp} run={run!} enc={screen.enc} boss={boss} onEnd={(result) => {
+      body = <Battle vp={vp} run={run!} enc={screen.enc} boss={boss && !screen.enc.godhand} onEnd={(result) => {
+        if (screen.enc.godhand) { settleGodHand(run!, result.outcome === 'win'); saveRun(run); go({ k: 'godhand' }); return; }
         if (result.outcome === 'lose') finishRun(false);
         else go({ k: 'after', result });
       }} />;
@@ -201,6 +218,9 @@ export function App() {
         }
         advance();
       }} />;
+      break;
+    case 'godhand':
+      body = <GodHandScreen vp={vp} run={run!} onFight={() => godHandFight(run!)} onDone={() => afterBoss(run!)} />;
       break;
     case 'guardian':
       body = <GuardianReward vp={vp} run={run!} onDone={() => go({ k: 'voyage' })} />;

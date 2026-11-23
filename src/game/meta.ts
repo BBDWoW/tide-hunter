@@ -71,6 +71,7 @@ export interface Meta {
   runs: number;
   selected?: string; // 棲息灣裡「出航夥伴」的 id
   achieved?: string[]; // 已經領取獎勵的成就
+  godHand?: boolean; // 撐過了神之手
   title?: string; // 目前顯示的稱號（成就 id）
   maxStar?: number; // 已解鎖的最高潮位
   star?: number; // 上次選的潮位
@@ -134,7 +135,7 @@ export const ROD_NAME: Record<Tier, string> = { broken: '破損釣竿', N: '普�
 /** 可以抽到的生物：每一族的最初型態（包含霸主，不含環境形態） */
 export function gachaPool(r: Rarity): string[] {
   const targets = new Set(Object.values(FORMS).flatMap((f) => (f.evolve ?? []).map((e) => e.to)));
-  return Object.values(FORMS).filter((f) => !targets.has(f.id) && !f.recolor && f.rarity === r).map((f) => f.id);
+  return Object.values(FORMS).filter((f) => !f.secret && !targets.has(f.id) && !f.recolor && f.rarity === r).map((f) => f.id);
 }
 export interface PullResult { rod: Tier; path: Tier[]; tier: Tier; form: string | null; mutant: boolean; bayId?: string }
 export function rollPull(rnd: () => number = Math.random): PullResult {
@@ -233,8 +234,8 @@ export function returnFromRun(m: Meta, party: Mon[]) {
 }
 
 // ── 成就與稱號 ──
-export interface AchStats { caught: string[]; clears: number; bestStation: number; bosses: string[]; evolved: string[]; mutants: number; bay: number; runs: number }
-export interface Achievement { id: string; title: string; desc: string; reward: number; check: (s: AchStats) => boolean }
+export interface AchStats { godhand?: boolean; caught: string[]; clears: number; bestStation: number; bosses: string[]; evolved: string[]; mutants: number; bay: number; runs: number }
+export interface Achievement { id: string; title: string; desc: string; reward: number; secret?: boolean; check: (s: AchStats) => boolean }
 const has = (arr: string[], ...ids: string[]) => ids.every((id) => arr.includes(id));
 export const ACHIEVEMENTS: Achievement[] = [
   { id: 'catch2', title: '新手獵手', desc: '第一次收服夥伴', reward: 10, check: (s) => s.caught.length >= 2 },
@@ -254,6 +255,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'guard', title: '守護之心', desc: '讓初始夥伴進化成守護型', reward: 30, check: (s) => s.evolved.some((id) => ['water3b', 'fire3b', 'grass3b'].includes(id)) },
   { id: 'env', title: '環境之子', desc: '讓夥伴進化成地區形態', reward: 30, check: (s) => s.evolved.some((id) => !!FORMS[id]?.recolor) },
   { id: 'baylove', title: '棲息灣大家庭', desc: '棲息灣住了 10 隻夥伴', reward: 30, check: (s) => s.bay >= 10 },
+  { id: 'godhand', title: '神之手認可者', desc: '陪神之手玩滿 20 回合', reward: 2000, secret: true, check: (s) => !!s.godhand },
   { id: 'runs10', title: '老練的水手', desc: '出海 10 次', reward: 30, check: (s) => s.runs >= 10 },
 ];
 export function claimAchievement(m: Meta, id: string): boolean {
@@ -265,7 +267,7 @@ export function claimAchievement(m: Meta, id: string): boolean {
 }
 /** 從圖鑑與港口資料整理出成就要用的統計 */
 export function achStats(m: Meta, d: { caught: string[]; clears: number; bestStation: number; bosses?: string[]; evolved?: string[]; mutants?: number }): AchStats {
-  return { caught: d.caught, clears: d.clears, bestStation: d.bestStation, bosses: d.bosses ?? [], evolved: d.evolved ?? [], mutants: d.mutants ?? 0, bay: m.bay.length, runs: m.runs };
+  return { godhand: !!m.godHand, caught: d.caught, clears: d.clears, bestStation: d.bestStation, bosses: d.bosses ?? [], evolved: d.evolved ?? [], mutants: d.mutants ?? 0, bay: m.bay.length, runs: m.runs };
 }
 export const claimable = (m: Meta, st: AchStats) => ACHIEVEMENTS.filter((a) => !m.achieved?.includes(a.id) && a.check(st)).length;
 export const titleOf = (m: Meta) => ACHIEVEMENTS.find((a) => a.id === m.title)?.title ?? null;

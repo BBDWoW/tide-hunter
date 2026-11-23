@@ -22,6 +22,7 @@ export interface Mon {
   style?: { atk: number; guard: number }; // 戰鬥風格：用攻擊技／變化技的次數（決定分支進化）
   mutant?: boolean; // 異變個體：顏色不同、個體值較好
   held?: HeldId; // 攜帶道具
+  hpFixed?: number; // 固定最大 HP（神之手：對手的 1000 倍）
 }
 
 export const MUTANT_CHANCE = 1 / 30;
@@ -68,6 +69,7 @@ export function statsOf(m: Mon): Stats {
   const s = (b: number, i: number) => Math.floor(((b * 2 * L) / 50 + 5) * mult * iv(i));
   let hp = Math.floor(((f.base.hp * 2 * L) / 50 + L + 10) * mult * iv(0));
   if (hasAb(f, 'colossal')) hp = Math.floor(hp * 1.6);
+  if (m.hpFixed) hp = m.hpFixed;
   return { hp, atk: s(f.base.atk, 1), def: s(f.base.def, 2), spd: s(f.base.spd, 3) };
 }
 export const maxHp = (m: Mon) => statsOf(m).hp;

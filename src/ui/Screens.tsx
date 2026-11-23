@@ -112,7 +112,7 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
             {meta.runs > 0 && <MenuItem onClick={guard('daily', onDaily)} sub={daily ? `今日最佳 ${daily.best} 站${daily.win ? '・通關' : ''}` : '今天還沒挑戰'}>每日挑戰</MenuItem>}
             {meta.bay.length > 0 && <MenuItem onClick={onBay} sub={`${meta.bay.length}/${bayCap(meta)}`}>棲息灣</MenuItem>}
             <MenuItem onClick={onPort} sub={claimable(meta, achStats(meta, dex)) ? `● 成就可領　◆ ${meta.pearls}` : `◆ ${meta.pearls}`}>港口</MenuItem>
-            <MenuItem onClick={onDex} sub={`${dex.caught.length}/${Object.keys(FORMS).length}`}>圖鑑</MenuItem>
+            <MenuItem onClick={onDex} sub={`${dex.caught.length}/${Object.values(FORMS).filter((f) => !f.secret).length}`}>圖鑑</MenuItem>
           </Win>
         </div>
       } />
@@ -212,7 +212,7 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
           {tab === 'ach' && (
             <div class="item-list">
               <p class="small dim">完成成就可以領取珍珠，也會解鎖稱號，顯示在主畫面上。{titleOf(meta) ? `目前稱號：「${titleOf(meta)}」` : ''}</p>
-              {ACHIEVEMENTS.map((a) => {
+              {ACHIEVEMENTS.filter((a) => !a.secret || meta.achieved?.includes(a.id)).map((a) => {
                 const got = meta.achieved?.includes(a.id), done = a.check(st);
                 return (
                   <div class={`ach-row ${got ? 'got' : done ? 'ready' : ''}`} key={a.id}>
@@ -508,7 +508,7 @@ function ItemList({ run, onChange }: { run: RunState; onChange: () => void }) {
 // ── 圖鑑 ──
 export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
   const dex = loadDex();
-  const all = Object.values(FORMS).sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity));
+  const all = Object.values(FORMS).filter((f) => !f.secret).sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity));
   const [sel, setSel] = useState<string | null>(() => all.find((x) => dex.seen.includes(x.id))?.id ?? null);
   const f = sel ? FORMS[sel] : null;
   // 進化路線：從最初型態往後展開（分支用「／」）

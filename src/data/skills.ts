@@ -182,6 +182,12 @@ const S: Skill[] = [
   { id: 'reboot', name: '系統重啟', elem: 'data', power: 0, cost: 2, acc: 100, desc: '重新啟動：治癒自己的異常狀態，並回復最大 HP 的 30%。', fx: { cleanse: true, heal: 0.3 }, anim: 'heal' },
   { id: 'engulf', name: '吞沒', elem: 'dark', power: 100, cost: 3, acc: 95, desc: '張開巨口吞沒一切，回復造成傷害的 30%。', fx: { drain: 0.3 }, anim: 'hit' },
   { id: 'abyssveil', name: '深淵', elem: 'dark', power: 0, cost: 2, acc: 100, desc: '場地變成「深淵」5 回合：暗屬性威力 ×1.5，暗屬性以外的攻擊命中率 ×0.85。', fx: { field: { id: 'abyss', turns: 5 } }, anim: 'splash' },
+  // ── 神之手（只有神之手會用） ──
+  { id: 'gh_toss', name: '拎北好無聊', elem: null, power: 0, cost: 0, acc: 100, desc: '抓起對手拋來拋去，造成 1～20 次、每次 1 點的傷害。', anim: 'hit' },
+  { id: 'gh_love', name: '無法忽視的愛', elem: null, power: 0, cost: 0, acc: 100, desc: '下一回合，對手只能使用技能，不能換人、用道具。', anim: 'buff' },
+  { id: 'gh_fire', name: '熱情如火', elem: null, power: 0, cost: 0, acc: 100, desc: '讓對手陷入不會結束的灼傷，每回合固定扣 2 HP。', anim: 'beam' },
+  { id: 'gh_stay', name: '不要走', elem: null, power: 0, cost: 0, acc: 100, desc: '回合數倒退一回合（每場最多 3 次）。', anim: 'buff' },
+  { id: 'gh_pull', name: '不讓你走', elem: null, power: 0, cost: 0, acc: 100, desc: '大招：直接拔走對手的兩個技能（只在最後五回合使用）。', anim: 'beam' },
 ];
 
 

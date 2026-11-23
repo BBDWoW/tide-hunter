@@ -883,6 +883,7 @@ export function drawDeep(ctx: CanvasRenderingContext2D, t: number) {
 
 export function auraColor(form: string, boss = false): string | undefined {
   const r = FORMS[form]?.rarity;
+  if (form === 'godhand') return undefined;
   if (boss) return '#ff5a6e';
   return r === 'SSR' ? '#ffd84a' : r === 'S' ? '#c58cff' : undefined;
 }

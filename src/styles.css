@@ -727,3 +727,29 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 .reduce-fx .ev-chip { animation: none; }
 .console.landscape .domain-chip { left: 57%; }
 .console.landscape .field-chip.below { left: 57%; }
+
+/* ── 神之手 ── */
+.godhand-panel .win-title { color: #fff6d0; letter-spacing: 0.15em; }
+.gh-say { color: #fff6d0; font-size: 1.05em; text-shadow: 0 0 8px rgba(255, 240, 180, 0.5); }
+.gh-need { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--u) * 1.5); }
+.rar-chip { display: inline-block; border: 1px solid var(--rar); color: var(--rar); padding: 0.05em 0.5em; font-size: 0.9em; background: rgba(0, 0, 0, 0.3); }
+.gh-party { display: flex; flex-wrap: wrap; gap: calc(var(--u) * 1.5); }
+.gh-mon { display: flex; flex-direction: column; align-items: center; gap: 0.15em; padding: 0.3em 0.4em; min-width: 4.6em; min-height: 44px; background: rgba(0, 0, 0, 0.3); border: 2px solid rgba(255, 255, 255, 0.15); color: #fff; font: inherit; cursor: pointer; }
+.gh-mon.on { border-color: #fff6d0; background: rgba(255, 246, 208, 0.12); box-shadow: 0 0 10px rgba(255, 240, 180, 0.4); }
+.gh-counter { position: absolute; top: calc(var(--u) * 3); left: 50%; transform: translateX(-50%); z-index: 4; display: flex; align-items: center; gap: 0.4em; white-space: nowrap; background: rgba(20, 18, 40, 0.85); border: 1px solid #fff6d0; color: #fff6d0; font-size: max(11px, calc(var(--u) * 3.8)); padding: 0.2em 0.8em; }
+.gh-counter b { font-size: 1.3em; color: #fff; }
+.gh-counter span { opacity: 0.75; font-size: 0.85em; }
+.gh-counter em { font-style: normal; color: #ff9ab0; animation: gh-blink 0.8s steps(2) infinite; }
+.portrait .gh-counter { top: auto; bottom: calc(var(--u) * 33); }
+@keyframes gh-blink { 50% { opacity: 0.3; } }
+.gh-pulls { position: absolute; left: 30%; top: 62%; z-index: 6; pointer-events: none; }
+.gh-pulls span { position: absolute; left: 0; top: 0; white-space: nowrap; background: #2a2e52; border: 2px solid #fff6d0; color: #fff; padding: 0.2em 0.7em; font-size: max(13px, calc(var(--u) * 4.4)); animation: gh-pull 1.4s cubic-bezier(0.5, 0, 0.8, 0.4) both; }
+@keyframes gh-pull { 0% { transform: translate(0, 0) rotate(0); opacity: 0; } 12% { opacity: 1; transform: translate(-6px, -4px) rotate(-6deg); } 30% { transform: translate(6px, -2px) rotate(6deg); } 100% { transform: translate(calc(var(--u) * 110), calc(var(--u) * -90)) rotate(30deg) scale(0.4); opacity: 0; } }
+.gh-rewind { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; pointer-events: none; font-size: max(22px, calc(var(--u) * 10)); color: #cfe6ff; letter-spacing: 0.2em; text-shadow: 0 0 14px #4a8aff, 0 3px 0 #0a1a40; background: radial-gradient(circle, rgba(74, 138, 255, 0.25), transparent 70%); animation: gh-rewind 0.9s ease-out both; }
+@keyframes gh-rewind { from { opacity: 0; transform: scale(1.4) rotate(20deg); } 40% { opacity: 1; transform: none; } to { opacity: 0; } }
+.reduce-fx .gh-pulls span, .reduce-fx .gh-rewind { animation-duration: 0.01s; }
+.console.landscape .panel-layer:has(.godhand-panel) { justify-items: start; }
+.console.landscape .godhand-panel { width: min(62%, calc(var(--u) * 150)); }
+.godhand-panel { gap: calc(var(--u) * 2); }
+.gh-mon { min-width: 4em; padding: 0.2em 0.3em; }
+.gh-btns { grid-template-columns: 1fr 1fr; }

@@ -135,6 +135,7 @@ export interface RunState {
   zone: ZoneId;
   zoneNo: number; // 第幾片海域（0 起算）
   pendingZone?: boolean; // 已打倒霸主、還沒選下一片海域
+  godHand?: GodHandEvent; // 超特殊事件：神之手（打倒霸主後 0.5%）
   guardianWin?: ZoneId; // 打倒了守護者、還沒選獎勵（存檔後可以接著選）
   returnTo?: { zone: ZoneId; route: RouteNode[][]; station: number; path: number[] }; // 在特殊區域時，原本的航線
   specialLv?: number; // 特殊區域的基準等級（依進入時的位置決定）
@@ -293,7 +294,7 @@ export const totalStation = (run: RunState) => run.zoneNo * ROUTE_LEN + run.stat
 export const nodeOf = (run: RunState): RouteNode => run.route[run.station][run.picked ?? 0];
 export const isBoss = (run: RunState) => run.route[run.station]?.[0].kind === 'boss';
 
-export interface Encounter { mon: Mon; rarity: Rarity; landing?: Landing; team?: Mon[]; crew?: string } // team／crew：對手船隊（多隻、不能收服）
+export interface Encounter { mon: Mon; rarity: Rarity; landing?: Landing; team?: Mon[]; crew?: string; godhand?: boolean } // team／crew：對手船隊（多隻、不能收服）
 
 // ── 水面下的魚：大小決定稀有度（玩家拋竿前看不到，上鉤才知道） ──
 export type ShadowKind = 'fish' | 'treasure' | 'junk';
@@ -633,4 +634,22 @@ export function applyItemOutside(run: RunState, item: ItemId, idx: number): stri
   m.hp += amt;
   if (item === 'superpotion') m.status = null;
   return `${name} 回復了 ${amt} HP${item === 'superpotion' ? '，異常狀態也治好了' : ''}。`;
+}
+
+// ── 超特殊事件：神之手 ──
+export const GODHAND_CHANCE = 0.005;
+export interface GodHandEvent { boss: string; lv: number; need: [Rarity, Rarity]; stage: 'offer' | 'ask' | 'fight' | 'won' | 'lost' | 'took' | 'left'; text?: string }
+/** 打倒霸主時擲骰：神之手要的兩隻夥伴的稀有度組合 */
+export function rollGodHand(run: RunState, boss: string, lv: number): GodHandEvent {
+  const pick = () => weighted(run.rng, [['N', 30], ['B', 35], ['A', 25], ['S', 10]] as [Rarity, number][]);
+  const a = pick(), b = pick();
+  const order: Rarity[] = ['S', 'A', 'B', 'N'];
+  const need = [a, b].sort((x, y) => order.indexOf(x) - order.indexOf(y)) as [Rarity, Rarity];
+  return { boss, lv, need, stage: 'offer' };
+}
+/** 選的兩隻剛好符合神之手要的稀有度嗎 */
+export function godHandMatch(need: [Rarity, Rarity], picked: Mon[]): boolean {
+  if (picked.length !== 2) return false;
+  const have = picked.map((m) => FORMS[m.form].rarity).sort().join(), want = [...need].sort().join();
+  return have === want;
 }

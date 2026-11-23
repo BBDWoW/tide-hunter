@@ -4,7 +4,7 @@
 import { DOMAINS, type DomainId } from '../data/domains';
 import { FIELDS, SKILLS, type FieldId, type Skill, type StatKey, type StatusId } from '../data/skills';
 import { effectiveness, ELEM } from '../data/types';
-import { blockRate, dodgeRate, formOf, maxHp, statsOf, type Mon } from './creature';
+import { blockRate, dodgeRate, formOf, isBasicAttack, maxHp, statsOf, type Mon } from './creature';
 import { hasAb } from '../data/creatures';
 import type { HeldId } from '../data/held';
 import type { Elem } from '../data/types';
@@ -49,7 +49,10 @@ export interface BattleState {
   field?: { id: FieldId; turns: number } | null; // 場地／天候
   traps?: [number, number]; // 各自場地上的暗礁剩餘回合
   domain?: DomainId; // 特殊區域的領域效果（整場戰鬥都在）
+  godhand?: GodHandState; // 神之手之戰：撐過 survive 回合就贏
 }
+export interface GodHandState { survive: number; rewinds: number; loveTurn: number; passion: string[]; pulled: Record<string, string[]>; saved: Record<string, string[]> }
+export const isGodHand = (m: Mon) => m.form === 'godhand';
 
 export type Action =
   | { type: 'skill'; slot: number } // slot = -1 → 掙扎
@@ -84,6 +87,9 @@ export type BEvent =
   | { t: 'trap'; side: SideId; turns: number }
   | { t: 'enrage'; side: SideId }
   | { t: 'item'; side: SideId; target: number; text: string; from: number; hp: number; max: number }
+  | { t: 'pull'; side: SideId; skills: string[] }
+  | { t: 'rewind'; turn: number }
+  | { t: 'toss'; side: SideId; hits: number }
   | { t: 'end'; winner: SideId };
 
 export const STRUGGLE: Skill = { id: 'struggle', name: '掙扎', elem: null, power: 35, cost: 0, acc: 100, desc: '能量不足時使用。', anim: 'hit' };
@@ -102,13 +108,13 @@ function freshVol(): Volatile {
 }
 
 type SideInit = { team: Mon[]; name: string; mods?: SideMods; boss?: boolean };
-export function createBattle(rng: Rng, a: SideInit, b: SideInit, wild: boolean, domain?: DomainId): BattleState {
+export function createBattle(rng: Rng, a: SideInit, b: SideInit, wild: boolean, domain?: DomainId, godhand = false): BattleState {
   const mk = (x: SideInit): Side => {
     const vol: Record<string, Volatile> = {};
     x.team.forEach((m) => { vol[m.uid] = freshVol(); vol[m.uid].energy += (x.mods?.energy ?? 0) + (held(m, 'sparkcell') ? 1 : 0); });
     return { team: x.team, active: Math.max(0, x.team.findIndex((m) => m.hp > 0)), vol, name: x.name, mods: x.mods, boss: x.boss };
   };
-  const st: BattleState = { rng, turn: 1, sides: [mk(a), mk(b)], wild, over: null, needSwitch: [false, false], field: null, traps: [0, 0], domain };
+  const st: BattleState = { rng, turn: 1, sides: [mk(a), mk(b)], wild, over: null, needSwitch: [false, false], field: null, traps: [0, 0], domain, godhand: godhand ? { survive: 20, rewinds: 0, loveTurn: 0, passion: [], pulled: {}, saved: {} } : undefined };
   for (const side of [0, 1] as SideId[]) bubble(st, side);
   return st;
 }
@@ -122,7 +128,7 @@ function bubble(s: BattleState, side: SideId, ev?: BEvent[]) {
 }
 
 const stageMult = (s: number) => (s >= 0 ? (2 + s) / 2 : 2 / (2 - s));
-const nameOf = (s: BattleState, side: SideId) => (side === 1 && s.wild ? '野生的 ' : side === 1 ? '對手的 ' : '') + formOf(active(s, side)).name;
+const nameOf = (s: BattleState, side: SideId) => isGodHand(active(s, side)) ? '神之手' : (side === 1 && s.wild ? '野生的 ' : side === 1 ? '對手的 ' : '') + formOf(active(s, side)).name;
 
 function effSpeed(s: BattleState, side: SideId): number {
   const m = active(s, side), v = volOf(s, side), f = formOf(m);
@@ -148,6 +154,12 @@ export function canAfford(s: BattleState, side: SideId, slot: number): boolean {
 export function resolveTurn(s: BattleState, actions: [Action, Action]): BEvent[] {
   const ev: BEvent[] = [];
   if (s.over) return ev;
+  // 無法忽視的愛：這回合玩家只能用技能
+  if (s.godhand && s.godhand.loveTurn === s.turn && actions[0].type !== 'skill') {
+    const me = active(s, 0), slot = me.skills.findIndex((_, i) => canAfford(s, 0, i));
+    actions = [{ type: 'skill', slot }, actions[1]];
+    ev.push({ t: 'msg', text: '神之手的愛讓你無法移開視線……只能攻擊！' });
+  }
   const prio = (side: SideId): number => {
     const a = actions[side];
     if (a.type === 'switch' || a.type === 'item' || a.type === 'run') return 10;
@@ -176,6 +188,10 @@ export function resolveTurn(s: BattleState, actions: [Action, Action]): BEvent[]
   }
   if (!s.over) { endOfTurn(s, ev); checkEnrage(s, ev); }
   s.turn++;
+  if (s.godhand && !s.over && s.turn > s.godhand.survive) {
+    ev.push({ t: 'msg', text: `撐過了 ${s.godhand.survive} 回合！神之手停了下來，輕輕摸了摸你的頭。` });
+    s.over = { winner: 0 }; ev.push({ t: 'end', winner: 0 });
+  }
   return ev;
 }
 
@@ -256,6 +272,7 @@ function useItem(s: BattleState, side: SideId, item: ItemId, target: number, ev:
 function applyStatus(s: BattleState, side: SideId, st: StatusId, ev: BEvent[]): boolean {
   const m = active(s, side);
   if (m.status || m.hp <= 0) return false;
+  if (isGodHand(m)) { ev.push({ t: 'msg', text: '神之手不受任何異常狀態影響。' }); return false; }
   if (hasAb(formOf(m), 'waterbarrier')) { ev.push({ t: 'msg', text: `${nameOf(s, side)} 的水之結界擋下了異常狀態！` }); return false; }
   if (st === 'freeze' && (hasAb(formOf(m), 'colossal') || formOf(m).elems.includes('ice'))) return false;
   if (st === 'burn' && (formOf(m).elems.includes('fire') || hasAb(formOf(m), 'waterveil'))) return false;
@@ -315,6 +332,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
   ev.push({ t: 'use', side, skill: sk.id });
   ev.push({ t: 'msg', text: `${myName} 使用了 ${sk.name}！` });
 
+  if (sk.id.startsWith('gh_')) { godHandSkill(s, side, sk.id, ev); return; }
   const fx = sk.fx ?? {};
   if (fx.energy) { v.energy = Math.min(MAX_ENERGY, v.energy + fx.energy); ev.push({ t: 'energy', side, value: v.energy }); }
 
@@ -594,8 +612,9 @@ function endOfTurn(s: BattleState, ev: BEvent[]) {
     const mx = maxHp(m);
     v.counter = 0;
     if (m.status === 'burn' || m.status === 'poison' || m.status === 'bleed') {
-      const d = Math.max(1, Math.floor(mx / (m.status === 'burn' ? 16 : m.status === 'bleed' ? 12 : 10)));
-      const what = { burn: '灼傷', poison: '毒', bleed: '流血' }[m.status];
+      const passion = m.status === 'burn' && !!s.godhand?.passion.includes(m.uid);
+      const d = passion ? 2 : Math.max(1, Math.floor(mx / (m.status === 'burn' ? 16 : m.status === 'bleed' ? 12 : 10)));
+      const what = passion ? '熱情的火焰' : { burn: '灼傷', poison: '毒', bleed: '流血' }[m.status];
       m.hp = Math.max(0, m.hp - d);
       ev.push({ t: 'dmg', side, amount: d, hp: m.hp, eff: 1, crit: false, shield: v.shield });
       ev.push({ t: 'msg', text: `${nameOf(s, side)} 受到${what}的傷害！` });
@@ -603,7 +622,7 @@ function endOfTurn(s: BattleState, ev: BEvent[]) {
       if (m.hp <= 0) continue;
     }
     // 異常狀態倒數，時間到就解除
-    if (m.status && STATUS_TURNS[m.status] && m.hp > 0) {
+    if (m.status && STATUS_TURNS[m.status] && m.hp > 0 && !(m.status === 'burn' && s.godhand?.passion.includes(m.uid))) {
       m.statusTurns = (m.statusTurns ?? STATUS_TURNS[m.status]!) - 1;
       if (m.statusTurns <= 0) {
         ev.push({ t: 'msg', text: `${nameOf(s, side)} 的${STATUS_NAME[m.status]}好了！` });
@@ -622,7 +641,7 @@ function endOfTurn(s: BattleState, ev: BEvent[]) {
       checkFaints(s, ev);
       if (m.hp <= 0 || s.over) continue;
     }
-    if (s.turn >= VORTEX_TURN) {
+    if (s.turn >= VORTEX_TURN && !s.godhand) {
       const d = Math.max(1, Math.floor((mx * (s.turn - VORTEX_TURN + 1)) / 12));
       m.hp = Math.max(0, m.hp - d);
       ev.push({ t: 'dmg', side, amount: d, hp: m.hp, eff: 1, crit: false, shield: v.shield });
@@ -679,7 +698,59 @@ export function forcedSwitch(s: BattleState, side: SideId, to: number): BEvent[]
 }
 
 // ── AI ──
+/** 神之手的技能 */
+function godHandSkill(s: BattleState, side: SideId, id: string, ev: BEvent[]) {
+  const g = s.godhand, foe: SideId = side === 0 ? 1 : 0, tg = active(s, foe), tname = nameOf(s, foe);
+  if (!g) return;
+  if (id === 'gh_toss') {
+    const n = int(s.rng, 1, 20), hits = Math.min(n, tg.hp);
+    ev.push({ t: 'toss', side: foe, hits });
+    for (let i = 0; i < hits; i++) { tg.hp = Math.max(0, tg.hp - 1); ev.push({ t: 'dmg', side: foe, amount: 1, hp: tg.hp, eff: 1, crit: false, shield: 0 }); }
+    ev.push({ t: 'msg', text: `神之手抓起 ${tname} 拋來拋去！拋接了 ${n} 次！` });
+  } else if (id === 'gh_love') {
+    g.loveTurn = s.turn + 1;
+    ev.push({ t: 'msg', text: `神之手緊緊盯著 ${tname}……下一回合只能攻擊，不能做別的事！` });
+  } else if (id === 'gh_fire') {
+    tg.status = 'burn'; tg.statusTurns = 99; if (!g.passion.includes(tg.uid)) g.passion.push(tg.uid);
+    ev.push({ t: 'status', side: foe, status: 'burn' });
+    ev.push({ t: 'msg', text: `神之手的熱情燒了起來！${tname} 陷入了不會熄滅的灼傷！（每回合 −2 HP）` });
+  } else if (id === 'gh_stay') {
+    if (g.rewinds >= 3) { ev.push({ t: 'msg', text: '神之手想留住時間，但什麼也沒發生。' }); return; }
+    g.rewinds++; s.turn--;
+    ev.push({ t: 'rewind', turn: s.turn });
+    ev.push({ t: 'msg', text: `「不要走……」時間倒退了一回合！（${g.rewinds}/3）` });
+  } else if (id === 'gh_pull') {
+    const cand = tg.skills.map((sk, i) => ({ sk, i })).filter((x) => x.i > 0 && !isBasicAttack(x.sk));
+    if (!cand.length) { ev.push({ t: 'msg', text: `神之手想拔走 ${tname} 的技能，但已經沒有可以拔的了。` }); return; }
+    g.saved[tg.uid] ??= [...tg.skills];
+    const take: string[] = [];
+    for (let k = 0; k < 2 && cand.length; k++) take.push(cand.splice(int(s.rng, 0, cand.length - 1), 1)[0].sk);
+    tg.skills = tg.skills.filter((sk) => !take.includes(sk));
+    g.pulled[tg.uid] = [...(g.pulled[tg.uid] ?? []), ...take];
+    ev.push({ t: 'pull', side: foe, skills: take.map((x) => SKILLS[x]?.name ?? x) });
+    ev.push({ t: 'msg', text: `「不讓你走！」神之手硬生生拔走了 ${tname} 的 ${take.map((x) => SKILLS[x]?.name ?? x).join('、')}！` });
+  }
+}
+/** 戰鬥結束後把被拔走的技能還回去 */
+export function restorePulled(s: BattleState) {
+  const g = s.godhand; if (!g) return;
+  for (const side of s.sides) for (const m of side.team) if (g.saved[m.uid]) m.skills = g.saved[m.uid];
+}
+function godHandAi(s: BattleState, side: SideId): Action {
+  const g = s.godhand!, me = active(s, side), tg = active(s, side === 0 ? 1 : 0);
+  const slot = (id: string) => Math.max(0, me.skills.indexOf(id));
+  const left = g.survive - s.turn; // 剩幾回合
+  const pullable = tg.skills.filter((sk, i) => i > 0 && !isBasicAttack(sk)).length;
+  if (left < 5 && pullable > 0 && !g.pulled[tg.uid] && next(s.rng) < 0.7) return { type: 'skill', slot: slot('gh_pull') };
+  if (g.rewinds < 3 && s.turn >= 6 && next(s.rng) < 0.13) return { type: 'skill', slot: slot('gh_stay') };
+  const opts: [string, number][] = [['gh_toss', 50], ['gh_love', g.loveTurn >= s.turn ? 0 : 18], ['gh_fire', tg.status === 'burn' && g.passion.includes(tg.uid) ? 0 : 26]];
+  let x = next(s.rng) * opts.reduce((a, o) => a + o[1], 0);
+  for (const [id, w] of opts) { x -= w; if (x <= 0) return { type: 'skill', slot: slot(id) }; }
+  return { type: 'skill', slot: slot('gh_toss') };
+}
+
 export function aiChoose(s: BattleState, side: SideId): Action {
+  if (s.godhand && isGodHand(active(s, side))) return godHandAi(s, side);
   const me = active(s, side), foe: SideId = side === 0 ? 1 : 0, tg = active(s, foe);
   const v = volOf(s, side), hpRatio = me.hp / maxHp(me), myElems = formOf(me).elems;
   let best: { slot: number; score: number } = { slot: -1, score: 1 };
