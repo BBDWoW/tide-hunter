@@ -163,7 +163,7 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
   const refresh = () => { setMeta(loadMeta()); force((n) => n + 1); };
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawPort(c, t, meta.bay.map((b) => ({ id: b.form, mutant: b.mutant })))} label="港口與棲息灣" />}
-      onPanelClose={onBack}
+      onPanelClose={onBack} outsideClose={false}
       panel={
         <Win class="big-panel port" title={`港口　珍珠 ◆ ${meta.pearls}`} onClose={onBack} closeLabel="返回標題">
           <div class="tabs">
@@ -505,7 +505,7 @@ export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
   const STAT = [['hp', 'HP'], ['atk', '攻擊'], ['def', '防禦'], ['spd', '速度']] as const;
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={drawDeep} label="海底" />}
-      onPanelClose={onBack}
+      onPanelClose={onBack} outsideClose={false}
       panel={
         <Win class="big-panel dex-panel">
           <div class="dex-head">
@@ -563,7 +563,7 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
   const els = Object.keys(ELEM) as Elem[];
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={drawDeep} label="海底" />}
-      onPanelClose={onBack}
+      onPanelClose={onBack} outsideClose={false}
       panel={
         <Win class="big-panel help" title="玩法說明" onClose={onBack} closeLabel="返回標題">
           <h3>一場遭遇</h3>
