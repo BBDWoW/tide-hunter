@@ -390,3 +390,25 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .hud.clickable:active { filter: brightness(1.1); }
 .st-up { background: #2f8f4a; } .st-down { background: #8a3a3a; }
 .battle-info { width: min(100%, calc(var(--u) * 170)); }
+
+/* ── 圖鑑：左邊列表、右邊資料 ── */
+.dex-panel { width: min(100%, calc(var(--u) * 232)); height: 100%; max-height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.dex-head { display: flex; align-items: center; gap: 0.8em; flex: none; }
+.dex-head b { color: var(--amber); }
+.dex-close { margin-left: auto; font-size: 1em; padding: 0.25em 0.9em; }
+.dex-split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: calc(var(--u) * 3); margin-top: calc(var(--u) * 2); }
+.dex-list { overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 22), 1fr)); gap: calc(var(--u) * 1.2); align-content: start; padding-right: calc(var(--u) * 1); scrollbar-width: thin; }
+.dex-list .dex-cell { padding: calc(var(--u) * 1) calc(var(--u) * 0.4); }
+.dex-list .dex-cell .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.dex-side { overflow: auto; display: grid; gap: calc(var(--u) * 1.5); align-content: start; justify-items: start; background: rgba(255, 255, 255, 0.05); padding: calc(var(--u) * 2.5); scrollbar-width: thin; }
+.dex-side > .sprite { justify-self: center; }
+.dex-stats { display: grid; gap: 2px; width: 100%; }
+.dex-stats span { display: grid; grid-template-columns: 3em 1fr 2.2em; align-items: center; gap: 0.5em; }
+.dex-stats i { display: block; height: 6px; background: linear-gradient(90deg, #5fd8ff, #ffcf4a); }
+.dex-stats b { text-align: right; font-weight: 400; }
+.dex-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4em; }
+.dex-evo { display: grid; justify-items: center; background: rgba(5, 10, 32, 0.4); border: 1px solid transparent; color: var(--ink); padding: 2px 4px; cursor: pointer; font-family: inherit; }
+.dex-evo.on { border-color: var(--amber); }
+/* 直式：上下螢幕的下方也維持左右兩欄，固定高度各自捲動 */
+.portrait .dex-panel { height: calc(100dvh - var(--scene-h, 220px) - 40px); min-height: 360px; }
+.portrait .dex-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); }

@@ -366,37 +366,71 @@ function ItemList({ run, onChange }: { run: RunState; onChange: () => void }) {
 export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
   const dex = loadDex();
   const all = Object.values(FORMS).sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity));
-  const [sel, setSel] = useState<string | null>(null);
+  const [sel, setSel] = useState<string | null>(() => all.find((x) => dex.seen.includes(x.id))?.id ?? null);
   const f = sel ? FORMS[sel] : null;
+  // 進化路線：從最初型態往後展開（分支用「／」）
+  const line = (() => {
+    if (!f) return [];
+    const root = ancestryOf(f.id)[0];
+    const out: string[][] = [[root.id]];
+    for (let guard = 0; guard < 4; guard++) {
+      const next = out[out.length - 1].flatMap((id) => (FORMS[id].evolve ?? []).map((e) => e.to));
+      if (!next.length) break;
+      out.push([...new Set(next)]);
+    }
+    return out;
+  })();
+  const STAT = [['hp', 'HP'], ['atk', '攻擊'], ['def', '防禦'], ['spd', '速度']] as const;
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={drawDeep} label="海底" />}
       onPanelClose={onBack}
       panel={
-        <Win class="big-panel" title={`圖鑑　見過 ${dex.seen.length} · 收服 ${dex.caught.length} · 共 ${all.length}`}>
-          {f && (
-            <div class="dex-detail">
-              <Sprite form={f.id} size={144} />
-              <div class="grow">
-                <div class="row-gap">{f.no && <span class="num dim">No.{String(f.no).padStart(4, '0')}</span>}<b class="big-name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={f.id} /></div>
-                <div class="row-gap"><Elems list={f.elems} /><span class="dim">{f.category}</span>{f.height && <span class="dim small">身高 {f.height} m · 體重 {f.weight?.toFixed(1)} kg</span>}</div>
-                <AbilityLines form={f.id} label={false} />
-                <p class="small dim">{f.desc}</p>
-              </div>
-            </div>
-          )}
-          <div class="dex-grid">
-            {all.map((x) => {
-              const seen = dex.seen.includes(x.id), caught = dex.caught.includes(x.id);
-              return (
-                <button class={`dex-cell ${caught ? 'caught' : ''} ${sel === x.id ? 'on' : ''}`} key={x.id} onClick={() => seen && setSel(x.id)} disabled={!seen}>
-                  <Sprite form={x.id} size={96} silhouette={!seen} still />
-                  <span class="small">{seen ? x.name : '？？？'}</span>
-                  <RarityTag r={x.rarity} />
-                </button>
-              );
-            })}
+        <Win class="big-panel dex-panel">
+          <div class="dex-head">
+            <b>圖鑑</b><span class="small dim">見過 {dex.seen.length}・收服 {dex.caught.length}・共 {all.length}</span>
+            <button class="chip-btn dex-close" onClick={onBack}>✕ 返回</button>
           </div>
-          <MenuItem onClick={onBack}>返回標題</MenuItem>
+          <div class="dex-split">
+            <div class="dex-list">
+              {all.map((x) => {
+                const seen = dex.seen.includes(x.id), caught = dex.caught.includes(x.id);
+                return (
+                  <button class={`dex-cell ${caught ? 'caught' : ''} ${sel === x.id ? 'on' : ''}`} key={x.id} onClick={() => seen && setSel(x.id)} disabled={!seen} aria-label={seen ? x.name : '未發現'}>
+                    <Sprite form={x.id} size={48} silhouette={!seen} still />
+                    <span class="small">{seen ? x.name : '？？？'}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div class="dex-side">
+              {f ? <>
+                <Sprite form={f.id} size={144} />
+                <div class="row-gap">{f.no && <span class="num dim">No.{String(f.no).padStart(4, '0')}</span>}<b class="big-name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={f.id} /></div>
+                <div class="row-gap"><Elems list={f.elems} /><span class="dim small">{f.category}</span>{dex.caught.includes(f.id) ? <span class="small accent">已收服</span> : <span class="small dim">只見過</span>}</div>
+                {f.height && <span class="dim small">身高 {f.height} m・體重 {f.weight?.toFixed(1)} kg</span>}
+                <p class="small">{f.desc}</p>
+                <AbilityLines form={f.id} label={false} />
+                <div class="dex-stats">
+                  {STAT.map(([k, label]) => <span key={k} class="small">{label}<i style={{ width: `${Math.min(100, f.base[k] / 1.3)}%` }} /><b class="num">{f.base[k]}</b></span>)}
+                </div>
+                <span class="small dim">閃避 {Math.round(dodgeRate(f) * 100)}%・格擋 {Math.round(blockRate(f) * 100)}%</span>
+                {line.length > 1 && (
+                  <div class="dex-line">
+                    {line.map((ids, k) => (
+                      <span class="row-gap" key={k}>{k > 0 && <span class="dim">→</span>}
+                        {ids.map((id) => {
+                          const known = dex.seen.includes(id), e = Object.values(FORMS).flatMap((x) => x.evolve ?? []).find((ev) => ev.to === id);
+                          return <button key={id} class={`dex-evo ${id === f.id ? 'on' : ''}`} disabled={!known} onClick={() => setSel(id)}>
+                            <Sprite form={id} size={48} silhouette={!known} still /><span class="small">{known ? FORMS[id].name : '？？？'}{e ? ` Lv${e.level}` : ''}</span>
+                          </button>;
+                        })}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </> : <p class="small dim">還沒有見過任何生物。</p>}
+            </div>
+          </div>
         </Win>
       } />
   );
@@ -412,7 +446,7 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
         <Win class="big-panel help" title="玩法說明">
           <h3>一場遭遇</h3>
           <ol>
-            <li><b>拋竿</b>：力量條越接近頂端，越容易釣到稀有生物（N &lt; B &lt; A &lt; S &lt; SSR）。</li>
+            <li><b>拋竿</b>：力量條停在魚影的目標區（黃色），紅色是完美落點：對手開場 HP 減少、比較好捕捉，稀有度也可能提升。</li>
             <li><b>等待咬鉤</b>：浮標下沉、出現「！」時立刻點擊。太早點會把魚嚇跑。</li>
             <li><b>回合制戰鬥</b>：每回合 +1 能量（上限 5），強力技能需要較多能量。</li>
             <li><b>收線捕捉</b>：對手 HP 越低、身上有異常狀態，捕捉區就越寬。失敗的話對手會獲得一次攻擊機會。</li>

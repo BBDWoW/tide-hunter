@@ -123,7 +123,7 @@ export function GameScreen({ vp, scene, overlay, dock, panel, dockTall, onScene,
         {!vp.portrait && dock && <div class={`dock ${dockTall ? 'tall' : ''}`}>{dock}</div>}
       </div>
       {lower && (
-        <div class="lower" style={{ width: `${vp.w}px`, '--u': `${Math.min(3.2, Math.max(2.4, vp.w / 150))}px` }}>
+        <div class="lower" style={{ width: `${vp.w}px`, '--scene-h': `${vp.h}px`, '--u': `${Math.min(3.2, Math.max(2.4, vp.w / 150))}px` }}>
           {panel && <div class="lower-panel">{panel}</div>}
           {dock && <div class="dock">{dock}</div>}
         </div>
