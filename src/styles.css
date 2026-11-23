@@ -502,3 +502,8 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 @keyframes bi-name { from { letter-spacing: 0.6em; opacity: 0; } to { letter-spacing: 0.1em; opacity: 1; } }
 .reduce-fx .boss-intro * , .reduce-fx .boss-intro::before { animation-duration: 0.01s !important; }
 .app:has(.boss-intro) .dock { visibility: hidden; }
+/* 霸主討伐成功 */
+.boss-intro.win::before { background: radial-gradient(ellipse at 50% 45%, rgba(255, 220, 120, 0.25) 0%, rgba(4, 2, 12, 0.7) 70%); }
+.boss-intro.win .bi-card { background: linear-gradient(100deg, rgba(200, 140, 20, 0.95) 0%, rgba(150, 90, 10, 0.92) 70%, rgba(150, 90, 10, 0) 100%); border-color: #fff3b0; }
+.boss-intro.win .bi-name { text-shadow: 3px 3px 0 #5a3000, 0 0 16px rgba(255, 240, 160, 0.8); }
+.boss-intro.win .bi-zone { color: #fff3c8; } .boss-intro.win .bi-title { color: #fff; }

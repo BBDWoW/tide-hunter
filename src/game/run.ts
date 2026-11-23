@@ -155,6 +155,7 @@ export interface RunState {
   heldBag?: HeldId[]; // 還沒裝上的攜帶道具
   star?: number; // 潮位（難度）
   daily?: string; // 每日挑戰的日期
+  after?: { boons?: string[]; bossWin?: string }; // 戰鬥已結算、還沒離開這一站（中途關掉 App 也能接著繼續）
   camp?: { key: string; text: string }; // 這個營地已經做過的事
   shopStock?: { key: string; held: HeldId[]; refreshes: number }; // 這間商店的攜帶道具貨架
   station: number;

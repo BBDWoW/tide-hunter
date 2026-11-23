@@ -143,9 +143,11 @@ export function evolveTarget(m: Mon, zone?: string): string | null {
 // 進化：換形態、按比例保留 HP，回傳新形態可學的技能
 export function evolve(m: Mon, to: string): string[] {
   const ratio = m.hp / maxHp(m);
+  // 進化前就學得到的招式不再重問一次：只問「新型態才有」的招式，最多 2 招（最新的）
+  const before = new Set(ancestryOf(m.form).flatMap((f) => f.learn.map(([, sk]) => sk)));
   m.form = to;
   m.hp = Math.max(1, Math.round(maxHp(m) * ratio));
-  return FORMS[to].learn.filter(([l, sk]) => l <= m.lv && !m.skills.includes(sk)).map(([, sk]) => sk);
+  return FORMS[to].learn.filter(([l, sk]) => l <= m.lv && !m.skills.includes(sk) && !before.has(sk)).map(([, sk]) => sk).slice(-2);
 }
 
 export const skillSlots = (m: Mon) => STAGE_SLOTS[formOf(m).stage];

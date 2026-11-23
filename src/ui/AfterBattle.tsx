@@ -5,7 +5,7 @@ import { FORMS } from '../data/creatures';
 import { SKILLS } from '../data/skills';
 import { RARITY, STAGE_NAME } from '../data/types';
 import { evolve, evolveTarget, formOf, gainXp, maxHp, skillSlots, xpReward, xpToNext, type Mon } from '../game/creature';
-import { applyBoon, giveHeld, boon, isBoss, markCaught, updateDex, nodeOf, PARTY_MAX, rollBoons, ZONES, type RunState, type ZoneId } from '../game/run';
+import { FINAL_ZONE, saveRun, applyBoon, giveHeld, boon, isBoss, markCaught, updateDex, nodeOf, PARTY_MAX, rollBoons, ZONES, type RunState, type ZoneId } from '../game/run';
 import { BOON_TIER, BOONS } from '../data/boons';
 import { HELD } from '../data/held';
 import { EVO_W, playEvolution } from '../render/evo';
@@ -55,7 +55,15 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
       const coins = Math.floor(foes.reduce((a, f) => a + 8 + f.lv * 2, 0) * (nodeOf(run).kind === 'elite' ? 2 : 1));
       run.shells += coins;
       out.push({ uid: '_coins', text: `獲得 ${coins} 枚貝殼幣（共 ${run.shells}）` });
-      if (result.team || (nodeOf(run).kind === 'elite' && next(run.rng) < 0.5)) { const h = giveHeld(run); out.push({ uid: '_held', text: `${result.team ? "船隊留下" : "菁英掉落"}了攜帶道具「${HELD[h].icon} ${HELD[h].name}」！` }); }
+      // 霸主：額外獎勵（貝殼幣、攜帶道具）
+      const bossWin = isBoss(run) && result.outcome === 'win';
+      if (bossWin) {
+        const bonus = 60 + run.zoneNo * 40;
+        run.shells += bonus;
+        out.push({ uid: '_coins', text: `霸主的寶藏：${bonus} 枚貝殼幣！（共 ${run.shells}）` });
+        const h = giveHeld(run); out.push({ uid: '_held', text: `霸主守護的攜帶道具「${HELD[h].icon} ${HELD[h].name}」！` });
+      }
+      if (!bossWin && (result.team || (nodeOf(run).kind === 'elite' && next(run.rng) < 0.5))) { const h = giveHeld(run); out.push({ uid: '_held', text: `${result.team ? "船隊留下" : "菁英掉落"}了攜帶道具「${HELD[h].icon} ${HELD[h].name}」！` }); }
       for (const m of run.party) {
         if (m.hp <= 0 || m === enemy) continue;
         const bondMul = 1 + Math.min(10, m.bond ?? 0) * 0.05; // 羈絆經驗加成
@@ -67,6 +75,9 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
         for (const sk of r.learnable) q.push({ k: 'learn', uid: m.uid, skill: sk });
       }
     }
+    // 立刻存檔：結算到一半關掉 App，重開後也不會弄丟這場戰鬥的結果
+    run.after = { boons: boonOpts ?? undefined, bossWin: isBoss(run) && result.outcome === 'win' ? enemy.form : undefined };
+    saveRun(run);
     setLines(out);
     setTasks(q);
     // 結算音效：貝殼幣、升級
@@ -75,7 +86,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
   }, []);
 
   const find = (uid: string) => run.party.find((m) => m.uid === uid);
-  const shift = (extra: Task[] = []) => setTasks((t) => [...extra, ...(t ?? []).slice(1)]);
+  const shift = (extra: Task[] = []) => { saveRun(run); setTasks((t) => [...extra, ...(t ?? []).slice(1)]); };
   const note = (uid: string, text: string) => setLines((l) => [...l, { uid, text }]);
   const cur = tasks?.[0];
 
@@ -96,7 +107,9 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
 
   if (!tasks) return null;
 
-  const title = result.outcome === 'caught' ? '收服成功！' : result.outcome === 'win' ? '戰鬥勝利' : '順利脫身';
+  const bossWin = isBoss(run) && result.outcome === 'win';
+  const title = bossWin ? '霸主討伐成功！' : result.outcome === 'caught' ? '收服成功！' : result.outcome === 'win' ? '戰鬥勝利' : '順利脫身';
+  const doneLabel = !bossWin ? '繼續航行' : run.returnTo ? '回到原本的航線' : run.zoneNo < FINAL_ZONE ? '前往下一片海域' : '凱旋回港';
 
   const evolving = cur?.k === 'evolve';
   return (
@@ -117,6 +130,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
                 shift(extra);
               }} />
           ) : <>
+            {bossWin && <p class="accent boss-calm">{ZONES[run.zone]?.name}的潮水平靜了下來。夥伴們都成長了不少！</p>}
             {caughtMon.current && <CaughtCard mon={caughtMon.current} />}
             <div class="after-list">
               {run.party.map((m) => (
@@ -143,8 +157,8 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
                 shift();
               }} />}
             {cur?.k === 'full' && <FullPrompt run={run} mon={cur.mon} onDone={(text) => { note(cur.mon.uid, text); shift(); }} />}
-            {!cur && boonOpts && !boonDone && <BoonPick ids={boonOpts} onPick={(id) => { note('_boon', applyBoon(run, id)); setBoonDone(true); }} />}
-            {!cur && (!boonOpts || boonDone) && <MenuItem onClick={onDone} hot>繼續航行</MenuItem>}
+            {!cur && boonOpts && !boonDone && <BoonPick ids={boonOpts} onPick={(id) => { note('_boon', applyBoon(run, id)); if (run.after) run.after.boons = undefined; saveRun(run); setBoonDone(true); }} />}
+            {!cur && (!boonOpts || boonDone) && <MenuItem onClick={onDone} hot>{doneLabel}</MenuItem>}
           </>}
         </Win>
       } />
@@ -247,5 +261,20 @@ function BoonPick({ ids, onPick }: { ids: string[]; onPick: (id: string) => void
         })}
       </div>
     </div>
+  );
+}
+
+/** 結算到一半關掉 App：重開後先把沒選的能力卡選完 */
+export function ResumeBoon({ vp, run, onDone }: { vp: Viewport; run: RunState; onDone: () => void }) {
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawSea(c, t, 'day')} />}
+      panel={
+        <Win class="big-panel after" title="戰鬥勝利">
+          <p class="small dim">上次的戰鬥還沒選能力卡。</p>
+          {msg ? <><p class="small accent">{msg}</p><MenuItem onClick={onDone} hot>繼續航行</MenuItem></>
+            : <BoonPick ids={run.after?.boons ?? []} onPick={(id) => { setMsg(applyBoon(run, id)); if (run.after) run.after.boons = undefined; saveRun(run); }} />}
+        </Win>
+      } />
   );
 }

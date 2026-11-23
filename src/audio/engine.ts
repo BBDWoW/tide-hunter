@@ -263,7 +263,7 @@ export const stopSurf = () => { window.clearInterval(surfTimer); };
 export type SfxId =
   | 'select' | 'confirm' | 'back' | 'hit' | 'crit' | 'super' | 'weak' | 'dodge' | 'block' | 'heal' | 'buff' | 'debuff' | 'status'
   | 'faint' | 'enter' | 'enrage' | 'cast' | 'splash' | 'nibble' | 'bite' | 'shake' | 'catch' | 'escape' | 'levelup' | 'coin' | 'win' | 'lose'
-  | 'turn' | 'reveal' | 'item' | 'energy'
+  | 'turn' | 'reveal' | 'item' | 'energy' | 'fanfare' | 'bossdown'
   | `skill:${string}`;
 
 function tone(t: number, type: OscillatorType | 'p25' | 'p50', f0: number, f1: number, dur: number, vol: number, attack = 0.004) {
@@ -322,6 +322,8 @@ export function sfx(id: SfxId) {
     case 'turn': tone(t, 'sine', 400, 1600, 0.4, 0.12); notes(t + 0.3, [84, 88, 91], 0.06, 'sine', 0.12, 0.2); break;
     case 'reveal': notes(t, [72, 79, 84, 88, 91], 0.07, 'p25', 0.11, 0.3); hiss(t, 0.6, 0.15, 'highpass', 5000); break;
     case 'item': tone(t, 'sine', 600, 900, 0.12, 0.15); break;
+    case 'bossdown': tone(t, 'sawtooth', 220, 40, 1.4, 0.3, 0.02); hiss(t, 1.2, 0.5, 'lowpass', 2000, 100); tone(t + 0.3, 'sine', 80, 30, 1.2, 0.5); break;
+    case 'fanfare': notes(t, [67, 67, 67, 72], 0.12, 'p25', 0.13, 0.14); notes(t + 0.6, [76, 79, 84], 0.18, 'p25', 0.14, 0.5); notes(t + 0.6, [60, 64, 67], 0.18, 'triangle', 0.18, 0.6); tone(t + 1.2, 'sine', hz(96), hz(96), 0.8, 0.06); break;
     case 'energy': tone(t, 'p25', 1200, 1800, 0.08, 0.06); break;
     default: skillSfx(t, id.slice(6));
   }

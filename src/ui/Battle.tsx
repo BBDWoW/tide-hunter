@@ -81,6 +81,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const net = useRef<{ wob: number; glow: number } | null>(null);
   const [intent, setIntent] = useState<Intent | null>(null);
   const [intro, setIntro] = useState<null | 'dark' | 'card' | 'out'>(null); // 霸主登場畫面
+  const [bossDown, setBossDown] = useState(false); // 打倒霸主的勝利畫面
   const introSkip = useRef(false);
   const [toast, setToast] = useState<{ id: number; text: string; form: string; from: number; hp: number; max: number } | null>(null);
   const intentRef = useRef<Intent | null>(null);
@@ -242,6 +243,18 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       case 'stat': { sfx(e.delta > 0 ? 'buff' : 'debuff'); const c = center(e.side); if (e.delta > 0) burst(a.parts, c.x, c.y, 'buff', null); else a.shakeT[e.side] = 0.2; pop(e.side, e.delta > 0 ? '▲' : '▼', e.delta > 0 ? 'heal' : 'weak'); break; }
       case 'energy': d[e.side].energy = e.value; rerender(); break;
       case 'faint': {
+        if (boss && e.side === 1) {
+          // 霸主倒下：閃爍、連續爆開、畫面劇烈震動，慢慢消失
+          sfx('bossdown'); a.shakeT[1] = 1.6;
+          const c = center(1);
+          for (let k = 0; k < 6; k++) {
+            setTimeout(() => { burst(a.parts, c.x + (Math.random() - 0.5) * 30, c.y + (Math.random() - 0.5) * 24, 'hit', 'fire'); jolt(4, k % 2 ? 0.35 : 0); a.mons[1].flash = 0.2; }, k * 180);
+          }
+          await new Promise((r) => setTimeout(r, 1100));
+          burst(a.parts, c.x, c.y, 'faint', null); burst(a.parts, c.x, c.y, 'faint', null); jolt(6, 0.7);
+          for (let i = 0; i < 20; i++) { a.fade[1] = 1 - (i + 1) / 20; await new Promise((r) => setTimeout(r, 45)); }
+          break;
+        }
         sfx('faint'); const c = center(e.side); burst(a.parts, c.x, c.y, 'faint', null);
         for (let i = 0; i < 10; i++) { a.fade[e.side] = 1 - (i + 1) / 10; await wait(40); }
         break;
@@ -290,6 +303,15 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   async function finish(caught = false) {
     const over = bs.over;
     let outcome: BattleResult['outcome'] = caught ? 'caught' : over?.fled ? 'fled' : over?.winner === 0 ? 'win' : 'lose';
+    if (outcome === 'win' && boss) {
+      // 霸主討伐：勝利字卡（點一下可以跳過）
+      introSkip.current = false;
+      sfx('fanfare'); setBossDown(true); say(`霸主「${FORMS[enc.mon.form].name}」被擊敗了！`);
+      const end = Date.now() + 3400;
+      while (Date.now() < end && !introSkip.current) await new Promise((r) => setTimeout(r, 40));
+      onEnd({ outcome, enemy: enc.mon, participants: [...participants.current] });
+      return;
+    }
     if (outcome === 'win') { sfx('win'); say('戰鬥勝利！'); }
     if (outcome === 'caught') sfx('catch');
     if (outcome === 'lose') {
@@ -407,6 +429,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={draw} label="戰鬥畫面" />}
       overlay={<>
+        {bossDown && <BossDown form={enc.mon.form} zone={zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
         {intro && <BossIntro phase={intro} form={enc.mon.form} lv={enc.mon.lv} zone={zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
         {!intro && <>
         <HudBox onOpen={() => setInfo(1)} side={1} d={de} rarity={crew ? undefined : FORMS[de.form].rarity} boss={boss} intent={mode === 'main' || mode === 'skills' ? intent : null} warn={!!intent?.atk && effectiveness(intent.elem, formOf(active(bs, 0)).elems) >= 2} crewLeft={crew ? bs.sides[1].team.filter((m) => m.hp > 0).length : 0} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
@@ -527,6 +550,20 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           </Win>
         </div>
       )} />
+  );
+}
+
+function BossDown({ form, zone, onSkip }: { form: string; zone: string; onSkip: () => void }) {
+  return (
+    <div class="boss-intro win" onClick={onSkip} role="button" aria-label="繼續">
+      <i class="bi-bar top" /><i class="bi-bar bottom" />
+      <div class="bi-card">
+        <span class="bi-zone">{zone}</span>
+        <b class="bi-name">討伐成功！</b>
+        <span class="bi-title">— {FORMS[form].name} 被擊敗了，海面恢復了平靜 —</span>
+      </div>
+      <span class="bi-skip">點一下繼續</span>
+    </div>
   );
 }
 
