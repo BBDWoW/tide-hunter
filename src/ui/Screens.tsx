@@ -398,13 +398,28 @@ function ItemList({ run, onChange }: { run: RunState; onChange: () => void }) {
   const owned = Object.entries(run.boons).filter(([, n]) => n > 0);
   const [using, setUsing] = useState<ItemId | null>(null);
   const [msg, setMsg] = useState('');
+  // 剛剛用過的結果：留在畫面上，看得到回了多少
+  const [last, setLast] = useState<{ uid: string; text: string; from: number; to: number; max: number; n: number } | null>(null);
+  const use = (item: ItemId, i: number) => {
+    const m = run.party[i], from = Math.max(0, m.hp);
+    const text = applyItemOutside(run, item, i);
+    if (!text) return;
+    setLast({ uid: m.uid, text, from, to: m.hp, max: maxHp(m), n: (last?.n ?? 0) + 1 });
+    setMsg(text); onChange();
+  };
   if (using) return (
     <div class="item-list">
+      {last && (
+        <div class="use-result" key={last.n}>
+          <b>✚ {last.text}</b>
+          <span class="num">HP {last.from} → {last.to}/{last.max}</span>
+        </div>
+      )}
       <p class="small">要對誰使用 <b>{ITEMS[using].name}</b>？（剩 {run.items[using]} 個）</p>
       <div class="pick-grid">
         {run.party.map((m, i) => (
-          <button class="pick" key={m.uid} disabled={!canUseOutside(m, using)}
-            onClick={() => { setMsg(applyItemOutside(run, using, i)); setUsing(null); onChange(); }}>
+          <button class={`pick ${last?.uid === m.uid ? 'just-used' : ''}`} key={m.uid + (last?.uid === m.uid ? last.n : '')} disabled={!run.items[using] || !canUseOutside(m, using)}
+            onClick={() => use(using, i)}>
             <Sprite form={m.form} size={48} mutant={m.mutant} />
             <span class="grow">
               <span class="row-gap"><b>{formOf(m).name}</b><span class="num">Lv{m.lv}</span></span>
@@ -414,7 +429,7 @@ function ItemList({ run, onChange }: { run: RunState; onChange: () => void }) {
           </button>
         ))}
       </div>
-      <MenuItem onClick={() => setUsing(null)}>返回背包</MenuItem>
+      <MenuItem onClick={() => { setUsing(null); setLast(null); }} hot={!!last}>返回背包</MenuItem>
     </div>
   );
   return (
@@ -423,7 +438,7 @@ function ItemList({ run, onChange }: { run: RunState; onChange: () => void }) {
       <h3 class="sub-h">回復道具（點「使用」）</h3>
       {BAG_USABLE.map((id) => (
         <div class="item-row" key={id}><b>{ITEMS[id].name}</b><span class="num">×{run.items[id] ?? 0}</span><span class="small dim grow">{ITEMS[id].desc}</span>
-          <button class="chip-btn" disabled={!run.items[id] || !run.party.some((m) => canUseOutside(m, id))} onClick={() => { setMsg(''); setUsing(id); }}>使用</button></div>
+          <button class="chip-btn" disabled={!run.items[id] || !run.party.some((m) => canUseOutside(m, id))} onClick={() => { setMsg(''); setLast(null); setUsing(id); }}>使用</button></div>
       ))}
       <div class="item-row"><b>能量海膽</b><span class="num">×{run.items.ether ?? 0}</span><span class="small dim">{ITEMS.ether.desc}（只能在戰鬥中用）</span></div>
       <div class="item-row"><b>生命石</b><span class="num">×{run.lifeStones ?? 0}</span><span class="small dim">戰鬥中全隊倒下時，可以讓全隊以 50% HP 復活，再選擇繼續戰鬥或逃跑。</span></div>

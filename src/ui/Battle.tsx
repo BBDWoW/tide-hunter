@@ -74,6 +74,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const [info, setInfo] = useState<SideId | null>(null); // 查看雙方資料
   const net = useRef<{ wob: number; glow: number } | null>(null);
   const [intent, setIntent] = useState<Intent | null>(null);
+  const [toast, setToast] = useState<{ id: number; text: string; form: string; from: number; hp: number; max: number } | null>(null);
   const intentRef = useRef<Intent | null>(null);
   /** 輪到玩家時，先決定好對手這回合要做什麼並顯示出來 */
   const planEnemy = () => {
@@ -211,6 +212,14 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       }
       case 'field': setField(e.id ? { id: e.id, turns: e.turns } : null); break;
       case 'trap': d[e.side].trap = e.turns; rerender(); break;
+      case 'item': {
+        // 用道具的結果：固定顯示 2.5 秒（不受快速、加速影響），看得清楚回了多少
+        if (e.side !== 0) break;
+        const m = bs.sides[0].team[e.target], id = Math.random();
+        setToast({ id, text: e.text, form: m.form, from: e.from, hp: e.hp, max: e.max });
+        setTimeout(() => setToast((t) => (t?.id === id ? null : t)), 2500);
+        await wait(700); break;
+      }
       case 'enrage': {
         const c = center(e.side), v = a.mons[e.side];
         v.aura = '#ff3040'; v.flash = 0.6; a.shakeT[e.side] = 0.8;
@@ -357,6 +366,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         {field && <div class="field-chip" style={{ borderColor: FIELDS[field.id].color }} title={FIELDS[field.id].desc}><i style={{ background: FIELDS[field.id].color }} />{FIELDS[field.id].name}<span>剩 {field.turns} 回合</span></div>}
         <button class="speed" onClick={toggleFast} aria-pressed={fast}>{fast ? '▶▶ 快速' : '▶ 一般'}</button>
         {mode === 'reel' && !vp.portrait && reel}
+        {toast && <div class="item-toast" key={toast.id}><Sprite form={toast.form} size={48} /><span class="grow"><b>✚ {toast.text}</b><Bar value={toast.hp} max={toast.max} /><span class="num small">HP {toast.from} → {toast.hp}/{toast.max}</span></span></div>}
         {mode === 'main' && !boss && <Tip id="battle">直接點技能出招（◆ 是能量消耗）。對手 HP 條下面的「下一步」是牠這回合要做的事。把對手打虛弱再按 🎣 捕捉，比較容易收服。點 HP 框可以看詳細資料。</Tip>}
         {mode === 'main' && boss && <Tip id="boss">霸主的 HP 掉到一半時會狂暴：攻擊提高，但防禦會露出破綻。霸主不能捕捉，也不能逃跑。</Tip>}
       </>}

@@ -81,6 +81,7 @@ export type BEvent =
   | { t: 'field'; id: FieldId | null; turns: number }
   | { t: 'trap'; side: SideId; turns: number }
   | { t: 'enrage'; side: SideId }
+  | { t: 'item'; side: SideId; target: number; text: string; from: number; hp: number; max: number }
   | { t: 'end'; winner: SideId };
 
 export const STRUGGLE: Skill = { id: 'struggle', name: '掙扎', elem: null, power: 35, cost: 0, acc: 100, desc: '能量不足時使用。', anim: 'hit' };
@@ -225,8 +226,10 @@ function useItem(s: BattleState, side: SideId, item: ItemId, target: number, ev:
   const m = s.sides[side].team[target], name = formOf(m).name, mx = maxHp(m);
   ev.push({ t: 'msg', text: `使用了 ${ITEMS[item].name}！` });
   const isActive = target === s.sides[side].active;
+  const from = Math.max(0, m.hp);
   if (item === 'revive') {
     m.hp = Math.floor(mx / 2); m.status = null;
+    ev.push({ t: 'item', side, target, text: `${name} 復活了！`, from, hp: m.hp, max: mx });
     ev.push({ t: 'msg', text: `${name} 復活了！` });
     return;
   }
@@ -243,6 +246,7 @@ function useItem(s: BattleState, side: SideId, item: ItemId, target: number, ev:
     ev.push({ t: 'heal', side, amount: amt, hp: m.hp });
     if (item === 'superpotion') ev.push({ t: 'status', side, status: null });
   }
+  ev.push({ t: 'item', side, target, text: `${name} 回復了 ${amt} HP${item === 'superpotion' ? '，異常也治好了' : ''}`, from, hp: m.hp, max: mx });
   ev.push({ t: 'msg', text: `${name} 回復了 ${amt} HP。` });
 }
 
