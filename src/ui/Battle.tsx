@@ -113,7 +113,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       if (enc.rarity === 'SSR') say('★ 傳說級的氣息！這可能是唯一的機會！');
       else if (enc.rarity === 'S') say('☆ 史詩級的稀有生物！');
       if (enc.mon.mutant) say('✦ 是異變個體！牠的顏色跟一般的不一樣！');
-      if (enc.landing === 'perfect' || enc.landing === 'good') { await wait(500); say(`${LANDING_BONUS[enc.landing].label}！釣鉤刺得很深，${ef.name} 的 HP 減少了，也比較好捕捉！`); }
+      if (enc.landing === 'perfect' || enc.landing === 'good') { await wait(500); say(`${LANDING_BONUS[enc.landing].label}！${ef.name} 受了傷，比較好捕捉！`); }
       await wait(700);
       say(`上吧，${formOf(active(bs, 0)).name}！`);
       await wait(500);
@@ -348,14 +348,13 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                 <div class="row-gap"><b class="big-name">{hs.name}</b>{hs.elem ? <ElemChip e={hs.elem} /> : <span class="chip neutral">無</span>}</div>
                 <p class="small">{hs.power ? (() => { const p = Math.round(effPower(bs, 0, 1, hs)); return p !== hs.power ? `威力 ${hs.power} → ${p}` : `威力 ${hs.power}`; })() : '變化技'} · 能量 {hs.cost} · 命中 {Math.round(Math.min(1, hitChance(bs, 0, hs)) * 100)}{hs.power > 0 && (() => { const e = effectiveness(hs.elem, formOf(foe).elems); return e >= 2 ? ' · 效果絕佳！' : e < 1 ? ' · 效果不好' : ''; })()}</p>
                 <p class="small dim">{hs.desc}</p>
-                {TOUCH && <p class="small accent">{armed === hover ? '再點一次使用這一招' : '點一下看說明，再點一次使用'}</p>}
+                {TOUCH && armed === hover && <p class="small accent">再點一次使用</p>}
               </div>
             ) : hi ? (
               <div class="skill-info"><b class="big-name">{ITEMS[hi].name}</b><p class="small dim">{ITEMS[hi].desc}</p></div>
             ) : (
               <div class="log" aria-live="polite">
                 {log.slice(-2).map((l, i, arr) => <p key={log.length - arr.length + i} class={i === arr.length - 1 ? 'last' : 'prev'}>{l}</p>)}
-                {mode === 'main' && <p class="prev">要怎麼做？</p>}
               </div>
             )}
           </Win>
@@ -443,11 +442,11 @@ function InfoPanel({ bs, side, boss, onClose }: { bs: BattleState; side: SideId;
           <span class="row-gap"><b class="big-name">{m.mutant ? '✦ ' : ''}{f.name}</b><RarityTag r={f.rarity} /><StageTag form={m.form} /><span class="num">Lv{m.lv}</span></span>
           <span class="row-gap"><Elems list={f.elems} /><span class="small dim">{f.category}</span>{mine && <IvStars iv={m.iv} />}</span>
           <Bar value={m.hp} max={mx} />
-          <span class="small">{mine ? `HP ${Math.max(0, m.hp)}/${mx}` : `HP 約 ${Math.round((Math.max(0, m.hp) / mx) * 100)}%`}・能量 {v.energy}/{MAX_ENERGY}</span>
+          <span class="row-gap">{mine && <span class="small">{Math.max(0, m.hp)}/{mx}</span>}<Energy value={v.energy} max={MAX_ENERGY} /></span>
         </span>
       </div>
       <div class="row-gap">
-        {m.status ? <span class={`st st-${m.status}`}>{statusLabel(m.status)}{m.statusTurns ? ` 剩 ${m.statusTurns} 回合` : ''}</span> : <span class="small dim">沒有異常狀態</span>}
+        {m.status && <span class={`st st-${m.status}`}>{statusLabel(m.status)}{m.statusTurns ? ` ${m.statusTurns}` : ''}</span>}
         {stages.map((k) => <span key={k} class={`st ${v.stages[k] > 0 ? 'st-up' : 'st-down'}`}>{STAGE_LABEL[k]} {v.stages[k] > 0 ? '+' : ''}{v.stages[k]}</span>)}
         {v.shield > 0 && <span class="st st-shield">護盾 {v.shield}</span>}
         {v.charged && <span class="st st-charge">蓄力</span>}
@@ -456,8 +455,7 @@ function InfoPanel({ bs, side, boss, onClose }: { bs: BattleState; side: SideId;
       {mine && <p class="small">攻擊 {st.atk}・防禦 {st.def}・速度 {st.spd}</p>}
       <p class="small dim">閃避 {Math.round(dodgeRate(f) * 100)}%・格擋 {Math.round(blockRate(f) * 100)}%</p>
       <AbilityLines form={f.id} />
-      {mine ? <div class="skills-col">{m.skills.map((id) => <SkillLine id={id} key={id} />)}</div>
-        : <p class="small dim">對手的技能要在戰鬥中觀察才知道。</p>}
+      {mine && <div class="skills-col">{m.skills.map((id) => <SkillLine id={id} key={id} />)}</div>}
       <MenuItem onClick={onClose} hot>關閉</MenuItem>
     </Win>
   );
