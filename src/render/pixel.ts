@@ -287,3 +287,40 @@ export function spritePixels(id: string, pal: Palette) {
   }
   return arr;
 }
+
+// ── 小尺寸版本（一半大小）：每 2×2 取最多的顏色，比直接縮放更能保住外框 ──
+const miniCache = new Map<string, HTMLCanvasElement>();
+export function drawSpriteMini(ctx: CanvasRenderingContext2D, id: string, pal: Palette, x: number, y: number, opt: { f?: number; flip?: boolean; recolor?: Recolor } = {}) {
+  const { f = 0, flip = false, recolor } = opt;
+  const key = `${id}:${f}:${recolorKey(recolor)}`;
+  let cv = miniCache.get(key);
+  if (!cv) {
+    const big = baked(id, f, pal, undefined, recolor), n = big.width, h = Math.ceil(n / 2);
+    const src = big.getContext('2d')!.getImageData(0, 0, n, n).data;
+    cv = document.createElement('canvas'); cv.width = h; cv.height = h;
+    const c2 = cv.getContext('2d')!, out = c2.createImageData(h, h);
+    for (let by = 0; by < h; by++) for (let bx = 0; bx < h; bx++) {
+      const cnt = new Map<number, number>(); let opaque = 0, dark = -1;
+      for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
+        const sx = bx * 2 + dx, sy = by * 2 + dy; if (sx >= n || sy >= n) continue;
+        const i = (sy * n + sx) * 4; if (src[i + 3] < 128) continue;
+        opaque++;
+        const v = (src[i] << 16) | (src[i + 1] << 8) | src[i + 2];
+        cnt.set(v, (cnt.get(v) ?? 0) + 1);
+        if (src[i] + src[i + 1] + src[i + 2] < 150) dark = v; // 外框色
+      }
+      if (opaque < 2) continue;
+      // 邊緣的格子優先保留外框色，裡面取最多的顏色
+      let best = -1, bc = 0; for (const [v, k] of cnt) if (k > bc) { best = v; bc = k; }
+      if (opaque < 4 && dark >= 0) best = dark;
+      const o = (by * h + bx) * 4;
+      out.data[o] = best >> 16; out.data[o + 1] = (best >> 8) & 255; out.data[o + 2] = best & 255; out.data[o + 3] = 255;
+    }
+    c2.putImageData(out, 0, 0);
+    miniCache.set(key, cv);
+  }
+  ctx.save(); ctx.imageSmoothingEnabled = false;
+  if (flip) { ctx.translate(Math.round(x) + cv.width, Math.round(y)); ctx.scale(-1, 1); ctx.drawImage(cv, 0, 0); }
+  else ctx.drawImage(cv, Math.round(x), Math.round(y));
+  ctx.restore();
+}

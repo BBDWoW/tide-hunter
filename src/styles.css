@@ -524,3 +524,75 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .hearts { color: #ff6a8a; display: inline-flex; gap: 1px; vertical-align: middle; }
 .hud-intent .icon { vertical-align: -0.2em; }
 .broken-rod { color: #c8d2e8; }
+
+/* ── 手機觸控：按鈕至少 40–44px、字至少 14–15px、按鈕之間留空隙，避免按錯 ── */
+@media (pointer: coarse) {
+  .frame { --dock-h: max(calc(var(--u) * 38), 108px); }
+  .frame, .lower { font-size: max(15px, calc(var(--u) * 5.2)); }
+  .dock { height: var(--dock-h); }
+  .console.landscape .hud-0 { bottom: calc(var(--dock-h) + var(--u) * 5); }
+  .mi { min-height: 44px; padding-top: 4px; padding-bottom: 4px; }
+  .mi-sub { font-size: 0.8em; }
+  .cmd-grid { gap: 6px 10px; }
+  .cmd-grid .mi { min-height: 44px; }
+  .title-menu .mi { min-height: 44px; }
+  .battle-main { gap: 8px; }
+  .act-row { gap: 8px; }
+  .act-btn { min-height: 42px; font-size: 14px; }
+  .tool-btn { min-height: 40px; min-width: 44px; font-size: 14px; padding: 0.3em 0.8em; display: inline-flex; align-items: center; justify-content: center; }
+  .title-tools, .voy-tools { gap: 8px; }
+  .voy-tools .tool-btn { font-size: 14px; }
+  .win-close { min-height: 40px; font-size: 14px; padding: 0 1em; }
+  .cmd-back { min-height: 36px; font-size: 14px; }
+  .cmd:has(.cmd-back) .cmd-grid { margin-top: 40px; }
+  .chip-btn { min-height: 38px; font-size: 14px; padding: 0.3em 0.9em; }
+  .tabs { gap: 8px; }
+  .tab { min-height: 42px; font-size: 14px; padding: 0 1em; }
+  .star-pick { gap: 8px; }
+  .star-btn { min-height: 42px; min-width: 56px; font-size: 15px; }
+  .pick { min-height: 48px; }
+  .pick-grid, .item-list, .bay-grid, .party-list { gap: 8px; }
+  .bay-cell { min-height: 72px; }
+  .speed { min-height: 34px; font-size: 13px; padding: 0.2em 0.8em; }
+  .hud { font-size: max(12px, calc(var(--u) * 4.6)); }
+  .snd-row input[type=range] { height: 32px; }
+  .fx-row input[type=checkbox] { width: 26px; height: 26px; }
+  .boon-card { min-height: 64px; }
+  .held-pick .chip-btn { min-height: 42px; }
+  .dex-close { min-height: 40px; font-size: 14px; }
+  .screen-back { top: 8px; right: 8px; }
+  .title-menu { display: grid; row-gap: 6px; }
+  .console.landscape .title-menu { row-gap: 6px; }
+  .hud { font-size: max(13px, calc(var(--u) * 4.6)); }
+  .speed { min-height: 38px; }
+  .cmd-back { min-height: 40px; }
+  .cmd:has(.cmd-back) .cmd-grid { margin-top: 44px; }
+}
+/* 橫式開著視窗時，把背後的工具列和指令區藏起來，避免看起來能按、按錯地方 */
+.console.landscape .frame:has(.panel-layer) .title-tools,
+.console.landscape .frame:has(.panel-layer) .voy-tools,
+.console.landscape .frame:has(.panel-layer.closable) .dock,
+.console.landscape .frame:has(.panel-layer) .hud,
+.console.landscape .frame:has(.panel-layer) .speed { visibility: hidden; }
+
+/* 橫式觸控：戰鬥指令改成「技能 2×2｜動作 2×2」左右並排，高度不會蓋到夥伴 */
+@media (pointer: coarse) {
+  .console.landscape .battle-dock { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); }
+  .console.landscape .battle-main { grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: 8px; align-items: stretch; }
+  .console.landscape .battle-main .cmd-grid { align-content: stretch; }
+  .console.landscape .battle-main .act-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .console.landscape .battle-main .act-btn { min-height: 0; font-size: 13px; padding: 2px 4px; flex-direction: column; gap: 0; line-height: 1.1; }
+  .console.landscape .battle-main .act-btn small { font-size: 0.75em; }
+  .console.landscape .battle-dock .cmd-grid .mi { min-height: 40px; }
+  .console.landscape .battle-dock .cmd { padding-top: 6px; padding-bottom: 6px; }
+  .cmd-back { white-space: nowrap; }
+  .console.landscape .cmd:has(.cmd-back) .cmd-grid { margin-top: 0; margin-right: 78px; }
+  .console.landscape .cmd-back { top: 8px; bottom: 8px; right: 8px; width: 70px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+}
+/* 標題選單：高度依內容，不被切掉；直式時工具鈕移到畫面右下，不蓋標題字 */
+.console.landscape .dock:has(.title-menu) { height: auto; }
+@media (pointer: coarse) {
+  .console.landscape .title-menu .mi { min-height: 40px; }
+  .portrait .title-tools { top: auto; bottom: 6px; right: 6px; }
+  .portrait .app-version { right: auto; left: 6px; }
+}

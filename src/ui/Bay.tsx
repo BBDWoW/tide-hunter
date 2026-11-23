@@ -34,7 +34,7 @@ export function Bay({ vp, onBack, onGacha, hint }: { vp: Viewport; onBack: () =>
   );
 
   return (
-    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawPort(c, t, list.slice(0, 6).map((x) => x.root))} label="棲息灣" />}
+    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawPort(c, t, list.map((x) => ({ id: x.root, mutant: x.mutant })))} label="棲息灣" />}
       panel={
         <Win class="big-panel bay" title={`棲息灣　${meta.bay.length}/${bayCap(meta)}　珍珠 ◆ ${meta.pearls}`} onClose={onBack} closeLabel="返回標題">
           {note && <p class="accent small">{note}</p>}

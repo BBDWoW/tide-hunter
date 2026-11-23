@@ -162,7 +162,7 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
   const [, force] = useState(0);
   const refresh = () => { setMeta(loadMeta()); force((n) => n + 1); };
   return (
-    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawPort(c, t, meta.bay.map((b) => b.form))} label="港口與棲息灣" />}
+    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawPort(c, t, meta.bay.map((b) => ({ id: b.form, mutant: b.mutant })))} label="港口與棲息灣" />}
       onPanelClose={onBack}
       panel={
         <Win class="big-panel port" title={`港口　珍珠 ◆ ${meta.pearls}`} onClose={onBack} closeLabel="返回標題">

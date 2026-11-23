@@ -1,7 +1,7 @@
 // 場景繪製（256×144 像素）：海景全景、戰鬥地形、釣魚、標題、海圖、海底
 import { FORMS, recolorOf } from '../data/creatures';
 import { ELEM, type Elem } from '../data/types';
-import { drawSprite, PAL, spriteSize } from './pixel';
+import { drawSprite, drawSpriteMini, PAL, spriteSize } from './pixel';
 import { sceneArt } from './art';
 import { fx, partMul } from './fx';
 
@@ -694,7 +694,7 @@ export function drawStarterScene(ctx: CanvasRenderingContext2D, t: number, forms
 }
 
 // ── 港口：棧橋、燈塔、棲息灣裡游動的夥伴 ──
-export function drawPort(ctx: CanvasRenderingContext2D, t: number, bay: string[]) {
+export function drawPort(ctx: CanvasRenderingContext2D, t: number, bay: { id: string; mutant?: boolean }[]) {
   drawSea(ctx, t, 'day');
   // 燈塔
   const lx = 30;
@@ -710,12 +710,18 @@ export function drawPort(ctx: CanvasRenderingContext2D, t: number, bay: string[]
   ctx.fillStyle = '#8a5a3a'; ctx.fillRect(4, 96, 40, 20); ctx.fillStyle = '#c84a3a'; for (let i = 0; i < 9; i++) ctx.fillRect(0 + i * 2, 96 - i, 48 - i * 4, 1);
   ctx.fillStyle = '#3a2418'; ctx.fillRect(19, 104, 9, 12); ctx.fillStyle = '#ffe48a'; ctx.fillRect(8, 102, 6, 5); ctx.fillRect(33, 102, 6, 5);
   // 棲息灣的夥伴
-  bay.forEach((id, i) => {
+  // 小尺寸、分兩排在海面上漂（異變個體用異變的顏色）
+  bay.slice(0, 10).forEach(({ id, mutant }, i) => {
     const f = FORMS[id]; if (!f) return;
-    const n = spriteSize(f.sprite), sp = 0, x = 40 + i * 34 + Math.sin(t * 0.5 + i * 1.7) * 8, y = 62 + (i % 2) * 18 + Math.sin(t * 1.3 + i) * 2;
+    const n = Math.ceil(spriteSize(f.sprite) / 2);
+    const x = 64 + (i % 5) * 38 + (i >= 5 ? 19 : 0) + Math.sin(t * 0.5 + i * 1.7) * 6, y = 70 + (i >= 5 ? 22 : 0) + Math.sin(t * 1.3 + i) * 1.5;
     const flip = Math.cos(t * 0.5 + i * 1.7) < 0;
-    drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(x - n / 2), Math.round(y - n / 2 + sp * 0), { f: Math.floor(t * 3 + i) % 2, flip, recolor: recolorOf(id) });
+    shadowMini(ctx, x, y + n / 2 - 1, n);
+    drawSpriteMini(ctx, f.sprite, PAL[f.pal], Math.round(x - n / 2), Math.round(y - n / 2), { f: Math.floor(t * 3 + i) % 2, flip, recolor: recolorOf(id, mutant) });
   });
+}
+function shadowMini(ctx: CanvasRenderingContext2D, cx: number, cy: number, n: number) {
+  ctx.fillStyle = 'rgba(6,30,70,0.28)'; ctx.fillRect(Math.round(cx - n * 0.35), Math.round(cy), Math.round(n * 0.7), 1);
 }
 
 // ── 海圖：俯視的航線 ──
