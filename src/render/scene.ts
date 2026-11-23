@@ -426,21 +426,61 @@ export type FishPhase = 'choose' | 'cast' | 'flying' | 'wait' | 'nibble' | 'bite
 export interface ShadowView { x: number; size: 1 | 2 | 3 }
 export interface FishView { phase: FishPhase; power: number; castT: number; bobX: number; shadows: ShadowView[]; sel: number; spot: string; theme?: ThemeId; ripple?: number }
 const BOAT = { x: 46, y: 92 };
+// 釣客：像素畫模板（每個字元一格）。坐在船上、面向右邊、手握釣竿
+const FISHER = [
+  '....oooooo......',
+  '...oHHHHHHo.....',
+  '..oHHLHHHHHo....',
+  '..oHHHHHHHHo....',
+  'oooobbbbbbboooo.',
+  'ohhhhhhhhhhhhhho',
+  '.oooKSSSSSSoooo.',
+  '...oKSSSSeSo....',
+  '...oKSSSSSSSo...',
+  '...oKsSScSSo....',
+  '....osSSSSo.....',
+  '....ooYYYoo.....',
+  '...oYYLYYYYo....',
+  '..oYYLYYYYYYoo..',
+  '..oYLYYYyYYSSSo.',
+  '..oYYYYyyoooSSo.',
+  '..oYYYYYyo..oo..',
+  '..oYYYYYyo......',
+  '..oyYYYYyo......',
+  '..oyyyyyyo......',
+  '..oPPPPPPPPPo...',
+  '..oPPPPPPPPPPo..',
+  '..oppppppppBBo..',
+  '...ooooooooBBo..',
+];
+const FISHER_COL: Record<string, string> = {
+  o: '#1b1a2e', H: '#e8c26a', h: '#b8903e', L: '#fff3b0', b: '#d23a5a', K: '#5a3a24', S: '#ffd9b8', s: '#e8a98a', e: '#1b1a2e', c: '#ff9a9a',
+  Y: '#ffcf4a', y: '#d9962a', P: '#2a3a6a', p: '#1e2a50', B: '#3a2a20',
+};
+const fisherCanvas = (blink: boolean) => cached(`fisher-${blink}`, 16, FISHER.length, (x) => {
+  FISHER.forEach((row, r) => [...row].forEach((ch, c) => {
+    if (ch === '.') return;
+    x.fillStyle = blink && ch === 'e' ? FISHER_COL.S : ch === 'L' && r >= 11 ? '#fff09a' : FISHER_COL[ch];
+    x.fillRect(c, r, 1, 1);
+  }));
+  if (blink) { x.fillStyle = FISHER_COL.o; x.fillRect(9, 8, 1, 1); }
+});
+/** 釣竿握把的位置（相對於船） */
+export const HAND = { dx: 14, dy: -14 };
 function boat(ctx: CanvasRenderingContext2D, bob: number) {
   const x = BOAT.x, y = BOAT.y + bob;
-  // 船身
-  ctx.fillStyle = '#5a321c'; ctx.fillRect(x - 30, y, 64, 3); ctx.fillRect(x - 27, y + 3, 58, 3); ctx.fillRect(x - 22, y + 6, 48, 2);
-  ctx.fillStyle = '#8a5530'; ctx.fillRect(x - 31, y - 3, 66, 3);
+  // 釣客（先畫，船身會蓋住腳）
+  const blink = (performance.now() / 1000) % 4 < 0.14;
+  ctx.drawImage(fisherCanvas(blink), x + 1, y - 28);
+  // 船身：深色外框、木板、亮邊
+  ctx.fillStyle = '#2a160c'; ctx.fillRect(x - 33, y - 5, 70, 1); ctx.fillRect(x - 33, y - 4, 1, 4); ctx.fillRect(x + 36, y - 4, 1, 4);
+  ctx.fillRect(x - 31, y + 3, 1, 3); ctx.fillRect(x + 34, y + 3, 1, 3); ctx.fillRect(x - 28, y + 6, 1, 2); ctx.fillRect(x + 31, y + 6, 1, 2); ctx.fillRect(x - 24, y + 8, 52, 1);
   ctx.fillStyle = '#c47a3e'; ctx.fillRect(x - 32, y - 4, 68, 1);
-  ctx.fillStyle = '#e8e0c8'; ctx.fillRect(x - 24, y + 1, 50, 1);
-  // 釣客
-  const fx = x + 4;
-  ctx.fillStyle = '#2a3a6a'; ctx.fillRect(fx, y - 9, 9, 6);
-  ctx.fillStyle = '#ffcf4a'; ctx.fillRect(fx, y - 21, 9, 12); ctx.fillStyle = '#e0a82a'; ctx.fillRect(fx, y - 12, 9, 2);
-  ctx.fillStyle = '#ffd9b8'; ctx.fillRect(fx + 1, y - 28, 7, 7);
-  ctx.fillStyle = '#1a1a2a'; ctx.fillRect(fx + 6, y - 26, 1, 2);
-  ctx.fillStyle = '#d23a5a'; ctx.fillRect(fx - 1, y - 30, 10, 3); ctx.fillRect(fx + 6, y - 28, 5, 1);
-  ctx.fillStyle = '#ffd9b8'; ctx.fillRect(fx + 9, y - 18, 3, 3);
+  ctx.fillStyle = '#8a5530'; ctx.fillRect(x - 32, y - 3, 68, 3);
+  ctx.fillStyle = '#6a3c20'; ctx.fillRect(x - 30, y, 64, 3); ctx.fillRect(x - 27, y + 3, 58, 3); ctx.fillRect(x - 23, y + 6, 50, 2);
+  ctx.fillStyle = '#4a2814'; ctx.fillRect(x - 27, y + 5, 58, 1); ctx.fillRect(x - 23, y + 7, 50, 1);
+  ctx.fillStyle = '#e8e0c8'; ctx.fillRect(x - 26, y + 1, 54, 1);
+  ctx.fillStyle = '#d23a5a'; ctx.fillRect(x - 24, y + 2, 4, 1); ctx.fillRect(x + 24, y + 2, 4, 1);
 }
 const SH_W = { 1: 12, 2: 20, 3: 32 } as const;
 function fishShadow(ctx: CanvasRenderingContext2D, x: number, y: number, size: 1 | 2 | 3, t: number, alpha = 0.45) {
@@ -499,7 +539,7 @@ export function drawFishing(ctx: CanvasRenderingContext2D, t: number, _dt: numbe
     }
   });
   boat(ctx, bob);
-  const hx = BOAT.x + 14, hy = BOAT.y - 16 + bob;
+  const hx = BOAT.x + HAND.dx, hy = BOAT.y + HAND.dy + bob;
   let tipX = hx + 42, tipY = hy - 34;
   if (v.phase === 'cast') { const k = v.power; tipX = hx + 40 - k * 50; tipY = hy - 34 - k * 4; }
   pxLine(ctx, hx, hy, tipX, tipY, '#3a2a1a'); pxLine(ctx, hx + 1, hy, tipX + 1, tipY, '#e8d8a8');
@@ -799,7 +839,7 @@ export function drawGacha(ctx: CanvasRenderingContext2D, t: number, dt: number, 
   }
   boat(ctx, bob);
   // 釣竿：顏色＝稀有度
-  const hx = BOAT.x + 14, hy = BOAT.y - 16 + bob;
+  const hx = BOAT.x + HAND.dx, hy = BOAT.y + HAND.dy + bob;
   const casting = v.phase === 'cast' ? Math.min(1, k / 0.5) : 1;
   const tipX = hx + 42 - (v.phase === 'cast' && k < 0.25 ? 40 : 0) * (1 - casting), tipY = hy - 34;
   const col = TIER_COLOR[v.rod];
