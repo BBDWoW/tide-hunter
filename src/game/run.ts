@@ -6,7 +6,7 @@ import { formOf, makeMon, makeMutant, maxHp, MUTANT_CHANCE, type Mon } from './c
 import { int, makeRng, newSeed, next, weighted, type Rng } from './rng';
 import type { ItemId } from './battle';
 import { BOON_LIST, BOON_TIER, BOONS, type LureId } from '../data/boons';
-import { gainXp, xpToNext } from './creature';
+import { ensureBasic, gainXp, xpToNext } from './creature';
 import { upLv, type Meta, type UpgradeId } from './meta';
 
 export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'event' | 'portal' | 'boss' | 'crew';
@@ -474,6 +474,7 @@ export function loadRun(): RunState | null {
     if (!raw) return null;
     const r = JSON.parse(raw) as RunState;
     if (r.version !== 4 || !r.party?.every((m) => FORMS[m.form])) return null;
+    r.party.forEach(ensureBasic);
     return r;
   } catch { return null; }
 }

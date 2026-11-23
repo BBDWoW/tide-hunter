@@ -62,4 +62,5 @@ export const RARITY_ORDER: Rarity[] = ['N', 'B', 'A', 'S', 'SSR'];
 export type Stage = 1 | 2 | 3;
 export const STAGE_NAME: Record<Stage, string> = { 1: '幼體', 2: '成長體', 3: '完全體' };
 // 每個階段可攜帶的技能上限
-export const STAGE_SLOTS: Record<Stage, number> = { 1: 2, 2: 3, 3: 4 };
+/** 技能槽：不分階段都是 4 格（第 1 格固定是普攻）；技能還是要升級才學得到 */
+export const STAGE_SLOTS: Record<Stage, number> = { 1: 4, 2: 4, 3: 4 };

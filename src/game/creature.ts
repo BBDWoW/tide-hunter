@@ -89,20 +89,10 @@ export function makeMon(formId: string, lv: number, boss = false, wild = false, 
   const f = FORMS[formId];
   const known: string[] = [];
   for (const anc of ancestryOf(formId)) for (const [l, sk] of anc.learn) if (l <= lv && !known.includes(sk)) known.push(sk);
-  const slots = STAGE_SLOTS[f.stage];
-  const picked = known.slice(-slots);
-  // 確保至少有一招不耗能量的攻擊，優先選本系
-  const basic = (id: string) => SKILLS[id] && SKILLS[id].cost === 0 && SKILLS[id].power > 0;
-  if (!picked.some(basic)) {
-    const b = known.find((id) => basic(id) && SKILLS[id].elem && f.elems.includes(SKILLS[id].elem!)) ?? known.find(basic);
-    if (b) picked[0] = b;
-  }
-  // 至少要有一招攻擊技：沒有的話，用最近學會的攻擊技換掉最早的變化技
-  const atk = (id: string) => SKILLS[id] && SKILLS[id].power > 0;
-  if (!picked.some(atk)) {
-    const a = [...known].reverse().find(atk);
-    if (a) picked[0] = a;
-  }
+  const basic = pickBasic(formId, known);
+  // 第 1 格是普攻，其他 3 格放最近學會的技能（沒學到的就空著）
+  // 霸主例外：用設計好的 4 招招式組
+  const picked = boss ? known.slice(-STAGE_SLOTS[f.stage]) : [basic, ...known.filter((id) => id !== basic).slice(-(STAGE_SLOTS[f.stage] - 1))];
   const m: Mon = { uid: newUid(), form: formId, lv, xp: 0, hp: 0, skills: picked, status: null, boss, wild, iv: boss ? [0, 0, 0, 0] : rollIv(rnd) };
   m.hp = maxHp(m);
   return m;
@@ -159,3 +149,21 @@ export function evolve(m: Mon, to: string): string[] {
 }
 
 export const skillSlots = (m: Mon) => STAGE_SLOTS[formOf(m).stage];
+
+// ── 普攻：不耗能量的攻擊技，固定在第 1 格、不能被忘記 ──
+export const isBasicAttack = (id: string) => !!SKILLS[id] && SKILLS[id].cost === 0 && SKILLS[id].power > 0;
+/** 這隻生物的普攻：優先選本系的不耗能攻擊，都沒有就是「撞擊」 */
+export function pickBasic(formId: string, known: string[]): string {
+  const elems = FORMS[formId].elems;
+  return known.find((id) => isBasicAttack(id) && SKILLS[id].elem && elems.includes(SKILLS[id].elem!)) ?? known.find(isBasicAttack) ?? 'tackle';
+}
+/** 舊存檔：確保第 1 格是普攻 */
+export function ensureBasic(m: Mon) {
+  if (m.skills.length && isBasicAttack(m.skills[0])) return;
+  const i = m.skills.findIndex(isBasicAttack);
+  if (i > 0) { const [b] = m.skills.splice(i, 1); m.skills.unshift(b); return; }
+  const known: string[] = [];
+  for (const anc of ancestryOf(m.form)) for (const [l, sk] of anc.learn) if (l <= m.lv) known.push(sk);
+  m.skills.unshift(pickBasic(m.form, known));
+  if (m.skills.length > skillSlots(m)) m.skills.splice(1, 1); // 擠掉最早的那招
+}

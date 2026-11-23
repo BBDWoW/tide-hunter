@@ -214,7 +214,7 @@ export function monFromBay(b: BayMon): Mon {
   if (b.mutant) mon.mutant = true;
   if (b.legacy && !mon.skills.includes(b.legacy)) {
     const slots = STAGE_SLOTS[FORMS[mon.form].stage];
-    if (mon.skills.length < slots) mon.skills.push(b.legacy); else mon.skills[mon.skills.length - 1] = b.legacy;
+    if (mon.skills.length < slots) mon.skills.push(b.legacy); else if (mon.skills.length > 1) mon.skills[mon.skills.length - 1] = b.legacy;
   }
   return mon;
 }

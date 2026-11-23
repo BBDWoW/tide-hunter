@@ -172,11 +172,11 @@ function LearnPrompt({ mon, skill, onPick }: { mon: Mon; skill: string; onPick: 
   const f = formOf(mon);
   return (
     <div class="prompt">
-      <p><b>{f.name}</b> 想學習 <b class="accent">{SKILLS[skill].name}</b>，但{STAGE_NAME[f.stage]}最多只能帶 {skillSlots(mon)} 招。</p>
+      <p><b>{f.name}</b> 想學習 <b class="accent">{SKILLS[skill].name}</b>，但技能槽已經滿了（{skillSlots(mon)} 招）。</p>
       <p class="small muted">新技能：{SKILLS[skill].desc}（{SKILLS[skill].power ? `威力 ${SKILLS[skill].power}` : '變化'} · 能量 {SKILLS[skill].cost}）</p>
       <p class="small">要忘記哪一招？</p>
       <div class="grid2">
-        {mon.skills.map((s, i) => <MenuItem key={s} onClick={() => onPick(i)}><SkillLine id={s} /></MenuItem>)}
+        {mon.skills.map((s, i) => <MenuItem key={s} disabled={i === 0} onClick={() => onPick(i)} sub={i === 0 ? '普攻' : undefined}><SkillLine id={s} /></MenuItem>)}
         <MenuItem onClick={() => onPick(null)}>放棄學習 {SKILLS[skill].name}</MenuItem>
       </div>
     </div>
@@ -207,7 +207,7 @@ function EvolveScene({ mon, to, onDone }: { mon: Mon; to: string; onDone: (learn
       </>}
       {phase === 'play' && <p class="muted">資料重組中……</p>}
       {phase === 'done' && <>
-        <p>恭喜！{FORMS[from].name} 進化成了 <b class="accent">{FORMS[to].name}</b>（{STAGE_NAME[FORMS[to].stage]}）！技能上限變成 {skillSlots(mon)} 招。</p>
+        <p>恭喜！{FORMS[from].name} 進化成了 <b class="accent">{FORMS[to].name}</b>（{STAGE_NAME[FORMS[to].stage]}）！</p>
         <MenuItem onClick={() => onDone(learned.current)} hot>太好了！</MenuItem>
       </>}
     </div>
