@@ -3,3 +3,6 @@ dist
 artifact
 
 audio/*.wav
+
+# 測試截圖
+/*.png

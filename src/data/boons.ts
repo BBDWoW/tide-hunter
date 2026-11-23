@@ -29,7 +29,7 @@ const B: Boon[] = [
   { id: 'starlure', name: '星光餌', desc: '立刻獲得星光餌 ×1（有機會釣到 S 級）。', tier: 'rare', cat: '釣魚', instant: true },
   { id: 'legendlure', name: '傳說餌', desc: '立刻獲得傳說餌 ×1（有機會釣到 SSR）。', tier: 'epic', cat: '釣魚', instant: true },
   { id: 'steady', name: '穩定手腕', desc: '拋竿的完美區變大。', tier: 'common', cat: '釣魚', max: 3 },
-  { id: 'lucky', name: '幸運浮標', desc: '更容易出現大魚影與寶箱。', tier: 'rare', cat: '釣魚', max: 3 },
+  { id: 'lucky', name: '幸運浮標', desc: '更容易釣到大魚與寶箱。', tier: 'rare', cat: '釣魚', max: 3 },
   { id: 'xp', name: '潮汐訓練', desc: '獲得的經驗值 +30%。', tier: 'common', cat: '養成', max: 4 },
   { id: 'train', name: '特訓', desc: '等級最低的夥伴立刻提升 2 級。', tier: 'rare', cat: '養成', instant: true },
   { id: 'breeze', name: '海風', desc: '每場戰鬥後多回復 15% HP。', tier: 'common', cat: '回復', max: 3 },
@@ -44,6 +44,6 @@ export const BOON_LIST = B;
 export type LureId = 'normal' | 'star' | 'legend';
 export const LURES: Record<LureId, { name: string; desc: string }> = {
   normal: { name: '普通餌', desc: '只會釣到 N／B／A 級。不會用完。' },
-  star: { name: '星光餌', desc: '大魚影有機會是 S 級。' },
-  legend: { name: '傳說餌', desc: '大魚影有機會是 SSR 傳說級。' },
+  star: { name: '星光餌', desc: '會引來大魚，有機會是 S 級。' },
+  legend: { name: '傳說餌', desc: '會引來大魚，有機會是 SSR 傳說級。' },
 };

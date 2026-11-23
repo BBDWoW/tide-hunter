@@ -424,7 +424,7 @@ export function burst(parts: Particle[], x: number, y: number, kind: 'hit' | 'sp
 // ── 釣魚 ──
 export type FishPhase = 'choose' | 'cast' | 'flying' | 'wait' | 'nibble' | 'bite' | 'hooked';
 export interface ShadowView { x: number; size: 1 | 2 | 3 }
-export interface FishView { phase: FishPhase; power: number; castT: number; bobX: number; shadows: ShadowView[]; sel: number; spot: string; theme?: ThemeId }
+export interface FishView { phase: FishPhase; power: number; castT: number; bobX: number; shadows: ShadowView[]; sel: number; spot: string; theme?: ThemeId; ripple?: number }
 const BOAT = { x: 46, y: 92 };
 function boat(ctx: CanvasRenderingContext2D, bob: number) {
   const x = BOAT.x, y = BOAT.y + bob;
@@ -470,6 +470,19 @@ export function drawFishing(ctx: CanvasRenderingContext2D, t: number, _dt: numbe
   drawSea(ctx, t, v.theme ?? 'day');
   spotDecor(ctx, v.spot, t);
   const bob = Math.round(Math.sin(t * 1.5));
+  // 魚群的漣漪：拋竿的目標（看不出底下是大魚還小魚）
+  if (v.ripple && (v.phase === 'choose' || v.phase === 'cast')) {
+    const rx = Math.round(v.ripple), ry = 88;
+    // 水面下有東西：一團固定大小的暗影（看不出大小）
+    ctx.globalAlpha = 0.28; pxEllipse(ctx, rx, ry + 1, 12, 4, () => '#06204a'); ctx.globalAlpha = 1;
+    for (let k = 0; k < 3; k++) {
+      const r = ((t * 7 + k * 6) % 18) + 3, a = 1 - r / 21;
+      ctx.globalAlpha = Math.min(1, a * 1.3);
+      for (let i = 0; i < 48; i++) { const an = (i / 48) * Math.PI * 2; if (i % 4 === 0) continue; ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(rx + Math.cos(an) * r), Math.round(ry + Math.sin(an) * r * 0.32), 2, 1); }
+    }
+    ctx.globalAlpha = 1;
+    if (Math.floor(t * 3) % 2) { ctx.fillStyle = '#e8fbff'; ctx.fillRect(rx - 4, ry - 3, 1, 1); ctx.fillRect(rx + 3, ry - 5, 1, 1); }
+  }
   // 魚影
   v.shadows.forEach((sh, i) => {
     const y = 86 + i * 7 + Math.sin(t * 1.6 + i) * 2;

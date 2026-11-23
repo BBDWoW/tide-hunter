@@ -250,7 +250,7 @@ export const isBoss = (run: RunState) => run.route[run.station]?.[0].kind === 'b
 
 export interface Encounter { mon: Mon; rarity: Rarity; landing?: Landing }
 
-// ── 魚影：拋竿前海面上的影子，大小暗示稀有度 ──
+// ── 水面下的魚：大小決定稀有度（玩家拋竿前看不到，上鉤才知道） ──
 export type ShadowKind = 'fish' | 'treasure' | 'junk';
 export interface Shadow { size: 1 | 2 | 3; kind: ShadowKind; rarity: Rarity; x: number }
 
@@ -318,9 +318,9 @@ export function rollEncounter(run: RunState, q: number, shadow: Shadow): Encount
 
 export const perfectAt = (run: RunState) => 0.92 - boon(run, 'steady') * 0.05;
 
-// ── 甩竿落點：力量條要停在這個魚影的目標區 ──
+// ── 甩竿落點：力量條要停在漣漪的目標區 ──
 export type Landing = 'perfect' | 'good' | 'miss' | 'far';
-/** 魚影越遠，需要的力量越大 */
+/** 漣漪越遠，需要的力量越大 */
 export const castTarget = (x: number) => 0.22 + ((x - 118) / 100) * 0.56;
 /** 目標區的寬度（穩定手腕能力卡會變寬） */
 export const landingZones = (run: RunState) => ({ perfect: 0.045 + boon(run, 'steady') * 0.015, good: 0.11 + boon(run, 'steady') * 0.02 });
@@ -436,8 +436,8 @@ export interface ShopItem { id: string; name: string; desc: string; price: numbe
 export const priceOf = (run: RunState, it: ShopItem) => Math.round(it.price * (1 - (run.perks?.discount ?? 0)));
 export const SHOP: ShopItem[] = [
   { id: 'bait', name: '捕捉餌', desc: '收服夥伴時消耗 1 個。', price: 30, buy: (r) => { r.catchBait++; } },
-  { id: 'star', name: '星光餌', desc: '大魚影有機會是 S 級。', price: 90, buy: (r) => { r.lures.star++; } },
-  { id: 'legend', name: '傳說餌', desc: '大魚影有機會是 SSR 傳說級。', price: 220, buy: (r) => { r.lures.legend++; } },
+  { id: 'star', name: '星光餌', desc: '會引來大魚，有機會是 S 級。', price: 90, buy: (r) => { r.lures.star++; } },
+  { id: 'legend', name: '傳說餌', desc: '會引來大魚，有機會是 SSR 傳說級。', price: 220, buy: (r) => { r.lures.legend++; } },
   { id: 'potion', name: '海藻藥膏', desc: '回復 50% HP。', price: 18, buy: (r) => { r.items.potion++; } },
   { id: 'superpotion', name: '珍珠精華', desc: '回復全部 HP 並治癒異常。', price: 45, buy: (r) => { r.items.superpotion++; } },
   { id: 'revive', name: '復甦貝', desc: '使倒下的夥伴復活。', price: 40, buy: (r) => { r.items.revive++; } },
