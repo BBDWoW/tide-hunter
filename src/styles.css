@@ -638,3 +638,8 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .console.landscape .bag-detail .big-name { font-size: 1em; }
 /* 可關閉的視窗會把指令區藏起來，所以視窗可以用到整個畫面高度 */
 .console.landscape .panel-layer.closable.with-dock { padding-top: calc(var(--u) * 3); padding-bottom: calc(var(--u) * 3); }
+
+/* 全遊戲：不讓長按選字、叫出放大鏡或系統選單（iOS） */
+.console, .console * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+.console input, .console textarea { -webkit-user-select: text; user-select: text; }
+html.holding, html.holding body { touch-action: none; overscroll-behavior: none; }
