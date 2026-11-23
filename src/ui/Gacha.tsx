@@ -1,3 +1,4 @@
+import { Icon } from './Icon';
 // 招募抽卡：像釣魚一樣拋竿。釣竿顏色代表稀有度，水面變色就是「轉」（升一級）
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { FORMS } from '../data/creatures';
@@ -67,10 +68,10 @@ export function Gacha({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
   return (
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={(c, t, dt) => { now.current = t; drawGacha(c, t, dt, view.current); }} label="招募：拋竿釣起新夥伴" />}
-      overlay={<Win class="banner left"><span class="eyebrow">招募</span><b>珍珠 ◆ {meta.pearls}　棲息灣 {meta.bay.length}/{bayCap(meta)}</b></Win>}
+      overlay={<><button class="tool-btn screen-back" onClick={onBack} disabled={busy}>✕ 返回</button><Win class="banner left"><span class="eyebrow">招募</span><b>珍珠 ◆ {meta.pearls}　棲息灣 {meta.bay.length}/{bayCap(meta)}</b></Win></>}
       onPanelClose={rates ? () => setRates(false) : results && results.length > 1 ? () => setResults(null) : undefined}
       panel={rates ? (
-        <Win class="big-panel" title="釣竿與機率">
+        <Win class="big-panel" title="釣竿與機率" onClose={() => setRates(false)}>
           <div class="item-list">
             {ROD_RATES.map(([tier, w]) => (
               <div class="item-row" key={tier}><b style={{ color: TIER_COLOR[tier] }}>{ROD_NAME[tier]}</b><span class="num">{w}%</span>
@@ -78,19 +79,17 @@ export function Gacha({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
             ))}
             <p class="small dim">「轉」可以連續發生。所有生物都可能被招募到，包含霸主；招募到的夥伴從最初的型態開始。</p>
           </div>
-          <MenuItem onClick={() => setRates(false)} hot>關閉</MenuItem>
         </Win>
       ) : results && results.length > 1 ? (
-        <Win class="big-panel" title="十連抽結果">
+        <Win class="big-panel" title="十連抽結果" onClose={() => setResults(null)} closeLabel="確定">
           <div class="gacha-grid">
             {results.map((r, i) => (
               <div class={`gacha-card t-${r.tier}`} key={i} style={{ borderColor: TIER_COLOR[r.tier] }}>
                 {r.form ? <><Sprite form={r.form} size={48} mutant={r.mutant} /><b class="small">{r.mutant ? '✦' : ''}{FORMS[r.form].name}</b><RarityTag r={FORMS[r.form].rarity} />{r.path.length > 0 && <span class="small accent">轉！</span>}</>
-                  : <><span class="broken-rod">✂</span><b class="small">線斷了</b><span class="small dim">+{BROKEN_REFUND}</span></>}
+                  : <><span class="broken-rod"><Icon name="broken" size="2em" /></span><b class="small">線斷了</b><span class="small dim">+{BROKEN_REFUND}</span></>}
               </div>
             ))}
           </div>
-          <MenuItem onClick={() => setResults(null)} hot>確定</MenuItem>
         </Win>
       ) : null}
       dock={
@@ -102,12 +101,11 @@ export function Gacha({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
             )}
           </Win>
           <Win class="cmd">
-            {busy ? <MenuItem onClick={finish} hot>⏩ 跳過</MenuItem> : (
+            {busy ? <MenuItem onClick={finish} hot><Icon name="skip" /> 跳過</MenuItem> : (
               <div class="cmd-grid">
-                <MenuItem onClick={() => pull(1)} hot disabled={meta.pearls < PULL_COST} sub={`◆ ${PULL_COST}`}>🎣 單抽</MenuItem>
+                <MenuItem onClick={() => pull(1)} hot disabled={meta.pearls < PULL_COST} sub={`◆ ${PULL_COST}`}><Icon name="rod" /> 單抽</MenuItem>
                 <MenuItem onClick={() => pull(10)} disabled={meta.pearls < TEN_COST} sub={`◆ ${TEN_COST}`}>十連抽</MenuItem>
                 <MenuItem onClick={() => setRates(true)}>機率說明</MenuItem>
-                <MenuItem onClick={onBack}>返回</MenuItem>
               </div>
             )}
           </Win>

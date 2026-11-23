@@ -507,3 +507,20 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .boss-intro.win .bi-card { background: linear-gradient(100deg, rgba(200, 140, 20, 0.95) 0%, rgba(150, 90, 10, 0.92) 70%, rgba(150, 90, 10, 0) 100%); border-color: #fff3b0; }
 .boss-intro.win .bi-name { text-shadow: 3px 3px 0 #5a3000, 0 0 16px rgba(255, 240, 160, 0.8); }
 .boss-intro.win .bi-zone { color: #fff3c8; } .boss-intro.win .bi-title { color: #fff; }
+
+/* 視窗右上角的關閉／返回鍵：固定在頂端，捲動時也看得到 */
+.win-title.has-close { display: flex; align-items: center; gap: calc(var(--u) * 2); }
+.big-panel > .win-title.has-close { position: sticky; top: calc(var(--u) * -3); z-index: 5; margin: calc(var(--u) * -3) calc(var(--u) * -4) 0; padding: calc(var(--u) * 3) calc(var(--u) * 4) calc(var(--u) * 1.5); background: var(--win-a); }
+.win-close { flex: none; background: #22408a; color: #fff; border: 1px solid var(--bevel); font: inherit; font-size: max(12px, 1.05em); letter-spacing: 0; padding: 0.3em 0.9em; min-height: 2.2em; cursor: pointer; text-shadow: none; }
+.win-close:hover { background: #3058b0; }
+.screen-back { position: absolute; top: calc(var(--u) * 3); right: calc(var(--u) * 3); z-index: 6; }
+.cmd-back { position: absolute; top: calc(var(--u) * 1.5); right: calc(var(--u) * 2); z-index: 3; font-size: max(11px, 0.8em); min-height: 0; padding: 0.2em 0.7em; }
+.cmd:has(.cmd-back) .cmd-grid { margin-top: calc(var(--u) * 7); }
+.back-chip { justify-self: start; font-size: 0.85em; padding: 0.35em 0.9em; }
+
+/* 手繪圖示 */
+.icon { display: inline-block; vertical-align: -0.18em; flex: none; overflow: visible; }
+.tool-btn .icon, .act-btn .icon, .win-close .icon { margin-right: 0.15em; }
+.hearts { color: #ff6a8a; display: inline-flex; gap: 1px; vertical-align: middle; }
+.hud-intent .icon { vertical-align: -0.2em; }
+.broken-rod { color: #c8d2e8; }

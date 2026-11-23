@@ -46,15 +46,15 @@ export const EVENTS: GameEvent[] = [
   {
     id: 'peddler', title: '小船上的工匠', text: '一位老工匠在小船上磨著貝殼：「我做的護符，戴在夥伴身上可是很有用的喔。」',
     options: [
-      { label: '買一個護符', hint: '🐚 50', can: (r) => r.shells >= 50, act: (r) => { r.shells -= 50; const h = giveHeld(r); return `拿到了「${HELD[h].icon} ${HELD[h].name}」！${HELD[h].desc}`; } },
-      { label: '幫忙搬材料', hint: '全隊損失 20% HP', act: (r) => { hurtAll(r, 0.2); const h = giveHeld(r); return `工匠把做壞的「${HELD[h].icon} ${HELD[h].name}」送給你——其實根本沒壞。`; } },
+      { label: '買一個護符', hint: '50 貝殼幣', can: (r) => r.shells >= 50, act: (r) => { r.shells -= 50; const h = giveHeld(r); return `拿到了「${HELD[h].name}」！${HELD[h].desc}`; } },
+      { label: '幫忙搬材料', hint: '全隊損失 20% HP', act: (r) => { hurtAll(r, 0.2); const h = giveHeld(r); return `工匠把做壞的「${HELD[h].name}」送給你——其實根本沒壞。`; } },
       leave,
     ],
   },
   {
     id: 'sunkcrate', title: '沉沒的貨箱', text: '海底卡著一個生鏽的貨箱，看起來需要有夥伴潛下去撬開。',
     options: [
-      { label: '派夥伴潛下去', hint: '先發夥伴損失 30% HP', can: (r) => alive(r).length > 0, act: (r) => { const m = alive(r)[0]; m.hp = Math.max(1, m.hp - Math.floor(maxHp(m) * 0.3)); const h = giveHeld(r); return `${formOf(m).name} 帶回了「${HELD[h].icon} ${HELD[h].name}」！`; } },
+      { label: '派夥伴潛下去', hint: '先發夥伴損失 30% HP', can: (r) => alive(r).length > 0, act: (r) => { const m = alive(r)[0]; m.hp = Math.max(1, m.hp - Math.floor(maxHp(m) * 0.3)); const h = giveHeld(r); return `${formOf(m).name} 帶回了「${HELD[h].name}」！`; } },
       leave,
     ],
   },

@@ -1,3 +1,4 @@
+import { sfx } from '../audio/engine';
 // 遊戲畫面版型：一個固定 16:9 的「主畫面」，所有介面都畫在場景上。
 // 直式手機則改成掌機的上下雙螢幕：上面是場景，下面放訊息與指令。
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -108,6 +109,13 @@ export function GameScreen({ vp, scene, overlay, dock, panel, dockTall, onScene,
   /** 有的話：點視窗外面的空白處就關閉視窗 */ onPanelClose?: () => void;
   onScene?: Record<string, unknown>; tappable?: boolean;
 }) {
+  // 電腦：按 Esc 關閉視窗
+  const closeRef = useRef(onPanelClose); closeRef.current = panel ? onPanelClose : undefined;
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => { if (e.key === 'Escape' && closeRef.current) { e.preventDefault(); closeRef.current(); } };
+    window.addEventListener('keydown', on);
+    return () => window.removeEventListener('keydown', on);
+  }, []);
   const lower = (dock || panel) && vp.portrait;
   // 橫向：算出左右要延伸多少（用整個螢幕寬，連瀏海兩側也鋪滿）
   const full = typeof document !== 'undefined' ? document.documentElement.clientWidth || window.innerWidth : vp.w;
@@ -132,10 +140,13 @@ export function GameScreen({ vp, scene, overlay, dock, panel, dockTall, onScene,
   );
 }
 
-export function Win({ children, class: cls = '', title }: { children: ComponentChildren; class?: string; title?: string }) {
+/** 視窗。有 onClose 時，右上角會有固定的關閉／返回鍵（捲動時也一直看得到） */
+export function Win({ children, class: cls = '', title, onClose, closeLabel = '關閉' }: { children: ComponentChildren; class?: string; title?: string; onClose?: () => void; closeLabel?: string }) {
   return (
     <div class={`win ${cls}`}>
-      {title && <div class="win-title">{title}</div>}
+      {onClose ? (
+        <div class="win-title has-close"><span class="grow">{title}</span><button class="win-close" onClick={(e) => { e.stopPropagation(); sfx('back'); onClose(); }}>✕ {closeLabel}</button></div>
+      ) : title && <div class="win-title">{title}</div>}
       {children}
     </div>
   );

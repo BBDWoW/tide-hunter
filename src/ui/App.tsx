@@ -1,3 +1,4 @@
+import { HandFilter } from './Icon';
 import { useEffect, useState } from 'preact/hooks';
 import { dailyPartner, MAX_STAR, pearlMul, todayKey, boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, leaveSpecial, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollCrew, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
 import { AfterBattle, ResumeBoon } from './AfterBattle';
@@ -209,6 +210,7 @@ export function App() {
       break;
   }
   return <>
+    <HandFilter />
     <main class="app" key={n}>{body}</main>
     {newVersion && <UpdateToast version={newVersion} safe={SAFE_TO_UPDATE.has(screen.k)} />}
   </>;

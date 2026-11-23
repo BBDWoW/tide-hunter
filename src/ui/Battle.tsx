@@ -1,3 +1,4 @@
+import { Icon } from './Icon';
 // 戰鬥畫面：把引擎吐出的事件依序播放成動畫，並提供玩家的選單
 import { HELD } from '../data/held';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -94,8 +95,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     const foeM = active(bs, 1);
     const sk = act.type === 'skill' ? (act.slot < 0 ? null : SKILLS[foeM.skills[act.slot]]) : null;
     const it: Intent = sk
-      ? { key, act, icon: sk.power > 0 ? '⚔' : sk.fx?.heal ? '✚' : sk.fx?.status || (sk.fx?.stat && !sk.fx.stat.self) ? '☠' : '✦', name: sk.name, elem: sk.elem, atk: sk.power > 0 }
-      : { key, act, icon: '⚔', name: '掙扎', elem: null, atk: true };
+      ? { key, act, icon: sk.power > 0 ? 'attack' : sk.fx?.heal ? 'heal' : sk.fx?.status || (sk.fx?.stat && !sk.fx.stat.self) ? 'hinder' : 'buff', name: sk.name, elem: sk.elem, atk: sk.power > 0 }
+      : { key, act, icon: 'attack', name: '掙扎', elem: null, atk: true };
     intentRef.current = it; setIntent(it);
   };
 
@@ -442,13 +443,13 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         {field && <div class="field-chip" style={{ borderColor: FIELDS[field.id].color }} title={FIELDS[field.id].desc}><i style={{ background: FIELDS[field.id].color }} />{FIELDS[field.id].name}<span>剩 {field.turns} 回合</span></div>}
         <button class="speed" onClick={toggleFast} aria-pressed={fast}>{fast ? '▶▶ 快速' : '▶ 一般'}</button>
         {mode === 'reel' && !vp.portrait && reel}
-        {toast && <div class="item-toast" key={toast.id}><Sprite form={toast.form} size={48} /><span class="grow"><b>✚ {toast.text}</b><Bar value={toast.hp} max={toast.max} /><span class="num small">HP {toast.from} → {toast.hp}/{toast.max}</span></span></div>}
-        {mode === 'main' && !boss && <Tip id="battle">直接點技能出招（◆ 是能量消耗）。對手 HP 條下面的「下一步」是牠這回合要做的事。把對手打虛弱再按 🎣 捕捉，比較容易收服。點 HP 框可以看詳細資料。</Tip>}
+        {toast && <div class="item-toast" key={toast.id}><Sprite form={toast.form} size={48} /><span class="grow"><b><Icon name="heal" /> {toast.text}</b><Bar value={toast.hp} max={toast.max} /><span class="num small">HP {toast.from} → {toast.hp}/{toast.max}</span></span></div>}
+        {mode === 'main' && !boss && <Tip id="battle">直接點技能出招（◆ 是能量消耗）。對手 HP 條下面的「下一步」是牠這回合要做的事。把對手打虛弱再按「捕捉」，比較容易收服。點 HP 框可以看詳細資料。</Tip>}
         {mode === 'main' && boss && <Tip id="boss">霸主的 HP 掉到一半時會狂暴：攻擊提高，但防禦會露出破綻。霸主不能捕捉，也不能逃跑。</Tip>}
       </>}
       onPanelClose={info !== null ? () => setInfo(null) : mode === 'switch' || mode === 'itemTarget' ? () => setMode(mode === 'itemTarget' ? 'items' : 'main') : undefined}
       panel={info !== null ? <InfoPanel bs={bs} side={info} boss={boss} onClose={() => setInfo(null)} /> : picking && (
-        <Win class="big-panel" title={mode === 'force' ? '要派誰上場？' : mode === 'itemTarget' ? `對誰使用 ${ITEMS[itemPick!].name}？` : '換人'}>
+        <Win class="big-panel" title={mode === 'force' ? '要派誰上場？' : mode === 'itemTarget' ? `對誰使用 ${ITEMS[itemPick!].name}？` : '換人'} onClose={mode !== 'force' ? () => setMode(mode === 'itemTarget' ? 'items' : 'main') : undefined} closeLabel="返回">
           <div class="pick-grid">
             {run.party.map((m, i) => {
               const isActive = i === bs.sides[0].active;
@@ -468,7 +469,6 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
               );
             })}
           </div>
-          {mode !== 'force' && <MenuItem onClick={() => setMode(mode === 'itemTarget' ? 'items' : 'main')}>返回</MenuItem>}
         </Win>
       )}
       dock={mode === 'reel' && vp.portrait ? reel : (
@@ -514,13 +514,14 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                   {!meAffordAny && <MenuItem onClick={() => submit({ type: 'skill', slot: -1 })}>掙扎</MenuItem>}
                 </div>
                 <div class="act-row">
-                  {!boss && !crew && <button class="act-btn" onClick={startReel} disabled={run.catchBait <= 0}>🎣 捕捉<small>×{run.catchBait}</small></button>}
-                  <button class="act-btn" onClick={() => setMode('switch')}>🔄 換人</button>
-                  <button class="act-btn" onClick={() => { setHover(0); setMode('items'); }}>🎒 道具</button>
-                  {!boss && <button class="act-btn" onClick={() => submit({ type: 'run' })}>🏃 逃跑</button>}
+                  {!boss && !crew && <button class="act-btn" onClick={startReel} disabled={run.catchBait <= 0}><Icon name="rod" /> 捕捉<small>×{run.catchBait}</small></button>}
+                  <button class="act-btn" onClick={() => setMode('switch')}><Icon name="swap" /> 換人</button>
+                  <button class="act-btn" onClick={() => { setHover(0); setMode('items'); }}><Icon name="bag" /> 道具</button>
+                  {!boss && <button class="act-btn" onClick={() => submit({ type: 'run' })}><Icon name="flee" /> 逃跑</button>}
                 </div>
               </div>
             )}
+            {(mode === 'skills' || mode === 'items') && <button class="win-close cmd-back" onClick={() => { sfx('back'); setMode('main'); }}>✕ 返回</button>}
             {mode === 'skills' && (
               <div class="cmd-grid">
                 {me.skills.map((id, i) => {
@@ -533,7 +534,6 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                   );
                 })}
                 {!meAffordAny && <MenuItem onClick={() => submit({ type: 'skill', slot: -1 })}>掙扎</MenuItem>}
-                <MenuItem onClick={() => setMode('main')}>返回</MenuItem>
               </div>
             )}
             {mode === 'items' && (
@@ -544,7 +544,6 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                     {ITEMS[id].name}
                   </MenuItem>
                 ))}
-                <MenuItem onClick={() => setMode('main')}>返回</MenuItem>
               </div>
             )}
           </Win>
@@ -602,7 +601,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
         <Energy value={d.energy} max={MAX_ENERGY} />
         {side === 0 && <span class="hpnum">{d.hp}/{d.max}</span>}
       </div>
-      {intent && <div class={`hud-intent ${warn ? 'warn' : ''}`} title={warn ? '對你的夥伴效果絕佳！' : undefined}><span class="dim">下一步</span> {intent.icon} {intent.name}{warn && ' ‼'}</div>}
+      {intent && <div class={`hud-intent ${warn ? 'warn' : ''}`} title={warn ? '對你的夥伴效果絕佳！' : undefined}><span class="dim">下一步</span> <Icon name={intent.icon} /> {intent.name}{warn && ' ‼'}</div>}
     </div>
   );
 }
@@ -615,7 +614,7 @@ function InfoPanel({ bs, side, boss, onClose }: { bs: BattleState; side: SideId;
   const stages = (Object.keys(STAGE_LABEL) as (keyof typeof STAGE_LABEL)[]).filter((k) => v.stages[k]);
   const mine = side === 0;
   return (
-    <Win class="big-panel battle-info" title={mine ? '我方資料' : boss ? '霸主資料' : '對手資料'}>
+    <Win class="big-panel battle-info" title={mine ? '我方資料' : boss ? '霸主資料' : '對手資料'} onClose={onClose}>
       <div class="pick">
         <Sprite form={m.form} size={96} mutant={m.mutant} />
         <span class="grow">
@@ -634,11 +633,10 @@ function InfoPanel({ bs, side, boss, onClose }: { bs: BattleState; side: SideId;
       </div>
       {mine && <p class="small">攻擊 {st.atk}・防禦 {st.def}・速度 {st.spd}</p>}
       <p class="small dim">閃避 {Math.round(dodgeRate(f) * 100)}%・格擋 {Math.round(blockRate(f) * 100)}%</p>
-      {m.held && <p class="small">攜帶 <b>{HELD[m.held].icon} {HELD[m.held].name}</b>：{HELD[m.held].desc}</p>}
+      {m.held && <p class="small">攜帶 <b><Icon name={HELD[m.held].icon} /> {HELD[m.held].name}</b>：{HELD[m.held].desc}</p>}
       {mine && Object.entries(bs.sides[0].mods?.reso ?? {}).map(([e, b]) => <p class="small accent" key={e}>屬性共鳴：{ELEM[e as Elem].name}技能 +{Math.round((b ?? 0) * 100)}%</p>)}
       <AbilityLines form={f.id} />
       {mine && <div class="skills-col">{m.skills.map((id) => <SkillLine id={id} key={id} />)}</div>}
-      <MenuItem onClick={onClose} hot>關閉</MenuItem>
     </Win>
   );
 }

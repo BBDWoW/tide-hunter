@@ -412,7 +412,7 @@ export function rollTreasure(run: RunState, kind: 'treasure' | 'junk'): Loot {
     return { title: '釣到了垃圾……', text: `是${j}。賣給回收商換了 5 枚貝殼幣。` };
   }
   const pick = weighted(r, [['shells', 34], ['bait', 22], ['potion', 16], ['held', 14], ['star', 8], ['revive', 6]] as [string, number][]);
-  if (pick === 'held') { const h = giveHeld(run); return { title: '釣到寶箱！', text: `裡面有攜帶道具「${HELD[h].icon} ${HELD[h].name}」！到隊伍裡讓夥伴裝上吧。` }; }
+  if (pick === 'held') { const h = giveHeld(run); return { title: '釣到寶箱！', text: `裡面有攜帶道具「${HELD[h].name}」！到隊伍裡讓夥伴裝上吧。` }; }
   if (pick === 'shells') { const n = int(r, 25, 60); run.shells += n; return { title: '釣到寶箱！', text: `裡面有 ${n} 枚貝殼幣。` }; }
   if (pick === 'bait') { run.catchBait += 1; return { title: '釣到寶箱！', text: '裡面有一個捕捉餌！' }; }
   if (pick === 'potion') { run.items.potion += 2; return { title: '釣到寶箱！', text: '裡面有海藻藥膏 ×2。' }; }
@@ -532,7 +532,7 @@ export function campTrain(run: RunState): string {
 }
 /** 營地探索：找到攜帶道具或寶箱 */
 export function campSearch(run: RunState): string {
-  if (next(run.rng) < 0.55) { const h = giveHeld(run); return `在小島的岩縫裡找到了「${HELD[h].icon} ${HELD[h].name}」！${HELD[h].desc}`; }
+  if (next(run.rng) < 0.55) { const h = giveHeld(run); return `在小島的岩縫裡找到了「${HELD[h].name}」！${HELD[h].desc}`; }
   const l = rollTreasure(run, 'treasure');
   return `在沙灘上挖到一個小箱子……${l.text}`;
 }

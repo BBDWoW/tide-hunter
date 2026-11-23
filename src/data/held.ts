@@ -6,19 +6,19 @@ export type HeldId =
   | 'venomspine' | 'cleansebell' | 'ripplecloak' | 'berserkscale' | 'tidecrest' | 'bubblecharm';
 
 export const HELD: Record<HeldId, { name: string; icon: string; desc: string; price: number }> = {
-  sharpfang: { name: '鯊齒', icon: '🦷', desc: '攻擊 +20%。', price: 70 },
-  shellplate: { name: '硬殼片', icon: '🐚', desc: '受到的傷害 −15%。', price: 70 },
-  swiftfin: { name: '迅鰭', icon: '🪶', desc: '速度 +20%。', price: 60 },
-  leechcoral: { name: '吸血珊瑚', icon: '🪸', desc: '造成傷害的 15% 轉為回復。', price: 80 },
-  lastpearl: { name: '不屈珍珠', icon: '⚪', desc: '每場戰鬥一次，受到致命傷時保留 1 HP。', price: 90 },
-  sparkcell: { name: '電池海膽', icon: '🔋', desc: '上場時能量 +1。', price: 70 },
-  scope: { name: '瞄準鏡片', icon: '🔍', desc: '擊中要害的機率 +12%。', price: 60 },
-  venomspine: { name: '毒棘', icon: '🌵', desc: '攻擊命中時 20% 使對手中毒。', price: 60 },
-  cleansebell: { name: '淨化鈴', icon: '🔔', desc: '異常狀態的回合數減半。', price: 50 },
-  ripplecloak: { name: '漣漪披風', icon: '🌀', desc: '閃避率 +8%。', price: 70 },
-  berserkscale: { name: '狂戰之鱗', icon: '🔥', desc: '攻擊 +35%，但防禦 −20%。', price: 80 },
-  tidecrest: { name: '潮之冠', icon: '👑', desc: '自己展開的場地多持續 2 回合。', price: 50 },
-  bubblecharm: { name: '泡泡護符', icon: '🫧', desc: '上場時獲得 15% HP 的護盾。', price: 70 },
+  sharpfang: { name: '鯊齒', icon: 'sharpfang', desc: '攻擊 +20%。', price: 70 },
+  shellplate: { name: '硬殼片', icon: 'shellplate', desc: '受到的傷害 −15%。', price: 70 },
+  swiftfin: { name: '迅鰭', icon: 'swiftfin', desc: '速度 +20%。', price: 60 },
+  leechcoral: { name: '吸血珊瑚', icon: 'leechcoral', desc: '造成傷害的 15% 轉為回復。', price: 80 },
+  lastpearl: { name: '不屈珍珠', icon: 'lastpearl', desc: '每場戰鬥一次，受到致命傷時保留 1 HP。', price: 90 },
+  sparkcell: { name: '電池海膽', icon: 'sparkcell', desc: '上場時能量 +1。', price: 70 },
+  scope: { name: '瞄準鏡片', icon: 'scope', desc: '擊中要害的機率 +12%。', price: 60 },
+  venomspine: { name: '毒棘', icon: 'venomspine', desc: '攻擊命中時 20% 使對手中毒。', price: 60 },
+  cleansebell: { name: '淨化鈴', icon: 'cleansebell', desc: '異常狀態的回合數減半。', price: 50 },
+  ripplecloak: { name: '漣漪披風', icon: 'ripplecloak', desc: '閃避率 +8%。', price: 70 },
+  berserkscale: { name: '狂戰之鱗', icon: 'berserkscale', desc: '攻擊 +35%，但防禦 −20%。', price: 80 },
+  tidecrest: { name: '潮之冠', icon: 'tidecrest', desc: '自己展開的場地多持續 2 回合。', price: 50 },
+  bubblecharm: { name: '泡泡護符', icon: 'bubblecharm', desc: '上場時獲得 15% HP 的護盾。', price: 70 },
 };
 export const HELD_IDS = Object.keys(HELD) as HeldId[];
 

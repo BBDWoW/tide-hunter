@@ -1,3 +1,4 @@
+import { Icon } from './Icon';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { ABILITIES, abilitiesOf, FORMS, recolorOf } from '../data/creatures';
@@ -100,7 +101,7 @@ export function IvStars({ iv, detail = false }: { iv?: number[]; detail?: boolea
 export function EnvHint({ mon }: { mon: Mon }) {
   const evo = FORMS[mon.form].evolve?.filter((e) => e.zone);
   if (!evo?.length) return null;
-  return <p class="small env-hint">🌍 環境進化：{evo.map((e) => `在${ZONE_NAMES[e.zone!] ?? e.zone}進化會變成「${FORMS[e.to].name}」`).join('；')}</p>;
+  return <p class="small env-hint">環境進化：{evo.map((e) => `在${ZONE_NAMES[e.zone!] ?? e.zone}進化會變成「${FORMS[e.to].name}」`).join('；')}</p>;
 }
 const ZONE_NAMES: Record<string, string> = { shallows: '碧藍淺灘', ice: '冰封峽灣', lava: '熔岩裂谷', forest: '聖林域', void: '無稽區', core: '域核區域' };
 
@@ -131,5 +132,5 @@ export function Tip({ id, children, inline }: { id: string; children: ComponentC
     try { localStorage.setItem(TIP_KEY, JSON.stringify([...seenTips(), id])); } catch { /* 略過 */ }
     setShow(false);
   };
-  return <button class={`tip ${inline ? 'inline' : ''}`} onClick={close} onPointerDown={(e) => e.stopPropagation()}><span>💡 {children}</span><small>知道了 ✕</small></button>;
+  return <button class={`tip ${inline ? 'inline' : ''}`} onClick={close} onPointerDown={(e) => e.stopPropagation()}><span><Icon name="bulb" /> {children}</span><small>知道了 ✕</small></button>;
 }

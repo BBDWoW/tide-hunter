@@ -1,3 +1,4 @@
+import { Icon } from './Icon';
 import { useEffect, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { FORMS, STARTERS } from '../data/creatures';
@@ -43,17 +44,17 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={drawTitle} label="夕陽下的海面，潮靈躍出水面" />}
       overlay={<>
-        <div class="title-logo"><span class="title-en">TIDE HUNTER</span><h1>潮汐獵手</h1><span class="title-sub">釣起潮靈 · 收服 · 進化 · 挑戰霸主</span>{titleOf(meta) && <span class="title-badge">🏅 {titleOf(meta)}</span>}</div>
+        <div class="title-logo"><span class="title-en">TIDE HUNTER</span><h1>潮汐獵手</h1><span class="title-sub">釣起潮靈 · 收服 · 進化 · 挑戰霸主</span>{titleOf(meta) && <span class="title-badge"><Icon name="medal" /> {titleOf(meta)}</span>}</div>
         <div class="title-tools">
-          <button class="tool-btn" onClick={onHelp} aria-label="玩法說明">❓</button>
-          <button class="tool-btn" onClick={() => { setNews(false); setSound(!sound); }} aria-label="聲音與特效設定">{snd.muted ? '🔇' : '🔊'}</button>
-          <button class="tool-btn news-btn" onClick={() => { setSound(false); news ? setNews(false) : openNews(); }} aria-label="更新通知">📢 通知{unread && <i class="news-dot" aria-label="有新消息" />}</button>
+          <button class="tool-btn" onClick={onHelp} aria-label="玩法說明"><Icon name="help" /></button>
+          <button class="tool-btn" onClick={() => { setNews(false); setSound(!sound); }} aria-label="聲音與特效設定"><Icon name={snd.muted ? 'mute' : 'sound'} /></button>
+          <button class="tool-btn news-btn" onClick={() => { setSound(false); news ? setNews(false) : openNews(); }} aria-label="更新通知"><Icon name="news" /> 通知{unread && <i class="news-dot" aria-label="有新消息" />}</button>
         </div>
         <span class="app-version">v{APP_VERSION}</span>
       </>}
       onPanelClose={sound || news || stars ? () => { setSound(false); setNews(false); setStars(false); } : undefined}
       panel={stars ? (
-        <Win class="big-panel" title="選擇潮位（難度）">
+        <Win class="big-panel" title="選擇潮位（難度）" onClose={() => setStars(false)}>
           <div class="star-pick">
             {Array.from({ length: maxStar + 1 }, (_, i) => (
               <button key={i} class={`chip-btn star-btn ${star === i ? 'on' : ''}`} onClick={() => setStar(i)}>{i ? '★'.repeat(i) : '標準'}</button>
@@ -66,17 +67,16 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
           <MenuItem onClick={begin} hot>出航！</MenuItem>
         </Win>
       ) : sound ? (
-        <Win class="big-panel sound-panel" title="聲音與特效設定">
+        <Win class="big-panel sound-panel" title="聲音與特效設定" onClose={() => setSound(false)}>
           <label class="snd-row"><span>背景音樂</span><input type="range" min="0" max="100" value={Math.round(snd.music * 100)} onInput={(e) => updSnd({ music: Number((e.target as HTMLInputElement).value) / 100 })} /><b>{Math.round(snd.music * 100)}</b></label>
           <label class="snd-row"><span>海浪與環境音</span><input type="range" min="0" max="100" value={Math.round(snd.amb * 100)} onInput={(e) => updSnd({ amb: Number((e.target as HTMLInputElement).value) / 100 })} /><b>{Math.round(snd.amb * 100)}</b></label>
           <label class="snd-row"><span>音效</span><input type="range" min="0" max="100" value={Math.round(snd.sfx * 100)} onInput={(e) => updSnd({ sfx: Number((e.target as HTMLInputElement).value) / 100 })} onChange={() => sfx('hit')} /><b>{Math.round(snd.sfx * 100)}</b></label>
           <label class="snd-row fx-row"><span>減少特效</span><input type="checkbox" checked={reduce} onChange={(e) => { const v = (e.target as HTMLInputElement).checked; setReduce(v); setReduceFx(v); }} /><span class="small dim">關掉畫面震動與閃光、減少粒子</span></label>
-          <MenuItem onClick={() => updSnd({ muted: !snd.muted })} hot={snd.muted}>{snd.muted ? '🔇 目前靜音，點一下開啟聲音' : '🔊 點一下靜音'}</MenuItem>
+          <MenuItem onClick={() => updSnd({ muted: !snd.muted })} hot={snd.muted}>{snd.muted ? <><Icon name="mute" /> 目前靜音，點一下開啟聲音</> : <><Icon name="sound" /> 點一下靜音</>}</MenuItem>
           <p class="small dim">聲音會在第一次點擊畫面後開始播放。電腦上也可以按 M 鍵切換靜音。</p>
-          <MenuItem onClick={() => setSound(false)}>關閉</MenuItem>
         </Win>
       ) : news && (
-        <Win class="big-panel" title={`更新通知　目前版本 v${APP_VERSION}`}>
+        <Win class="big-panel" title={`更新通知　目前版本 v${APP_VERSION}`} onClose={() => setNews(false)}>
           <div class="item-list">
             {CHANGELOG.map((c, i) => (
               <div class="news-entry" key={c.version}>
@@ -85,7 +85,6 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
               </div>
             ))}
           </div>
-          <MenuItem onClick={() => setNews(false)} hot>關閉</MenuItem>
         </Win>
       )}
       dock={
@@ -129,6 +128,7 @@ export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (for
       scene={<SceneCanvas draw={(c, t) => drawStarterScene(c, t, win.map((o) => (o ? formOfOpt(o) : null)), 1)} label="可以選的夥伴站在礁石上" />}
       overlay={<>
         <Win class="banner">第一次出海！選一隻成為你的第一位夥伴</Win>
+        <button class="tool-btn screen-back" onClick={onBack}>✕ 返回</button>
         {PEDESTALS.map((p, i) => (
           <button class="hit" key={i} aria-label={i === 0 ? '上一隻' : i === 2 ? '下一隻' : f.name} onClick={() => i !== 1 && move(i - 1)}
             style={{ left: `${((p.x - 26) / 256) * 100}%`, top: `${((p.y - 50) / 144) * 100}%`, width: `${(52 / 256) * 100}%`, height: `${(56 / 144) * 100}%` }} />
@@ -148,7 +148,6 @@ export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (for
               <MenuItem onClick={() => move(-1)}>◀ 上一隻</MenuItem>
               <MenuItem onClick={() => move(1)}>下一隻 ▶</MenuItem>
             </div>
-            <MenuItem onClick={onBack}>返回</MenuItem>
           </Win>
         </div>
       } />
@@ -166,7 +165,7 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
     <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawPort(c, t, meta.bay.map((b) => b.form))} label="港口與棲息灣" />}
       onPanelClose={onBack}
       panel={
-        <Win class="big-panel port" title={`港口　珍珠 ◆ ${meta.pearls}`}>
+        <Win class="big-panel port" title={`港口　珍珠 ◆ ${meta.pearls}`} onClose={onBack} closeLabel="返回標題">
           <div class="tabs">
             {([['up', '設施升級'], ['recruit', '招募夥伴'], ['ach', `成就${canClaim ? ` ●${canClaim}` : ''}`]] as const).map(([k, label]) => (
               <button key={k} class={`tab ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}>{label}</button>
@@ -190,7 +189,7 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
             <div class="item-list">
               <p>在港口邊拋下釣竿，就有機會釣到新的夥伴！所有生物都可能出現，連霸主也是。</p>
               <p class="small dim">一次 ◆ 200，十連 ◆ 1800。釣竿的顏色代表稀有度，水面變色就是「轉」，會再升一級。稀有的夥伴非常難釣到。</p>
-              <MenuItem onClick={onGacha} hot>🎣 前往招募</MenuItem>
+              <MenuItem onClick={onGacha} hot><Icon name="rod" /> 前往招募</MenuItem>
             </div>
           )}
           {tab === 'ach' && (
@@ -200,7 +199,7 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
                 const got = meta.achieved?.includes(a.id), done = a.check(st);
                 return (
                   <div class={`ach-row ${got ? 'got' : done ? 'ready' : ''}`} key={a.id}>
-                    <span class="grow"><b>{got ? '🏅' : done ? '✨' : '🔒'} {a.title}</b><span class="small dim">{a.desc}</span></span>
+                    <span class="grow"><b><Icon name={got ? 'medal' : done ? 'sparkle' : 'lock'} /> {a.title}</b><span class="small dim">{a.desc}</span></span>
                     {got ? (meta.title === a.id ? <span class="small accent">使用中</span> : <button class="chip-btn" onClick={() => { meta.title = a.id; saveMeta(meta); refresh(); }}>設為稱號</button>)
                       : <button class="chip-btn" disabled={!done} onClick={() => { claimAchievement(meta, a.id); refresh(); }}>{done ? `領取 ◆ ${a.reward}` : `◆ ${a.reward}`}</button>}
                   </div>
@@ -208,7 +207,6 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
               })}
             </div>
           )}
-          <MenuItem onClick={onBack} hot>返回標題</MenuItem>
         </Win>
       } />
   );
@@ -233,7 +231,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
   };
 
   const node = run.picked !== null ? opts[run.picked] : null;
-  let action: { text: string; btn: string; fn: () => void; alt?: { btn: string; fn: () => void }; more?: { btn: string; fn: () => void }[] } | null = null;
+  let action: { text: string; btn: ComponentChildren; fn: () => void; alt?: { btn: string; fn: () => void }; more?: { btn: ComponentChildren; fn: () => void }[] } | null = null;
   const notice = run.notice;
   if (node) {
     const spot = spotName(run, node.spot);
@@ -255,10 +253,10 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
       action = rested
         ? { text: rested, btn: '繼續航行', fn: onNext }
         : { text: `找到一座可以紮營的小島。只有時間做一件事：休息（全隊回復 ${Math.round(heal * 100)}% HP、倒下的醒來）、特訓（全隊獲得經驗）、或探索小島（找到道具）。`,
-          btn: '🔥 休息', fn: () => { healParty(run, heal, true); done('夥伴們圍著營火睡了一覺，精神都恢復了。'); },
+          btn: <><Icon name="fire" /> 休息</>, fn: () => { healParty(run, heal, true); done('夥伴們圍著營火睡了一覺，精神都恢復了。'); },
           more: [
-            { btn: '💪 特訓', fn: () => done(campTrain(run)) },
-            { btn: '🔍 探索', fn: () => done(campSearch(run)) },
+            { btn: <><Icon name="train" /> 特訓</>, fn: () => done(campTrain(run)) },
+            { btn: <><Icon name="search" /> 探索</>, fn: () => done(campSearch(run)) },
           ] };
     }
   }
@@ -269,12 +267,12 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
       scene={<SceneCanvas draw={(c, t) => drawChart(c, t, run.route, run.station, run.picked, run.path, run.seed, zoneOf(run).theme)} label="海圖與航線" />}
       overlay={<>
         <Win class="banner left"><span class="eyebrow">{run.daily ? '每日 · ' : ''}{run.star ? `${'★'.repeat(run.star)} · ` : ''}{zoneOf(run).special ? '特殊區域' : `海域 ${run.zoneNo + 1}`} · {zoneOf(run).name}</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b></Win>
-        <Win class="banner right"><span class="res">🐚 {run.shells}</span><span class="res">捕捉餌 {run.catchBait}</span></Win>
-        {run.picked === null && !panel && <Tip id="voyage">點海圖上的圖示選擇航線。釣點會遇到野生潮靈，精英更強，🚩 船隊會連續派出好幾隻。右上角可以看隊伍和背包。</Tip>}
+        <Win class="banner right"><span class="res"><Icon name="shell" /> {run.shells}</span><span class="res">捕捉餌 {run.catchBait}</span></Win>
+        {run.picked === null && !panel && <Tip id="voyage">點海圖上的圖示選擇航線。釣點會遇到野生潮靈，精英更強，掛旗子的船隊會連續派出好幾隻。右上角可以看隊伍和背包。</Tip>}
         <div class="voy-tools">
-          <button class={`tool-btn ${panel === 'party' ? 'on' : ''}`} onClick={() => setPanel(panel === 'party' ? null : 'party')}>👥 隊伍</button>
-          <button class={`tool-btn ${panel === 'items' ? 'on' : ''}`} onClick={() => setPanel(panel === 'items' ? null : 'items')}>🎒 背包</button>
-          <button class="tool-btn" onClick={onQuit}>💾 存檔</button>
+          <button class={`tool-btn ${panel === 'party' ? 'on' : ''}`} onClick={() => setPanel(panel === 'party' ? null : 'party')}><Icon name="party" /> 隊伍</button>
+          <button class={`tool-btn ${panel === 'items' ? 'on' : ''}`} onClick={() => setPanel(panel === 'items' ? null : 'items')}><Icon name="bag" /> 背包</button>
+          <button class="tool-btn" onClick={onQuit}><Icon name="save" /> 存檔</button>
         </div>
         {run.picked === null && opts.map((o, j) => {
           const [x, y] = chartPos(run.station, j, opts.length);
@@ -284,11 +282,10 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
       </>}
       onPanelClose={panel && panel !== 'shop' ? () => setPanel(null) : undefined}
       panel={panel && (
-        <Win class="big-panel" title={panel === 'party' ? `隊伍 ${run.party.length}/6` : panel === 'shop' ? `漂流商店　🐚 ${run.shells}` : '背包'}>
+        <Win class="big-panel" title={panel === 'party' ? `隊伍 ${run.party.length}/6` : panel === 'shop' ? `漂流商店　貝殼幣 ${run.shells}` : '背包'} onClose={panel === 'shop' ? onNext : () => setPanel(null)} closeLabel={panel === 'shop' ? '離開商店' : '關閉'}>
           {panel === 'party' && <PartyList run={run} onChange={() => force((n) => n + 1)} />}
           {panel === 'items' && <ItemList run={run} onChange={() => { saveRun(run); force((n) => n + 1); }} />}
           {panel === 'shop' && <ShopList run={run} onChange={() => { saveRun(run); force((n) => n + 1); }} />}
-          {panel === 'shop' ? <MenuItem onClick={onNext} hot>離開商店，繼續航行</MenuItem> : <MenuItem onClick={() => setPanel(null)}>關閉</MenuItem>}
         </Win>
       )}
       dock={
@@ -308,7 +305,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
           </Win>
           <Win class="cmd">
             <div class="cmd-grid">
-              {node && action ? <><MenuItem onClick={() => { run.notice = undefined; action!.fn(); }} hot>{action.btn}</MenuItem>{action.alt && <MenuItem onClick={action.alt.fn}>{action.alt.btn}</MenuItem>}{action.more?.map((m) => <MenuItem key={m.btn} onClick={m.fn}>{m.btn}</MenuItem>)}</>
+              {node && action ? <><MenuItem onClick={() => { run.notice = undefined; action!.fn(); }} hot>{action.btn}</MenuItem>{action.alt && <MenuItem onClick={action.alt.fn}>{action.alt.btn}</MenuItem>}{action.more?.map((m, i) => <MenuItem key={i} onClick={m.fn}>{m.btn}</MenuItem>)}</>
                 : opts.map((o, j) => <MenuItem key={j} hot={j === hover} onHover={() => setHover(j)} onClick={() => choose(j)}>{NODE_INFO[o.kind].name}{o.kind === 'fish' || o.kind === 'elite' ? `・${spotName(run, o.spot).name}` : ''}</MenuItem>)}
 
             </div>
@@ -325,17 +322,17 @@ function ShopList({ run, onChange }: { run: RunState; onChange: () => void }) {
       <h3 class="sub-h">攜帶道具</h3>
       {stock.map((h) => { const price = heldPrice(run, h); return (
         <button class="pick shop-row" key={h} disabled={run.shells < price} onClick={() => { buyHeld(run, h); onChange(); }}>
-          <span class="grow"><b>{HELD[h].icon} {HELD[h].name}</b><span class="small dim">{HELD[h].desc}</span></span>
-          <span class="num">🐚 {price}</span>
+          <span class="grow"><b><Icon name={HELD[h].icon} /> {HELD[h].name}</b><span class="small dim">{HELD[h].desc}</span></span>
+          <span class="num"><Icon name="shell" /> {price}</span>
         </button>
       ); })}
       {!stock.length && <p class="small dim">攜帶道具賣完了。</p>}
-      <button class="chip-btn" disabled={run.shells < refreshCost(run)} onClick={() => { refreshShop(run); onChange(); }}>🔄 換一批（🐚 {refreshCost(run)}）</button>
+      <button class="chip-btn" disabled={run.shells < refreshCost(run)} onClick={() => { refreshShop(run); onChange(); }}><Icon name="refresh" /> 換一批（<Icon name="shell" /> {refreshCost(run)}）</button>
       <h3 class="sub-h">補給</h3>
       {SHOP.map((it) => (
         <button class="pick shop-row" key={it.id} disabled={run.shells < priceOf(run, it)} onClick={() => { run.shells -= priceOf(run, it); it.buy(run); onChange(); }}>
           <span class="grow"><b>{it.name}</b><span class="small dim">{it.desc}</span></span>
-          <span class="num">🐚 {priceOf(run, it)}</span>
+          <span class="num"><Icon name="shell" /> {priceOf(run, it)}</span>
         </button>
       ))}
     </div>
@@ -355,11 +352,11 @@ function HeldRow({ run, m, onChange }: { run: RunState; m: Mon; onChange: () => 
   const bag = [...new Set(run.heldBag ?? [])] as HeldId[];
   return (
     <div class="held-row">
-      <span class="small">攜帶：{m.held ? <b>{HELD[m.held].icon} {HELD[m.held].name}</b> : <span class="dim">（無）</span>}{m.held && <span class="dim">　{HELD[m.held].desc}</span>}</span>
+      <span class="small">攜帶：{m.held ? <b><Icon name={HELD[m.held].icon} /> {HELD[m.held].name}</b> : <span class="dim">（無）</span>}{m.held && <span class="dim">　{HELD[m.held].desc}</span>}</span>
       {(bag.length > 0 || m.held) && <button class="chip-btn" onClick={() => setOpen(!open)}>{open ? '收起' : m.held ? '更換' : '裝上'}</button>}
       {open && (
         <div class="held-pick">
-          {bag.map((h) => <button class="chip-btn" key={h} onClick={() => { equipHeld(run, m, h); setOpen(false); onChange(); }}>{HELD[h].icon} {HELD[h].name}<span class="dim">・{HELD[h].desc}</span></button>)}
+          {bag.map((h) => <button class="chip-btn" key={h} onClick={() => { equipHeld(run, m, h); setOpen(false); onChange(); }}><Icon name={HELD[h].icon} /> {HELD[h].name}<span class="dim">・{HELD[h].desc}</span></button>)}
           {m.held && <button class="chip-btn danger" onClick={() => { equipHeld(run, m, null); setOpen(false); onChange(); }}>卸下</button>}
         </div>
       )}
@@ -413,9 +410,10 @@ function ItemList({ run, onChange }: { run: RunState; onChange: () => void }) {
   };
   if (using) return (
     <div class="item-list">
+      <button class="chip-btn back-chip" onClick={() => { setUsing(null); setLast(null); }}>← 返回背包</button>
       {last && (
         <div class="use-result" key={last.n}>
-          <b>✚ {last.text}</b>
+          <b><Icon name="heal" /> {last.text}</b>
           <span class="num">HP {last.from} → {last.to}/{last.max}</span>
         </div>
       )}
@@ -433,7 +431,6 @@ function ItemList({ run, onChange }: { run: RunState; onChange: () => void }) {
           </button>
         ))}
       </div>
-      <MenuItem onClick={() => { setUsing(null); setLast(null); }} hot={!!last}>返回背包</MenuItem>
     </div>
   );
   return (
@@ -540,13 +537,13 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
     <GameScreen vp={vp} scene={<SceneCanvas draw={drawDeep} label="海底" />}
       onPanelClose={onBack}
       panel={
-        <Win class="big-panel help" title="玩法說明">
+        <Win class="big-panel help" title="玩法說明" onClose={onBack} closeLabel="返回標題">
           <h3>一場遭遇</h3>
           <ol>
             <li><b>拋竿</b>：對準海面的漣漪，力量條停在目標區（黃色），紅色是完美落點：對手開場 HP 減少、比較好捕捉，稀有度也可能提升。</li>
             <li><b>等待咬鉤</b>：浮標下沉、出現「！」時立刻點擊。太早點會把魚嚇跑。</li>
             <li><b>回合制戰鬥</b>：每回合 +1 能量（上限 5），強力技能需要較多能量。</li>
-            <li><b>對手的下一步</b>：對手 HP 條下面會顯示牠這回合要做的事（⚔ 攻擊、☠ 妨礙、✦ 強化、✚ 回復）；標著 ‼ 代表對你目前的夥伴效果絕佳，可以考慮換人。霸主 HP 掉到一半時會狂暴（攻擊 +1、防禦 −1）。</li>
+            <li><b>對手的下一步</b>：對手 HP 條下面會顯示牠這回合要做的事（<Icon name="attack" /> 攻擊、<Icon name="hinder" /> 妨礙、<Icon name="buff" /> 強化、<Icon name="heal" /> 回復）；標著 ‼ 代表對你目前的夥伴效果絕佳，可以考慮換人。霸主 HP 掉到一半時會狂暴（攻擊 +1、防禦 −1）。</li>
             <li><b>收線捕捉</b>：對手 HP 越低、身上有異常狀態，捕捉區就越寬。失敗的話對手會獲得一次攻擊機會。</li>
           </ol>
           <h3>航線</h3>
@@ -594,7 +591,6 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
           <p class="small dim">◎ 效果絕佳 ×2　△ 效果不好 ×0.5　本系技能額外 ×1.3</p>
           <h3>稀有度</h3>
           <div class="row-gap">{RARITY_ORDER.map((r) => <span key={r} class="row-gap"><RarityTag r={r} /><span class="small">{RARITY[r].name}</span></span>)}</div>
-          <MenuItem onClick={onBack}>返回標題</MenuItem>
         </Win>
       } />
   );
@@ -671,11 +667,11 @@ export function EventScreen({ vp, run, ev, onDone }: { vp: Viewport; run: RunSta
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawSea(c, t, zoneOf(run).theme)} label="海面" />}
       panel={
-        <Win class="big-panel event" title={`❓ ${ev.title}`}>
+        <Win class="big-panel event" title={ev.title}>
           <p>{ev.text}</p>
           {result ? <>
             <p class="accent">{result}</p>
-            <MenuItem onClick={onDone} hot>{run.eventFight ? '⚔ 開始戰鬥' : '繼續航行'}</MenuItem>
+            <MenuItem onClick={onDone} hot>{run.eventFight ? <><Icon name="attack" /> 開始戰鬥</> : '繼續航行'}</MenuItem>
           </> : ev.options.map((o, i) => {
             const ok = o.can ? o.can(run) : true;
             return <MenuItem key={i} disabled={!ok} onClick={() => { setResult(o.act(run)); saveRun(run); }} sub={o.hint}>{o.label}</MenuItem>;

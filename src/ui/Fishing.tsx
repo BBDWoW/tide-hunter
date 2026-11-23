@@ -1,3 +1,4 @@
+import { Icon } from './Icon';
 // 釣魚：選魚餌 → 對準海面的漣漪拋竿（力量條）→ 等待（小心假咬鉤）→ 咬鉤時點擊 → 上鉤後才知道是大是小
 import { useRef, useState } from 'preact/hooks';
 import { LURES, type LureId } from '../data/boons';
@@ -144,7 +145,7 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
               <MenuItem onClick={() => pickLure('star')} disabled={!run.lures.star} sub={`×${run.lures.star}`}>星光餌</MenuItem>
               <MenuItem onClick={() => pickLure('legend')} disabled={!run.lures.legend} sub={`×${run.lures.legend}`}>傳說餌</MenuItem>
             </div>}
-            {phase === 'choose' && <MenuItem onClick={startCast} hot>🎣 拋竿！</MenuItem>}
+            {phase === 'choose' && <MenuItem onClick={startCast} hot><Icon name="rod" /> 拋竿！</MenuItem>}
             {phase === 'loot' && (treasureNode ? <MenuItem onClick={onDone} hot>繼續航行</MenuItem> : <div class="cmd-grid">
               <MenuItem onClick={fishAgain} hot>繼續釣魚</MenuItem>
               <MenuItem onClick={onDone}>離開這裡</MenuItem>
