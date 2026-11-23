@@ -45,6 +45,11 @@ const BOSS_INTRO: Record<string, string[]> = {
   void_star_dragon: ['星光被一點一點吸走。', '虛無星龍盤旋在破碎的星空裡，低聲咆哮。'],
   domain_realm_core: ['空間像玻璃一樣出現裂痕。', '域界核心開始轉動，周圍的一切都被它改寫！'],
 };
+// 霸主的稱號（登場字卡）
+const BOSS_TITLE: Record<string, string> = {
+  whale: '吞潮的巨口', frostking: '萬年冰冠之王', lavadragon: '裂谷的熔岩君主', mainframe_leviathan: '資料深海的主宰',
+  nether_whale: '無光之海的沉默者', vine_antler_deer: '森林的守望者', void_star_dragon: '吞噬星光的虛無', domain_realm_core: '改寫世界的核心',
+};
 const readSpeed = () => { try { return localStorage.getItem(SPEED_KEY) !== 'normal'; } catch { return true; } }; // 預設快速
 
 export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunState; enc: Encounter; boss: boolean; onEnd: (r: BattleResult) => void }) {
@@ -75,6 +80,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const [info, setInfo] = useState<SideId | null>(null); // 查看雙方資料
   const net = useRef<{ wob: number; glow: number } | null>(null);
   const [intent, setIntent] = useState<Intent | null>(null);
+  const [intro, setIntro] = useState<null | 'dark' | 'card' | 'out'>(null); // 霸主登場畫面
+  const introSkip = useRef(false);
   const [toast, setToast] = useState<{ id: number; text: string; form: string; from: number; hp: number; max: number } | null>(null);
   const intentRef = useRef<Intent | null>(null);
   /** 輪到玩家時，先決定好對手這回合要做什麼並顯示出來 */
@@ -152,23 +159,38 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   useEffect(() => {
     (async () => {
       const ef = FORMS[enc.mon.form];
-      sfx('enter');
-      if (boss) { setTimeout(() => { sfx('enrage'); jolt(4, 0.3, '#200010'); }, 350); }
-      await wait(500);
+      if (boss) await bossIntro();
+      else { sfx('enter'); await wait(500); }
       if (crew) { say(`「${enc.crew}」的船隊攔住了去路！（${enc.team!.length} 隻）`); await wait(500); say(`${enc.crew}派出了 ${ef.name}！`); }
       else if (boss) { for (const line of BOSS_INTRO[enc.mon.form] ?? []) { say(line); await wait(900); } say(`霸主「${ef.name}」擋住了去路！`); }
       else say(`野生的 ${ef.name} 出現了！`);
       if (enc.rarity === 'SSR') say('★ 傳說級的氣息！這可能是唯一的機會！');
       else if (enc.rarity === 'S') say('☆ 史詩級的稀有生物！');
       if (enc.mon.mutant) say('✦ 是異變個體！牠的顏色跟一般的不一樣！');
-      if (enc.landing === 'perfect' || enc.landing === 'good') { await wait(500); say(`${LANDING_BONUS[enc.landing].label}！${ef.name} 受了傷，比較好捕捉！`); }
+      if (enc.landing === 'perfect' || enc.landing === 'good') { await wait(500); say(`${LANDING_BONUS[enc.landing].label}！${ef.name} 受了傷${boss || crew ? '' : '，比較好捕捉'}！`); }
       await wait(700);
+      if (boss) { const a = anim.current; a.fade[0] = 1; a.enter[0] = 0; sfx('enter'); }
       say(`上吧，${formOf(active(bs, 0)).name}！`);
       await wait(500);
       setMode('main');
     })();
   }, []);
 
+  /** 霸主登場：黑邊收進來 → 黑色剪影 → 閃光怒吼現身 → 名字字卡。點一下可以跳過 */
+  async function bossIntro() {
+    const a = anim.current, m = a.mons[1];
+    const pause = (ms: number) => new Promise<void>((r) => { const end = Date.now() + ms; const id = setInterval(() => { if (introSkip.current || Date.now() >= end) { clearInterval(id); r(); } }, 30); });
+    a.fade[0] = 0; a.enter[1] = 1; m.tint = '#05050c';
+    setIntro('dark'); sfx('debuff');
+    await pause(1000);
+    m.tint = undefined; jolt(5, 0.55); sfx('enrage');
+    const c = center(1); burst(a.parts, c.x, c.y, 'faint', null);
+    setIntro('card');
+    await pause(2300);
+    setIntro('out');
+    await pause(350);
+    setIntro(null);
+  }
   const center = (side: SideId) => { const v = anim.current.mons[side]; const p = monSlot(side, v.form); return { x: p.cx, y: p.cy }; };
 
   async function apply(e: BEvent) {
@@ -385,8 +407,11 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={draw} label="戰鬥畫面" />}
       overlay={<>
+        {intro && <BossIntro phase={intro} form={enc.mon.form} lv={enc.mon.lv} zone={zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
+        {!intro && <>
         <HudBox onOpen={() => setInfo(1)} side={1} d={de} rarity={crew ? undefined : FORMS[de.form].rarity} boss={boss} intent={mode === 'main' || mode === 'skills' ? intent : null} warn={!!intent?.atk && effectiveness(intent.elem, formOf(active(bs, 0)).elems) >= 2} crewLeft={crew ? bs.sides[1].team.filter((m) => m.hp > 0).length : 0} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
-        <HudBox onOpen={() => setInfo(0)} side={0} d={dp} charged={volOf(bs, 0).charged} locked={volOf(bs, 0).lockOn} turns={active(bs, 0).statusTurns} />
+        {anim.current.fade[0] > 0 && <HudBox onOpen={() => setInfo(0)} side={0} d={dp} charged={volOf(bs, 0).charged} locked={volOf(bs, 0).lockOn} turns={active(bs, 0).statusTurns} />}
+        </>}
         {popups.map((p) => {
           const c = monSlot(p.side, disp.current[p.side].form);
           return <span key={p.id} class={`pop ${p.cls}`} style={{ left: `${((c.cx + p.dx) / W) * 100}%`, top: `${((c.cy - 30) / H) * 100}%` }}>{p.label && <small>{p.label}</small>}{p.text}</span>;
@@ -502,6 +527,24 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           </Win>
         </div>
       )} />
+  );
+}
+
+function BossIntro({ phase, form, lv, zone, onSkip }: { phase: 'dark' | 'card' | 'out'; form: string; lv: number; zone: string; onSkip: () => void }) {
+  const f = FORMS[form];
+  return (
+    <div class={`boss-intro ${phase}`} onClick={onSkip} role="button" aria-label="跳過登場畫面">
+      <i class="bi-bar top" /><i class="bi-bar bottom" />
+      {phase !== 'dark' && (
+        <div class="bi-card">
+          <span class="bi-zone">{zone}</span>
+          <b class="bi-name">{f.name}</b>
+          <span class="bi-title">— {BOSS_TITLE[form] ?? '這片海域的支配者'} —</span>
+          <span class="bi-meta"><Elems list={f.elems} /><span class="lv">Lv{lv}</span></span>
+        </div>
+      )}
+      <span class="bi-skip">點一下跳過</span>
+    </div>
   );
 }
 

@@ -476,3 +476,29 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .reduce-fx .pop { animation-duration: 1.2s; }
 .fx-row input[type=checkbox] { width: 1.3em; height: 1.3em; accent-color: #ffcf4a; }
 .fx-row { grid-template-columns: 7em auto 1fr; }
+
+/* 霸主登場畫面 */
+.boss-intro { position: absolute; inset: 0 calc(-1 * var(--bleed, 0px)); z-index: 20; cursor: pointer; overflow: hidden; }
+.boss-intro::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 72% 45%, transparent 18%, rgba(4, 2, 12, 0.75) 70%); animation: bi-fade 0.5s ease-out both; }
+.bi-bar { position: absolute; left: 0; right: 0; height: 15%; background: #000; animation: bi-bar-in 0.45s cubic-bezier(.2,.8,.3,1) both; }
+.bi-bar.top { top: 0; transform-origin: top; } .bi-bar.bottom { bottom: 0; transform-origin: bottom; }
+.boss-intro.out .bi-bar, .boss-intro.out::before { animation: bi-bar-out 0.35s ease-in both; }
+.bi-card { position: absolute; left: 0; top: 30%; display: flex; flex-direction: column; gap: 0.15em; padding: 0.5em 2.4em 0.6em calc(var(--bleed, 0px) + 1.4em);
+  background: linear-gradient(100deg, rgba(150, 16, 40, 0.95) 0%, rgba(90, 8, 30, 0.92) 70%, rgba(90, 8, 30, 0) 100%);
+  border-top: 2px solid #ffcf4a; border-bottom: 2px solid #ffcf4a; clip-path: polygon(0 0, 100% 0, 92% 100%, 0 100%);
+  animation: bi-card-in 0.5s cubic-bezier(.2,.9,.3,1.2) both; }
+.boss-intro.out .bi-card { animation: bi-card-out 0.35s ease-in both; }
+.bi-zone { font-size: max(10px, calc(var(--u) * 3.2)); color: #ffd9a0; letter-spacing: 0.15em; }
+.bi-name { font-size: max(22px, calc(var(--u) * 10)); color: #fff; letter-spacing: 0.1em; text-shadow: 3px 3px 0 #3a0010, 0 0 12px rgba(255, 120, 90, 0.6); animation: bi-name 0.6s 0.15s ease-out both; }
+.bi-title { font-size: max(10px, calc(var(--u) * 3.4)); color: #ffcf4a; }
+.bi-meta { display: flex; gap: 0.6em; align-items: center; margin-top: 0.2em; font-size: max(9px, calc(var(--u) * 3)); }
+.bi-meta .lv { font-family: var(--f-num); color: #fff; }
+.bi-skip { position: absolute; right: calc(var(--bleed, 0px) + 2.5%); top: 3.5%; z-index: 1; font-size: max(9px, calc(var(--u) * 2.8)); color: rgba(255, 255, 255, 0.55); }
+@keyframes bi-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bi-bar-in { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes bi-bar-out { from { transform: scaleY(1); opacity: 1; } to { transform: scaleY(0); opacity: 0; } }
+@keyframes bi-card-in { from { transform: translateX(-105%); } to { transform: translateX(0); } }
+@keyframes bi-card-out { from { transform: translateX(0); opacity: 1; } to { transform: translateX(-30%); opacity: 0; } }
+@keyframes bi-name { from { letter-spacing: 0.6em; opacity: 0; } to { letter-spacing: 0.1em; opacity: 1; } }
+.reduce-fx .boss-intro * , .reduce-fx .boss-intro::before { animation-duration: 0.01s !important; }
+.app:has(.boss-intro) .dock { visibility: hidden; }
