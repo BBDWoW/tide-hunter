@@ -1,5 +1,4 @@
 import { setTimeOfDay } from '../render/scene';
-import { fx } from '../render/fx';
 import { GuardianReward, ZoneCutscene } from './Special';
 import { GodHandScreen, settleGodHand } from './GodHand';
 import { ChestReveal } from './Treasure';
@@ -251,7 +250,6 @@ export function App() {
   return <>
     <HandFilter />
     <main class="app" key={n}>{body}</main>
-    {n > 0 && !fx.reduce && <div class="wave-wipe" key={`w${n}`} aria-hidden="true"><i /><i /></div>}
     {devChest && <div class="frame" style={{ position: 'fixed', inset: 0, zIndex: 100, '--u': `${vp.u}px` }}><ChestReveal loot={{ title: '', text: '', tier: devChest as 'gold', items: [{ icon: 'legendlure', name: '傳說餌 ×1' }, { icon: 'shell', name: '貝殼幣 ×128' }] }} /></div>}
     {devCut && <ZoneCutscene zone={devCut[0] as DomainId} mode={devCut[1] as 'enter' | 'win'} onDone={() => {}} />}
     {newVersion && <UpdateToast version={newVersion} safe={SAFE_TO_UPDATE.has(screen.k)} />}
