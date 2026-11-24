@@ -6,7 +6,7 @@ import { SKILLS } from '../data/skills';
 import { RARITY, STAGE_NAME } from '../data/types';
 import { evolve, evolveTarget, formOf, gainXp, maxHp, skillSlots, xpReward, xpToNext, type Mon } from '../game/creature';
 import { FINAL_ZONE, saveRun, applyBoon, giveHeld, boon, isBoss, markCaught, updateDex, nodeOf, PARTY_MAX, rollBoons, ZONES, type RunState, type ZoneId } from '../game/run';
-import { BOON_TIER, BOONS } from '../data/boons';
+import { BOON_STYLE, BOON_TIER, BOONS } from '../data/boons';
 import { HELD } from '../data/held';
 import { EVO_W, playEvolution } from '../render/evo';
 import type { BattleResult } from './Battle';
@@ -47,6 +47,8 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
       markCaught(enemy.form);
       if (enemy.mutant) updateDex((d) => { d.mutants = (d.mutants ?? 0) + 1; });
       run.caught++;
+      if (boon(run, 'x_thrift') && next(run.rng) < 0.5) { run.catchBait++; out.push({ uid: '_bait', text: '回收網：捕捉餌拿回來了！' }); }
+      if (boon(run, 'x_hunter')) out.push({ uid: '_hunter', text: `獵人之心：全隊攻擊 +${run.caught * 4}%` });
       if (run.party.length < PARTY_MAX) { run.party.push(enemy); out.push({ uid: enemy.uid, text: `${formOf(enemy).name} 加入了隊伍！` }); }
       else q.push({ k: 'full', mon: enemy });
     }
@@ -55,7 +57,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
       // 船隊：每一隻都算經驗（稍微打折），貝殼幣加倍
       const foes = result.team ?? [enemy];
       const reward = Math.floor(foes.reduce((a, f) => a + xpReward(f), 0) * (foes.length > 1 ? 0.75 : 1) * (result.outcome === 'caught' ? 0.7 : 1) * (1 + boon(run, 'xp') * 0.3) * (run.dailyRule?.id === 'strong' ? 1.5 : 1));
-      const coins = Math.floor(foes.reduce((a, f) => a + 8 + f.lv * 2, 0) * (nodeOf(run).kind === 'elite' ? 2 : 1));
+      const coins = Math.floor(foes.reduce((a, f) => a + 8 + f.lv * 2, 0) * (nodeOf(run).kind === 'elite' ? 2 : 1)) + (boon(run, 'L_midas') ? 25 : 0);
       run.shells += coins;
       out.push({ uid: '_coins', text: `獲得 ${coins} 枚貝殼幣（共 ${run.shells}）` });
       // 霸主：額外獎勵（貝殼幣、攜帶道具）
@@ -185,7 +187,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
   );
   else if (stepNow === 'boon' && boonOpts && !boonDone) body = (
     <Win class="big-panel after" title="選一張能力卡">
-      <BoonPick ids={boonOpts} onPick={(id) => { note('_boon', applyBoon(run, id)); if (run.after) run.after.boons = undefined; saveRun(run); setBoonDone(true); setStep('end'); }} />
+      <BoonPick run={run} ids={boonOpts} onPick={(id) => { note('_boon', applyBoon(run, id)); if (run.after) run.after.boons = undefined; saveRun(run); setBoonDone(true); setStep('end'); }} />
     </Win>
   );
   else body = (
@@ -284,16 +286,19 @@ function FullPrompt({ run, mon, onDone }: { run: RunState; mon: Mon; onDone: (t:
   );
 }
 
-function BoonPick({ ids, onPick }: { ids: string[]; onPick: (id: string) => void }) {
+function BoonPick({ ids, onPick, run }: { ids: string[]; onPick: (id: string) => void; run?: RunState }) {
+  // 同流派已經有幾張（提示可以組成流派）
+  const owned = (style?: string) => (run && style ? Object.entries(run.boons ?? {}).filter(([k, n]) => n > 0 && BOONS[k]?.style === style).length : 0);
   return (
     <div class="boon-pick">
       <div class="boon-row">
         {ids.map((id) => {
-          const b = BOONS[id], tier = BOON_TIER[b.tier];
+          const b = BOONS[id], tier = BOON_TIER[b.tier], st = b.style ? BOON_STYLE[b.style] : null, have = owned(b.style);
           return (
-            <button class="boon-card" key={id} style={{ '--tier': tier.color }} onClick={() => onPick(id)}>
-              <span class="boon-tier">{tier.name} · {b.cat}</span>
+            <button class={`boon-card ${b.tier === 'legend' ? 'legend' : ''}`} key={id} style={{ '--tier': tier.color }} onClick={() => onPick(id)}>
+              <span class="boon-tier">{tier.name} · {b.cat}{b.tier === 'legend' ? ' · 一局一張' : ''}</span>
               <b class="boon-name">{b.name}</b>
+              {st && <span class="boon-style" style={{ color: st.color, borderColor: st.color }}>{st.name}{have ? `（已有 ${have} 張）` : ''}</span>}
               <span class="small">{b.desc}</span>
             </button>
           );
@@ -312,7 +317,7 @@ export function ResumeBoon({ vp, run, onDone }: { vp: Viewport; run: RunState; o
         <Win class="big-panel after" title="戰鬥勝利">
           <p class="small dim">上次的戰鬥還沒選能力卡，選一張吧。</p>
           {msg ? <><p class="small accent">{msg}</p><MenuItem onClick={onDone} hot>繼續航行</MenuItem></>
-            : <BoonPick ids={run.after?.boons ?? []} onPick={(id) => { setMsg(applyBoon(run, id)); if (run.after) run.after.boons = undefined; saveRun(run); }} />}
+            : <BoonPick run={run} ids={run.after?.boons ?? []} onPick={(id) => { setMsg(applyBoon(run, id)); if (run.after) run.after.boons = undefined; saveRun(run); }} />}
         </Win>
       } />
   );

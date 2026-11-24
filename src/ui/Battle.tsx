@@ -397,7 +397,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       return;
     }
     // 收線成功 → 被網住，晃動三次
-    const chanceAll = Math.min(0.97, catchChance(foe, quality, boon(run, 'shake') + (run.dailyRule?.id === 'harvest' ? 2 : 0)) * (1 + LANDING_BONUS[enc.landing ?? 'miss'].catch));
+    const chanceAll = Math.min(0.97, catchChance(foe, quality, boon(run, 'shake') + (run.dailyRule?.id === 'harvest' ? 2 : 0)) * (1 + LANDING_BONUS[enc.landing ?? 'miss'].catch) * (boon(run, 'x_tranq') && foe.hp < maxHp(foe) / 3 ? 1.3 : 1));
     const shakes = rollShakes(bs.rng, chanceAll);
     const a = anim.current, c = center(1);
     for (let i = 0; i < 10; i++) { a.fade[1] = 1 - (i + 1) / 10; await wait(30); }

@@ -24,13 +24,15 @@ export const HELD_IDS = Object.keys(HELD) as HeldId[];
 
 /** 屬性共鳴：隊伍裡同屬性的夥伴越多，那個屬性的技能越強 */
 export const RESONANCE = [{ n: 4, bonus: 0.25 }, { n: 3, bonus: 0.15 }];
-export function resonance(elemLists: Elem[][]): Partial<Record<Elem, number>> {
+/** opt.two：2 隻同屬性也算（+10%）；opt.mult：效果倍率（萬物共鳴 ×2） */
+export function resonance(elemLists: Elem[][], opt: { two?: boolean; mult?: number } = {}): Partial<Record<Elem, number>> {
   const count: Partial<Record<Elem, number>> = {};
   for (const l of elemLists) for (const e of new Set(l)) count[e] = (count[e] ?? 0) + 1;
   const out: Partial<Record<Elem, number>> = {};
+  const tiers = opt.two ? [...RESONANCE, { n: 2, bonus: 0.1 }] : RESONANCE;
   for (const [e, n] of Object.entries(count) as [Elem, number][]) {
-    const tier = RESONANCE.find((r) => n >= r.n);
-    if (tier) out[e] = tier.bonus;
+    const tier = tiers.find((r) => n >= r.n);
+    if (tier) out[e] = tier.bonus * (opt.mult ?? 1);
   }
   return out;
 }

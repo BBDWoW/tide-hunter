@@ -24,9 +24,12 @@ export interface Volatile {
   lockOn?: boolean; // 鎖定中：下一次攻擊必定命中且暴擊
   counter?: number; // 本回合的反擊比例
   pearlUsed?: boolean; // 不屈珍珠已經用掉
+  relay?: number; // 接力：下一招的威力倍率
 }
 
-export interface SideMods { atk: number; def: number; energy: number; crit: number; reso?: Partial<Record<Elem, number>> }
+export interface SideMods { atk: number; def: number; energy: number; crit: number; reso?: Partial<Record<Elem, number>>; bn?: Record<string, number> }
+/** 這一方擁有的能力卡層數 */
+const bn = (s: BattleState, side: SideId, id: string) => s.sides[side].mods?.bn?.[id] ?? 0;
 const NO_MODS: SideMods = { atk: 1, def: 1, energy: 0, crit: 0 };
 
 export interface Side {
@@ -37,6 +40,8 @@ export interface Side {
   name: string;
   boss?: boolean; // 霸主：HP 掉到一半時會狂暴一次
   enraged?: boolean;
+  spreadBurn?: boolean; // 燎原：下一隻上場的會被灼傷
+  phoenixUsed?: boolean; // 不死鳥之羽已經用掉
 }
 
 export interface BattleState {
@@ -116,6 +121,11 @@ export function createBattle(rng: Rng, a: SideInit, b: SideInit, wild: boolean, 
   };
   const st: BattleState = { rng, turn: 1, sides: [mk(a), mk(b)], wild, over: null, needSwitch: [false, false], field: null, traps: [0, 0], domain, godhand: godhand ? { survive: 20, rewinds: 0, loveTurn: 0, passion: [], pulled: {}, saved: {} } : undefined };
   for (const side of [0, 1] as SideId[]) bubble(st, side);
+  // 潮汐護甲：先發夥伴開場就有護盾
+  for (const side of [0, 1] as SideId[]) {
+    const n = bn(st, side, 'x_tidearmor'); if (!n) continue;
+    const m = active(st, side), v = volOf(st, side); v.shield = Math.max(v.shield, Math.floor(maxHp(m) * (0.1 + 0.1 * n)));
+  }
   return st;
 }
 
@@ -232,6 +242,10 @@ export function switchIn(s: BattleState, side: SideId, to: number, ev: BEvent[])
   ev.push({ t: 'switch', side, index: to, form: inc.form, hp: inc.hp, energy: sd.vol[inc.uid].energy, status: inc.status });
   ev.push({ t: 'msg', text: side === 0 ? `上吧，${formOf(sd.team[to]).name}！` : `${sd.name}派出了 ${formOf(sd.team[to]).name}！` });
   bubble(s, side, ev);
+  const nv = sd.vol[inc.uid];
+  if (bn(s, side, 'x_surge') && inc.hp > 0) { nv.shield = Math.max(nv.shield, Math.floor(maxHp(inc) * 0.12 * bn(s, side, 'x_surge'))); ev.push({ t: 'shield', side, amount: nv.shield }); }
+  if (bn(s, side, 'x_relay')) nv.relay = 1 + 0.3 * bn(s, side, 'x_relay');
+  if (sd.spreadBurn && inc.hp > 0) { sd.spreadBurn = false; ev.push({ t: 'msg', text: '燎原之火延燒了過來！' }); applyStatus(s, side, 'burn', ev); }
   if ((s.traps?.[side] ?? 0) > 0 && inc.hp > 0) {
     const d = Math.max(1, Math.floor(maxHp(inc) / 8));
     inc.hp = Math.max(0, inc.hp - d);
@@ -413,12 +427,13 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
   if (chained) ev.push({ t: 'msg', text: `趁對手${STATUS_NAME[fx.chain!.id]}，威力提升了！` });
   else if (fx.vsStatus && tgt.status) ev.push({ t: 'msg', text: '趁虛而入，威力提升了！' });
   if (v.charged) ev.push({ t: 'msg', text: '釋放蓄積的力量！' });
-  const hits = fx.multi ? int(s.rng, fx.multi[0], fx.multi[1]) : 1;
+  let hits = fx.multi ? int(s.rng, fx.multi[0], fx.multi[1]) + bn(s, side, 'x_chain') : 1;
+  if (!fx.multi && isBasicAttack(sk.id) && bn(s, side, 'x_echo') && chance(s.rng, 0.4)) { hits = 2; ev.push({ t: 'msg', text: '回音！普攻再打了一次！' }); }
   let total = 0, landed = 0;
   for (let h = 0; h < hits; h++) {
     const target = active(s, foe);
     if (target.hp <= 0 || me.hp <= 0) break;
-    const r = calcDamage(s, side, foe, sk);
+    const r = calcDamage(s, side, foe, sk, h);
     landed++;
     // 格擋：這一下傷害減少 40%
     if (target.status !== 'freeze' && target.status !== 'sleep' && chance(s.rng, blockRate(formOf(target)))) {
@@ -437,7 +452,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
       ev.push({ t: 'msg', text: `${nameOf(s, foe)} 反彈了 ${back} 點傷害！` });
     }
   }
-  v.charged = false; v.lockOn = false;
+  v.charged = false; v.lockOn = false; v.relay = undefined;
   if (hits > 1) ev.push({ t: 'msg', text: `擊中了 ${landed} 次！` });
   const drain = (fx.drain ?? 0) + (held(me, 'leechcoral') ? 0.15 : 0);
   if (drain && total > 0 && me.hp > 0) {
@@ -460,6 +475,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
   }
   if (active(s, foe).hp > 0) {
     if (held(me, 'venomspine') && total > 0 && chance(s.rng, 0.2)) applyStatus(s, foe, 'poison', ev);
+    if (bn(s, side, 'x_ignite') && total > 0 && chance(s.rng, 0.15 * bn(s, side, 'x_ignite'))) applyStatus(s, foe, 'burn', ev);
     if (fx.status && chance(s.rng, statusChance(s, fx.status.id, fx.status.chance))) applyStatus(s, foe, fx.status.id, ev);
     if (fx.stat && !fx.stat.self && chance(s.rng, fx.stat.chance ?? 1)) changeStat(s, foe, fx.stat.key, fx.stat.delta, ev);
   }
@@ -510,7 +526,7 @@ export function effPower(s: BattleState, side: SideId, foe: SideId, sk: Skill): 
   return p;
 }
 
-export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill) {
+export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill, hit = 0) {
   const me = active(s, side), tg = active(s, foe);
   const fm = formOf(me), ft = formOf(tg);
   const vm = volOf(s, side), vt = volOf(s, foe);
@@ -525,8 +541,12 @@ export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill)
   const base = (((2 * me.lv) / 5 + 2) * effPower(s, side, foe, sk) * A) / D / 50 + 2;
   const eff = effectiveness(sk.elem, ft.elems);
   const forced = vm.lockOn || (!!sk.fx?.chain?.crit && tg.status === sk.fx.chain.id);
-  const crit = forced || chance(s.rng, 0.0625 + ma.crit + (held(me, 'scope') ? 0.12 : 0));
-  let mod = eff * (crit ? 1.5 : 1) * range(s.rng, 0.85, 1);
+  const exe = bn(s, side, 'L_execute');
+  const crit = forced || chance(s.rng, 0.0625 + ma.crit + (held(me, 'scope') ? 0.12 : 0) + (exe ? 0.1 : 0));
+  let mod = eff * (crit ? (exe ? 2.5 : 1.5) : 1) * range(s.rng, 0.85, 1);
+  if (tg.status === 'burn' && bn(s, side, 'x_fuel')) mod *= 1 + 0.25 * bn(s, side, 'x_fuel');
+  if (hit > 0 && bn(s, side, 'x_ramp')) mod *= 1 + 0.25 * bn(s, side, 'x_ramp') * hit;
+  if (vm.relay) mod *= vm.relay;
   if (sk.elem && fm.elems.includes(sk.elem)) mod *= 1.3;
   if (sk.elem && ma.reso?.[sk.elem]) mod *= 1 + ma.reso[sk.elem]!;
   if (held(tg, 'shellplate')) mod *= 0.85;
@@ -551,6 +571,13 @@ function dealDamage(s: BattleState, side: SideId, dmg: number, eff: number, crit
   m.hp -= real;
   ev.push({ t: 'dmg', side, amount: real, hp: m.hp, eff, crit, shield: v.shield });
   if (absorbed) ev.push({ t: 'msg', text: `護盾擋下了 ${absorbed} 點傷害！` });
+  const att: SideId = side === 0 ? 1 : 0, am = active(s, att);
+  if (absorbed && bn(s, side, 'x_thorns') && am.hp > 0) {
+    const back = Math.max(1, Math.floor(absorbed * 0.5));
+    am.hp = Math.max(0, am.hp - back);
+    ev.push({ t: 'dmg', side: att, amount: back, hp: am.hp, eff: 1, crit: false, shield: volOf(s, att).shield });
+    ev.push({ t: 'msg', text: `珊瑚刺反彈了 ${back} 點傷害！` });
+  }
   if (crit) ev.push({ t: 'msg', text: '擊中要害！' });
   if (eff >= 2) ev.push({ t: 'msg', text: '效果絕佳！' });
   else if (eff > 0 && eff < 1) ev.push({ t: 'msg', text: '效果不太好……' });
@@ -571,6 +598,15 @@ function checkFaints(s: BattleState, ev: BEvent[]) {
   for (const side of [0, 1] as SideId[]) {
     const m = active(s, side);
     if (m.hp > 0 || s.needSwitch[side]) continue;
+    const sd0 = s.sides[side];
+    if (bn(s, side, 'L_phoenix') && !sd0.phoenixUsed) {
+      sd0.phoenixUsed = true; m.hp = Math.ceil(maxHp(m) * 0.5); m.status = null;
+      ev.push({ t: 'status', side, status: null });
+      ev.push({ t: 'heal', side, amount: m.hp, hp: m.hp });
+      ev.push({ t: 'msg', text: `不死鳥之羽燃起火焰——${nameOf(s, side)} 復活了！` });
+      continue;
+    }
+    if (m.status === 'burn' && bn(s, side === 0 ? 1 : 0, 'x_wildfire')) sd0.spreadBurn = true;
     m.status = null;
     ev.push({ t: 'faint', side });
     ev.push({ t: 'msg', text: `${nameOf(s, side)} 倒下了！` });
@@ -613,7 +649,7 @@ function endOfTurn(s: BattleState, ev: BEvent[]) {
     v.counter = 0;
     if (m.status === 'burn' || m.status === 'poison' || m.status === 'bleed') {
       const passion = m.status === 'burn' && !!s.godhand?.passion.includes(m.uid);
-      const d = passion ? 2 : Math.max(1, Math.floor(mx / (m.status === 'burn' ? 16 : m.status === 'bleed' ? 12 : 10)));
+      const d = passion ? 2 : Math.max(1, Math.floor(mx / (m.status === 'burn' ? 16 : m.status === 'bleed' ? 12 : 10))) * (m.status === 'burn' && bn(s, side === 0 ? 1 : 0, 'x_wildfire') ? 2 : 1);
       const what = passion ? '熱情的火焰' : { burn: '灼傷', poison: '毒', bleed: '流血' }[m.status];
       m.hp = Math.max(0, m.hp - d);
       ev.push({ t: 'dmg', side, amount: d, hp: m.hp, eff: 1, crit: false, shield: v.shield });
@@ -661,7 +697,7 @@ function endOfTurn(s: BattleState, ev: BEvent[]) {
       m.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: m.hp });
     }
     v.turnsIn++;
-    v.energy = Math.min(MAX_ENERGY, v.energy + 1 + (s.domain === 'core' && side === 0 ? 1 : 0) + (hasAb(f, 'tidegod') || hasAb(f, 'dragonpresence') ? 1 : 0));
+    v.energy = Math.min(MAX_ENERGY, v.energy + 1 + (s.domain === 'core' && side === 0 ? 1 : 0) + (bn(s, side, 'L_tideking') ? 1 : 0) + (hasAb(f, 'tidegod') || hasAb(f, 'dragonpresence') ? 1 : 0));
     ev.push({ t: 'energy', side, value: v.energy });
   }
   if (s.over) return;

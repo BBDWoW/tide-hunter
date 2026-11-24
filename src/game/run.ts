@@ -203,7 +203,7 @@ export function foeMods(run: RunState) {
   const re = run.dailyRule?.id === 'element' ? run.dailyRule.elem : undefined;
   return { atk: k, def: k, energy: 0, crit: 0, reso: re ? { [re]: 0.3 } : undefined };
 }
-export const priceMul = (run: RunState) => (1 - (run.perks?.discount ?? 0)) * (starOf(run) >= 2 ? 1.25 : 1) * (run.dailyRule?.id === 'treasure' ? 1.5 : 1);
+export const priceMul = (run: RunState) => (1 - (run.perks?.discount ?? 0)) * (starOf(run) >= 2 ? 1.25 : 1) * (run.dailyRule?.id === 'treasure' ? 1.5 : 1) * (boon(run, 'L_midas') ? 0.7 : 1);
 export const campHealMul = (run: RunState) => (starOf(run) >= 5 ? 0.5 : 1);
 export const pearlMul = (star: number) => 1 + star * 0.2;
 
@@ -504,9 +504,15 @@ export const boon = (run: RunState, id: string) => run.boons?.[id] ?? 0;
 export function rollBoons(run: RunState, better = false): string[] {
   const out: string[] = [];
   for (let guard = 0; out.length < 3 && guard < 80; guard++) {
-    const tier = weighted(run.rng, Object.entries(BOON_TIER).map(([k, v]) => [k, better && k === 'common' ? v.weight * 0.25 : better ? v.weight * 2 : v.weight] as [string, number]));
+    const tier = weighted(run.rng, Object.entries(BOON_TIER).filter(([k]) => k !== 'legend').map(([k, v]) => [k, better && k === 'common' ? v.weight * 0.25 : better ? v.weight * 2 : v.weight] as [string, number]));
     const cands = BOON_LIST.filter((b) => !b.guardian && b.tier === tier && !out.includes(b.id) && (b.instant || boon(run, b.id) < (b.max ?? 99)));
     if (cands.length) out.push(cands[Math.floor(next(run.rng) * cands.length)].id);
+  }
+  // 傳說能力卡：一局最多一張；精英、船隊後比較容易出現
+  const hasLegend = BOON_LIST.some((b) => b.tier === 'legend' && boon(run, b.id) > 0);
+  if (!hasLegend && out.length && next(run.rng) < (better ? 0.2 : 0.05)) {
+    const legends = BOON_LIST.filter((b) => b.tier === 'legend');
+    out[out.length - 1] = legends[Math.floor(next(run.rng) * legends.length)].id;
   }
   return out;
 }
@@ -530,10 +536,10 @@ export function applyBoon(run: RunState, id: string): string {
 }
 export function battleMods(run: RunState) {
   const g = run.dailyRule?.id === 'glass';
-  const reso = resonance(run.party.map((m) => FORMS[m.form].elems));
+  const reso = resonance(run.party.map((m) => FORMS[m.form].elems), { two: !!(boon(run, 'x_duo') || boon(run, 'L_twin')), mult: boon(run, 'L_twin') ? 2 : 1 });
   const re = run.dailyRule?.id === 'element' ? run.dailyRule.elem : undefined;
   if (re) reso[re] = (reso[re] ?? 0) + 0.3;
-  return { atk: (1 + boon(run, 'atk') * 0.1) * (g ? 1.3 : 1), def: (1 + boon(run, 'def') * 0.1) * (g ? 0.7 : 1), energy: boon(run, 'energy') + boon(run, 'g_core'), crit: boon(run, 'crit') * 0.06 + boon(run, 'g_void') * 0.12, reso };
+  return { bn: { ...run.boons }, atk: (1 + boon(run, 'atk') * 0.1) * (g ? 1.3 : 1) * (1 + (boon(run, 'x_hunter') ? run.caught * 0.04 : 0)), def: (1 + boon(run, 'def') * 0.1) * (g ? 0.7 : 1), energy: boon(run, 'energy') + boon(run, 'g_core'), crit: boon(run, 'crit') * 0.06 + boon(run, 'g_void') * 0.12, reso };
 }
 
 export function healParty(run: RunState, ratio: number, revive = false) {
