@@ -204,13 +204,13 @@ export function registerSprites(defs: Record<string, SpriteDef>, size = SIZE) { 
 export const spriteSize = (id: string) => spriteArt(id)?.size ?? SIZES[id] ?? SIZE;
 /** 動畫格數：美術圖有幾格就用幾格（2 格或 6 格），程式畫的固定 2 格 */
 export const spriteFrames = (id: string) => spriteArt(id)?.frames ?? 2;
-/** 依時間取得要畫第幾格：6 格動畫每格約 0.18 秒（跟原本 GIF 一樣），2 格每格約 0.33 秒 */
+/** 依時間取得要畫第幾格：6 格動畫每格 0.3 秒（水母、星砂仔 0.36 秒），2 格每格約 0.33 秒 */
 /** 有些角色的節奏不一樣（毫秒／格），照美術給的動畫清單 */
-const FRAME_MS: Record<string, number> = { starsand: 220, jelly1: 220, jelly2: 220 };
+const FRAME_MS: Record<string, number> = { starsand: 360, jelly1: 360, jelly2: 360 };
 export function animFrame(id: string, t: number, offset = 0): number {
   const n = spriteFrames(id);
   if (n <= 2) return Math.floor(t * 3 + offset) % 2;
-  return Math.floor((t * 1000) / (FRAME_MS[id] ?? 180) + offset * 2) % n;
+  return Math.floor((t * 1000) / (FRAME_MS[id] ?? 300) + offset * 2) % n;
 }
 
 const cellCache = new Map<string, Cell[]>();
