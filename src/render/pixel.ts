@@ -206,7 +206,7 @@ export const spriteSize = (id: string) => spriteArt(id)?.size ?? SIZES[id] ?? SI
 export const spriteFrames = (id: string) => spriteArt(id)?.frames ?? 2;
 /** 依時間取得要畫第幾格：6 格動畫每格約 0.18 秒（跟原本 GIF 一樣），2 格每格約 0.33 秒 */
 /** 有些角色的節奏不一樣（毫秒／格），照美術給的動畫清單 */
-const FRAME_MS: Record<string, number> = { starsand: 220, jelly1: 220 };
+const FRAME_MS: Record<string, number> = { starsand: 220, jelly1: 220, jelly2: 220 };
 export function animFrame(id: string, t: number, offset = 0): number {
   const n = spriteFrames(id);
   if (n <= 2) return Math.floor(t * 3 + offset) % 2;
