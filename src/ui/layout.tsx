@@ -122,15 +122,22 @@ export function GameScreen({ vp, scene, overlay, dock, panel, dockTall, onScene,
     const de = document.documentElement;
     de.classList.toggle('lock', !vp.portrait);
     if (vp.portrait) return;
-    const guard = (e: TouchEvent) => {
-      for (let el = e.target as HTMLElement | null; el && el !== document.body; el = el.parentElement) {
-        const oy = getComputedStyle(el).overflowY, ox = getComputedStyle(el).overflowX;
-        if (((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) || ((ox === 'auto' || ox === 'scroll') && el.scrollWidth > el.clientWidth + 1)) return;
+    // 每次手指按下時判斷一次：落在視窗、清單裡就完全交給瀏覽器捲動（安卓上逐次檢查會卡頓、偶爾捲不動）；
+    // 落在場景空白處才擋掉，避免整頁被拖動
+    let allow = true;
+    const start = (e: TouchEvent) => {
+      const t = e.target as HTMLElement | null;
+      allow = !!t?.closest?.('.win, .panel-layer, .lower-panel, .dock, .item-list, input, textarea, select');
+      if (allow) return;
+      for (let el = t; el && el !== document.body; el = el.parentElement) {
+        const oy = getComputedStyle(el).overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) { allow = true; return; }
       }
-      e.preventDefault();
     };
+    const guard = (e: TouchEvent) => { if (!allow && e.cancelable) e.preventDefault(); };
+    document.addEventListener('touchstart', start, { passive: true });
     document.addEventListener('touchmove', guard, { passive: false });
-    return () => document.removeEventListener('touchmove', guard);
+    return () => { document.removeEventListener('touchstart', start); document.removeEventListener('touchmove', guard); };
   }, [vp.portrait]);
   const lower = (dock || panel) && vp.portrait;
   // 橫向：算出左右要延伸多少（用整個螢幕寬，連瀏海兩側也鋪滿）

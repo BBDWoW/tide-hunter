@@ -646,10 +646,10 @@ html.holding, html.holding body { touch-action: none; overscroll-behavior: none;
 
 /* 橫向：頁面鎖住，不會被拖動 */
 html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
-.panel-layer, .win, .lower-panel { overscroll-behavior: contain; }
+.panel-layer, .big-panel, .lower-panel { overscroll-behavior: contain; }
 
 /* 彈出視窗：只能上下捲、不會左右晃；背景不透明，捲動時後面的字不會透出來 */
-.big-panel, .lower-panel, .item-list { overflow-x: hidden; overscroll-behavior: contain; }
+.big-panel, .lower-panel { overflow-x: hidden; overscroll-behavior: contain; }
 .big-panel { overflow-y: auto; touch-action: pan-y; background: linear-gradient(180deg, #162860, #091032); }
 .big-panel > .win-title.has-close { background: #162860; box-shadow: 0 calc(var(--u) * 1) calc(var(--u) * 1.5) rgba(0, 0, 0, 0.35); }
 .big-panel * { min-width: 0; overflow-wrap: anywhere; }
@@ -767,3 +767,10 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 @keyframes inf-pulse { 50% { transform: scale(1.08); text-shadow: 0 0 8px #fff, 0 0 22px #ffe48a, 0 0 40px #ffb84a, 0 0 60px #c8b4ff; } }
 .reduce-fx .gh-inf { animation: none; }
 .gh-intro .zc-card { padding: 0.6em 2em; gap: 0.2em; }
+
+/* 視窗與清單：明確告訴瀏覽器可以上下捲（安卓 Chrome 依這個決定手勢） */
+.big-panel, .lower-panel, .dex-list, .dex-side { touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+/* 視窗裡的清單不要自己變成捲動區（否則安卓上手指在清單上滑時，捲動會卡在清單、外面的視窗不動） */
+.big-panel .item-list { overflow: visible; overscroll-behavior: auto; }
+/* 直式：視窗在下螢幕，整頁一起捲；視窗本身不要變成捲動區，否則手指在視窗上滑會卡住、頁面不動 */
+.lower-panel, .lower-panel .big-panel { overflow-x: clip; overflow-y: visible; overscroll-behavior: auto; touch-action: auto; }
