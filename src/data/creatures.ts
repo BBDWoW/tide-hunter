@@ -1,6 +1,7 @@
 // 生物資料：一個「形態」就是圖鑑中的一筆。進化關係寫在 evolve。
 import type { Elem, Rarity, Stage } from './types';
 import type { PalName } from '../render/pixel';
+import { EVO2 } from './evolutions2';
 
 export interface Stats { hp: number; atk: number; def: number; spd: number }
 
@@ -55,6 +56,7 @@ export interface Form {
   recolor?: Recolor; // 環境形態：沿用別的圖再換色
   desc: string;
   scale?: number; // 戰鬥畫面中的放大倍率
+  placeholder?: boolean; // 還在用前一階的圖暫代，等新美術
   secret?: boolean; // 不能收集、不會出現在圖鑑和招募（例如神之手）
   no?: number; // 圖鑑編號
   height?: number; // 公尺
@@ -380,6 +382,19 @@ const F: Form[] = [
     base: { hp: 74, atk: 66, def: 94, spd: 36 }, ability: 'sturdy', learn: [[15, 'rockslide'], [16, 'reefspikes'], [17, 'icebeam']], desc: '在冰封峽灣進化的火山蝸。殼上的火山結冰了，噴出的是雪。' },
 ];
 
+// 第二波進化：補上原本不會進化的角色的下一個形態
+for (const e of EVO2) {
+  const p = F.find((f) => f.id === e.from);
+  if (!p || F.some((f) => f.id === e.id)) continue;
+  const up = (v: number) => Math.round(v * e.mult);
+  (p.evolve ??= []).push({ to: e.id, level: e.level });
+  F.push({
+    id: e.id, name: e.name, family: p.family, stage: e.stage, rarity: p.rarity, category: p.category, elems: e.elems ?? p.elems,
+    sprite: p.sprite, pal: p.pal, recolor: e.look, scale: e.scale * (p.scale ?? 1), placeholder: true,
+    base: { hp: up(p.base.hp), atk: up(p.base.atk), def: up(p.base.def), spd: up(p.base.spd) }, ability: p.ability, extra: p.extra,
+    learn: e.learn, desc: e.desc,
+  });
+}
 export const FORMS: Record<string, Form> = Object.fromEntries(F.map((f) => [f.id, f]));
 export const STARTERS = ['water1', 'fire1', 'grass1'];
 
