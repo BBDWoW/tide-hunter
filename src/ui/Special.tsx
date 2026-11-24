@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { sfx } from '../audio/engine';
 import { DOMAINS, type DomainId } from '../data/domains';
 import { GUARDIAN } from '../game/guardian';
+import { EGG_DROP, EGG_INFO } from '../game/eggs';
 import { leaveSpecial, saveRun, ZONES, type RunState } from '../game/run';
 import { fx } from '../render/fx';
 import { drawSea } from '../render/scene';
@@ -265,7 +266,8 @@ export function GuardianReward({ vp, run, onDone }: { vp: Viewport; run: RunStat
   const pick = (i: number) => {
     const rw = g.rewards[i];
     run.shells += g.bonus;
-    const text = rw.apply(run);
+    let text = rw.apply(run);
+    if (Math.random() < EGG_DROP.guardian) { (run.eggs ??= []).push(zone); text += `守護者還留下了一顆「${EGG_INFO[zone].name}」！`; }
     run.guardianWin = undefined;
     leaveSpecial(run);
     saveRun(run);

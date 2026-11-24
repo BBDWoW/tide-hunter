@@ -1,6 +1,7 @@
 import { HELD, HELD_IDS, resonance, type HeldId } from '../data/held';
 // 一局冒險的狀態：隊伍、道具、航程站點、存檔
 import { ABYSS_POOL, CORE_POOL, CYBER_POOL, FOREST_POOL, FORMS, ICE_POOL, LAVA_POOL, VOID_POOL, ZONE1_POOL } from '../data/creatures';
+import type { EggZone } from './eggs';
 import { effectiveness, ELEM, RARITY_ORDER, type Elem, type Rarity } from '../data/types';
 import { formOf, makeMon, makeMutant, maxHp, MUTANT_CHANCE, type Mon } from './creature';
 import { int, makeRng, newSeed, next, weighted, type Rng } from './rng';
@@ -154,6 +155,7 @@ export interface RunState {
   zoneNo: number; // 第幾片海域（0 起算）
   pendingZone?: boolean; // 已打倒霸主、還沒選下一片海域
   dailyRule?: { id: DailyRuleId; elem?: Elem }; // 每日挑戰的今日規則
+  eggs?: EggZone[]; // 這一局拿到的潮汐卵（冒險結束時放進棲息灣）
   godHand?: GodHandEvent; // 超特殊事件：神之手（打倒霸主後 0.5%）
   guardianWin?: ZoneId; // 打倒了守護者、還沒選獎勵（存檔後可以接著選）
   returnTo?: { zone: ZoneId; route: RouteNode[][]; station: number; path: number[] }; // 在特殊區域時，原本的航線
@@ -239,6 +241,8 @@ export function dailyRuleInfo(rule: { id: DailyRuleId; elem?: Elem }): { name: s
   } as const)[rule.id];
 }
 export const ruleOf = (run: RunState) => run.dailyRule?.id;
+/** 這片海域掉的蛋是哪一種 */
+export const eggZoneOf = (run: RunState): EggZone => run.zone as EggZone;
 /** 今天的每日挑戰夥伴（從第一片海域的 N／B 幼體和御三家裡挑） */
 export function dailyPartner(day: string): Mon {
   const rng = makeRng(dailySeed(day) ^ 0x5bd1e995);
@@ -490,6 +494,7 @@ export function rollTreasure(run: RunState, kind: 'treasure' | 'junk', bonus = 0
   if (tier === 'wood') give(W([['shellsS', 40], ['bait', 25], ['potion', 25], ['ether', 10]]));
   else if (tier === 'silver') give(W([['shellsM', 26], ['held', 22], ['potion2', 14], ['bait2', 12], ['revive', 10], ['star', 10], ['elixir', 6]]));
   else {
+    if (next(r) < 0.03) { (run.eggs ??= []).push(eggZoneOf(run)); items.push({ icon: 'egg', name: '潮汐卵！' }); }
     const first = W([['held', 40], ['legend', 18], ['star', 22], ['life', 10], ['elixir2', 10]]);
     give(first);
     give(W([['shellsL', 40], ['revive2', 25], ['bait2', 20], ['held', first === 'held' ? 0 : 15]]));

@@ -119,7 +119,7 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
             {hasSave && <MenuItem onClick={onContinue} hot>繼續冒險</MenuItem>}
             <MenuItem onClick={guard('new', openNew)} hot={!hasSave} sub={maxStar > 0 && (meta.star ?? 0) > 0 ? '★'.repeat(meta.star ?? 0) : undefined}>新的冒險</MenuItem>
             {meta.runs > 0 && <MenuItem onClick={() => setDailyInfo(true)} sub={todayRule.name}>每日挑戰</MenuItem>}
-            {meta.bay.length > 0 && <MenuItem onClick={onBay} sub={`${meta.bay.length}/${bayCap(meta)}`}>棲息灣</MenuItem>}
+            {meta.bay.length > 0 && <MenuItem onClick={onBay} sub={(meta.eggs ?? []).some((e) => e.left <= 0) ? '● 蛋要孵化了' : `${meta.bay.length}/${bayCap(meta)}`}>棲息灣</MenuItem>}
             <MenuItem onClick={onPort} sub={claimable(meta, achStats(meta, dex)) ? `● 成就可領　◆ ${meta.pearls}` : `◆ ${meta.pearls}`}>港口</MenuItem>
             <MenuItem onClick={onDex} sub={`${dex.caught.length}/${Object.values(FORMS).filter((f) => !f.secret).length}`}>圖鑑</MenuItem>
           </Win>
@@ -632,6 +632,8 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
           <p class="small">釣點、精英釣點、寶藏點、神秘事件、漂流商店、營地，還有 <b>馴潮船隊</b>：2–3 隻對手輪番上陣、不能收服，但經驗、貝殼幣更多，還一定會留下攜帶道具。營地只能做一件事：休息、特訓或探索。商店可以花貝殼幣換一批攜帶道具。</p>
           <h3>攜帶道具與屬性共鳴</h3>
           <p class="small">每隻夥伴可以帶一個攜帶道具（鯊齒、硬殼片、吸血珊瑚、不屈珍珠……），從寶箱、精英、船隊、營地、商店和事件取得，在隊伍畫面裝上或更換。隊伍裡同屬性的夥伴有 3 隻時，該屬性的技能威力 +15%，4 隻以上 +25%。</p>
+          <h3>潮汐卵</h3>
+          <p class="small">打倒霸主（20%）、神秘區域的守護者（35%），或開到黃金寶箱（很少見）時，有機會拿到那片海域的<b>潮汐卵</b>。冒險結束後蛋會放進棲息灣的巢（最多 3 顆），每出海一局前進一格，時間到就能孵化。孵化有 25% 機率失敗，可以花珍珠<b>暖蛋</b>降低失敗率（每次 −8%，最多 3 次）。孵出來的夥伴一定帶一招平常學不到的<b>遺傳技</b>，異變的機率也比較高。</p>
           <h3>能力卡的流派</h3>
           <p class="small">有些能力卡屬於某個<b>流派</b>（灼燒流、護盾流、連擊流、捕捉流、共鳴流），同流派的卡會互相加乘，越收越強。偶爾還會出現粉紅色的<b>傳說能力卡</b>，效果非常強大，但一局只能拿一張；打贏精英和船隊之後比較容易出現。</p>
           <h3>潮位與每日挑戰</h3>
@@ -703,6 +705,7 @@ export function End({ vp, run, win, pearls, onTitle }: { vp: Viewport; run: RunS
       panel={
         <Win class="big-panel end" title={win ? `${zoneOf(run).name}的霸主已被擊敗！` : '航程結束'}>
           <p>{win ? '恭喜通關！帶著收穫回到港口吧。' : '隊伍全部倒下了。回港口整頓一下，再出海一次吧。'}</p>
+          {(run.eggs?.length ?? 0) > 0 && <p class="small accent"><Icon name="egg" /> 帶回了 {run.eggs!.length} 顆潮汐卵，已經放進棲息灣的巢（巢滿了的話換成珍珠）。</p>}
           {run.daily && <p class="small accent">每日挑戰（{run.daily}）：今日最佳 {meta.daily?.best ?? 0} 站{pearls === 0 ? '・今天的珍珠已經領過了' : ''}。每日挑戰的夥伴不會帶回棲息灣。</p>}
           {!run.daily && (run.star ?? 0) > 0 && <p class="small accent">潮位 {'★'.repeat(run.star ?? 0)}：珍珠 +{(run.star ?? 0) * 20}%{win && (meta.maxStar ?? 0) > (run.star ?? 0) ? `・解鎖了 ★${meta.maxStar}！` : ''}</p>}
           <div class="end-stats">

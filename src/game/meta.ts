@@ -4,6 +4,7 @@ import { SKILLS } from '../data/skills';
 import { STAGE_SLOTS } from '../data/types';
 import { ancestryOf, makeMon, maxHp, newUid, rollIv, type Mon } from './creature';
 import type { Rarity } from '../data/types';
+import type { Egg } from './eggs';
 
 export type UpgradeId = 'bait' | 'rod' | 'discount' | 'supply' | 'bay' | 'star' | 'school' | 'herbal' | 'kiln' | 'legend' | 'cabin';
 export const UPGRADES: Record<UpgradeId, { name: string; desc: (lv: number) => string; costs: number[] }> = {
@@ -76,6 +77,7 @@ export interface Meta {
   maxStar?: number; // 已解鎖的最高潮位
   star?: number; // 上次選的潮位
   daily?: { day: string; best: number; win: boolean; paid: boolean }; // 每日挑戰紀錄
+  eggs?: Egg[]; // 棲息灣裡的潮汐卵
 }
 
 const KEY = 'tidehunter.meta.v1';

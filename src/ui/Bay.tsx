@@ -9,6 +9,7 @@ import { drawPort } from '../render/scene';
 import { Elems, IvStars, RarityTag, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
+import { EggNest } from './Egg';
 
 export function Bay({ vp, onBack, onGacha, hint }: { vp: Viewport; onBack: () => void; onGacha: () => void; hint?: string }) {
   const [meta, setMeta] = useState(loadMeta);
@@ -52,6 +53,7 @@ export function Bay({ vp, onBack, onGacha, hint }: { vp: Viewport; onBack: () =>
               </div>
             </div>
           )}
+          {((meta.eggs?.length ?? 0) > 0) && <><h3 class="sub-h"><Icon name="egg" /> 潮汐卵的巢</h3><EggNest onChange={(msg) => { refresh(); setNote(msg); }} /></>}
           <h3 class="sub-h">所有夥伴</h3>
           {list.length ? (
             <div class="bay-grid">

@@ -1,6 +1,7 @@
 import { setTimeOfDay } from '../render/scene';
 import { GuardianReward, ZoneCutscene } from './Special';
 import { GodHandScreen, settleGodHand } from './GodHand';
+import { settleEggs } from '../game/eggs';
 import { ChestReveal } from './Treasure';
 import type { DomainId } from '../data/domains';
 // 開發用：網址加 ?cut=forest-enter 可以直接看過場動畫
@@ -114,6 +115,8 @@ export function App() {
       d.paid = true; meta.daily = d;
     } else if (win && (r.star ?? 0) >= (meta.maxStar ?? 0) && (meta.maxStar ?? 0) < MAX_STAR) meta.maxStar = (r.star ?? 0) + 1;
     meta.pearls += pearls; meta.totalPearls += pearls; meta.runs++;
+    // 潮汐卵：棲息灣的蛋前進一格，這局拿到的蛋放進去
+    settleEggs(meta, r.eggs ?? []);
     saveMeta(meta);
     returnFromRun(meta, r.party);
     updateDex((d) => { d.bestStation = Math.max(d.bestStation, totalStation(r)); if (win) d.clears++; });

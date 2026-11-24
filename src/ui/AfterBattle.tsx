@@ -5,7 +5,8 @@ import { FORMS } from '../data/creatures';
 import { SKILLS } from '../data/skills';
 import { RARITY, STAGE_NAME } from '../data/types';
 import { evolve, evolveTarget, formOf, gainXp, maxHp, skillSlots, xpReward, xpToNext, type Mon } from '../game/creature';
-import { FINAL_ZONE, saveRun, applyBoon, giveHeld, boon, isBoss, markCaught, updateDex, nodeOf, PARTY_MAX, rollBoons, ZONES, type RunState, type ZoneId } from '../game/run';
+import { EGG_DROP, EGG_INFO } from '../game/eggs';
+import { eggZoneOf, FINAL_ZONE, saveRun, applyBoon, giveHeld, boon, isBoss, markCaught, updateDex, nodeOf, PARTY_MAX, rollBoons, ZONES, type RunState, type ZoneId } from '../game/run';
 import { BOON_STYLE, BOON_TIER, BOONS } from '../data/boons';
 import { HELD } from '../data/held';
 import { EVO_W, playEvolution } from '../render/evo';
@@ -67,6 +68,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
         run.shells += bonus;
         out.push({ uid: '_coins', text: `霸主的寶藏：${bonus} 枚貝殼幣！（共 ${run.shells}）` });
         const h = giveHeld(run); out.push({ uid: '_held', text: `霸主守護的攜帶道具「${HELD[h].name}」！` });
+        if (next(run.rng) < EGG_DROP.boss) { (run.eggs ??= []).push(eggZoneOf(run)); out.push({ uid: '_egg', text: `霸主的巢裡留下了一顆「${EGG_INFO[eggZoneOf(run)].name}」！冒險結束後會送回棲息灣。` }); }
       }
       if (!bossWin && (result.team || (nodeOf(run).kind === 'elite' && next(run.rng) < 0.5))) { const h = giveHeld(run); out.push({ uid: '_held', text: `${result.team ? "船隊留下" : "菁英掉落"}了攜帶道具「${HELD[h].name}」！` }); }
       for (const m of run.party) {
