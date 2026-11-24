@@ -1,7 +1,7 @@
 // 場景繪製（256×144 像素）：海景全景、戰鬥地形、釣魚、標題、海圖、海底
 import { FORMS, recolorOf } from '../data/creatures';
 import { ELEM, type Elem } from '../data/types';
-import { drawSprite, drawSpriteMini, PAL, spriteSize } from './pixel';
+import { animFrame, drawSprite, drawSpriteMini, PAL, spriteSize } from './pixel';
 import { sceneArt } from './art';
 import { fx, partMul } from './fx';
 
@@ -385,7 +385,7 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
   for (const [i, m] of mons.entries()) {
     if (!m || m.alpha <= 0) continue;
     const f = FORMS[m.form];
-    const fr = Math.floor(t * 3 + i) % 2;
+    const fr = animFrame(f.sprite, t, i);
     const sx = m.x + m.lunge * (m.flip ? -1 : 1) + (m.shake ? Math.round(Math.sin(t * 60) * 2) : 0);
     // 待機：呼吸般上下浮動，偶爾小跳一下；HP 很低時動作變慢、會發抖
     const ph = (t + i * 1.7) % (m.low ? 5 : 3.4);
@@ -689,7 +689,7 @@ export function drawStarterScene(ctx: CanvasRenderingContext2D, t: number, forms
     const f = FORMS[id], n = spriteSize(f.sprite);
     const jump = i === sel ? Math.round(Math.abs(Math.sin(t * 3)) * -4) : 0;
     shadow(ctx, p.x, p.y, 13);
-    drawSprite(ctx, f.sprite, PAL[f.pal], p.x - n / 2, p.y - n + 3 + jump, { f: Math.floor(t * 3 + i) % 2, alpha: i === sel ? 1 : 0.85, recolor: recolorOf(id) });
+    drawSprite(ctx, f.sprite, PAL[f.pal], p.x - n / 2, p.y - n + 3 + jump, { f: animFrame(f.sprite, t, i), alpha: i === sel ? 1 : 0.85, recolor: recolorOf(id) });
   });
 }
 
@@ -717,7 +717,7 @@ export function drawPort(ctx: CanvasRenderingContext2D, t: number, bay: { id: st
     const x = 64 + (i % 5) * 38 + (i >= 5 ? 19 : 0) + Math.sin(t * 0.5 + i * 1.7) * 6, y = 70 + (i >= 5 ? 22 : 0) + Math.sin(t * 1.3 + i) * 1.5;
     const flip = Math.cos(t * 0.5 + i * 1.7) < 0;
     shadowMini(ctx, x, y + n / 2 - 1, n);
-    drawSpriteMini(ctx, f.sprite, PAL[f.pal], Math.round(x - n / 2), Math.round(y - n / 2), { f: Math.floor(t * 3 + i) % 2, flip, recolor: recolorOf(id, mutant) });
+    drawSpriteMini(ctx, f.sprite, PAL[f.pal], Math.round(x - n / 2), Math.round(y - n / 2), { f: animFrame(f.sprite, t, i), flip, recolor: recolorOf(id, mutant) });
   });
 }
 function shadowMini(ctx: CanvasRenderingContext2D, cx: number, cy: number, n: number) {
@@ -964,7 +964,7 @@ export function drawGacha(ctx: CanvasRenderingContext2D, t: number, dt: number, 
     ctx.globalAlpha = 0.25 + q * 0.3;
     for (let r = 30; r > 8; r -= 4) pxCircle(ctx, Math.round(cx), Math.round(cy), r, r % 8 ? glow : '#ffffff');
     ctx.globalAlpha = 1;
-    drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(cx - n / 2), Math.round(cy - n / 2), { f: Math.floor(t * 3) % 2, recolor: recolorOf(v.form, v.mutant) });
+    drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(cx - n / 2), Math.round(cy - n / 2), { f: animFrame(f.sprite, t), recolor: recolorOf(v.form, v.mutant) });
     if (k < 0.1) for (let i = 0; i < 24; i++) { const a = Math.random() * Math.PI * 2, sp = 20 + Math.random() * 50; v.parts.push({ x: POOL.x, y: POOL.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 30, g: 120, life: 0.8, max: 0.8, color: i % 3 ? '#e8fbff' : glow, size: 2 }); }
   }
   stepParts(ctx, v.parts, dt);

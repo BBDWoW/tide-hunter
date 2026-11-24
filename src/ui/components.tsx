@@ -3,15 +3,16 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { ABILITIES, abilitiesOf, FORMS, recolorOf } from '../data/creatures';
 import { ELEM, RARITY, STAGE_NAME, type Elem, type Rarity } from '../data/types';
-import { drawSprite, PAL, spriteSize } from '../render/pixel';
+import { animFrame, drawSprite, PAL, spriteSize } from '../render/pixel';
 import { SKILLS } from '../data/skills';
 import { GUARD_THRESHOLD, IV_LABELS, ivStars as ivStarsOf, styleRatio, type Mon } from '../game/creature';
 
-// 所有小圖共用一個動畫節拍
-let frame = 0;
-const subs = new Set<(f: number) => void>();
+// 所有小圖共用一個動畫時鐘（每 0.09 秒檢查一次，各自依格數換格）
+let clock = 0;
+const subs = new Set<(t: number) => void>();
 if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-  setInterval(() => { frame ^= 1; subs.forEach((fn) => fn(frame)); }, 330);
+  const t0 = performance.now();
+  setInterval(() => { clock = (performance.now() - t0) / 1000; subs.forEach((fn) => fn(clock)); }, 90);
 }
 
 export function Sprite({ form, size = 96, flip = false, silhouette = false, still = false, mutant = false }: { form: string; size?: number; flip?: boolean; silhouette?: boolean; still?: boolean; mutant?: boolean }) {
@@ -20,11 +21,14 @@ export function Sprite({ form, size = 96, flip = false, silhouette = false, stil
     const c = ref.current!, ctx = c.getContext('2d')!, f = FORMS[form];
     const n = spriteSize(f?.sprite ?? '');
     c.width = n; c.height = n;
-    const draw = (fr: number) => {
+    let last = -1;
+    const draw = (t: number) => {
+      const fr = f ? animFrame(f.sprite, t) : 0;
+      if (fr === last) return; last = fr;
       ctx.clearRect(0, 0, n, n);
       if (f) drawSprite(ctx, f.sprite, PAL[f.pal], 0, 0, { f: fr, flip, tint: silhouette ? '#1d2a55' : undefined, recolor: recolorOf(form, mutant) });
     };
-    draw(frame);
+    draw(clock);
     if (still || silhouette) return;
     subs.add(draw);
     return () => { subs.delete(draw); };

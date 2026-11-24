@@ -202,6 +202,13 @@ const SIZES: Record<string, number> = {};
 // size：畫布邊長（一般 48，傳說級 64）
 export function registerSprites(defs: Record<string, SpriteDef>, size = SIZE) { Object.assign(DEFS, defs); for (const k of Object.keys(defs)) SIZES[k] = size; }
 export const spriteSize = (id: string) => spriteArt(id)?.size ?? SIZES[id] ?? SIZE;
+/** 動畫格數：美術圖有幾格就用幾格（2 格或 6 格），程式畫的固定 2 格 */
+export const spriteFrames = (id: string) => spriteArt(id)?.frames ?? 2;
+/** 依時間取得要畫第幾格：6 格動畫每格約 0.18 秒（跟原本 GIF 一樣），2 格每格約 0.33 秒 */
+export function animFrame(id: string, t: number, offset = 0): number {
+  const n = spriteFrames(id);
+  return n <= 2 ? Math.floor(t * 3 + offset) % 2 : Math.floor(t * 5.5 + offset * 2) % n;
+}
 
 const cellCache = new Map<string, Cell[]>();
 export function spriteCells(id: string, f = 0): Cell[] {
