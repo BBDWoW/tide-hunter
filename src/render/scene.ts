@@ -596,7 +596,7 @@ const FISHER_COL: Record<string, string> = {
   o: '#1b1a2e', H: '#e8c26a', h: '#b8903e', L: '#fff3b0', b: '#d23a5a', K: '#5a3a24', S: '#ffd9b8', s: '#e8a98a', e: '#1b1a2e', c: '#ff9a9a',
   Y: '#ffcf4a', y: '#d9962a', P: '#2a3a6a', p: '#1e2a50', B: '#3a2a20',
 };
-const fisherCanvas = (blink: boolean) => cached(`fisher-${blink}`, 16, FISHER.length, (x) => {
+export const fisherCanvas = (blink: boolean) => cached(`fisher-${blink}`, 16, FISHER.length, (x) => {
   FISHER.forEach((row, r) => [...row].forEach((ch, c) => {
     if (ch === '.') return;
     x.fillStyle = blink && ch === 'e' ? FISHER_COL.S : ch === 'L' && r >= 11 ? '#fff09a' : FISHER_COL[ch];

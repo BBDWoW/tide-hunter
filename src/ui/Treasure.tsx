@@ -13,7 +13,7 @@ const PAL: Record<Exclude<ChestTier, 'junk'>, { body: string; dark: string; band
 };
 const rnd = (i: number) => { const x = Math.sin(i * 91.7 + 13.3) * 43758.5453; return x - Math.floor(x); };
 
-function drawChest(c: CanvasRenderingContext2D, tier: Exclude<ChestTier, 'junk'>, t: number) {
+export function drawChest(c: CanvasRenderingContext2D, tier: Exclude<ChestTier, 'junk'>, t: number) {
   const P = PAL[tier];
   c.clearRect(0, 0, CW, CH);
   const drop = Math.min(1, t / 0.35), bounce = t > 0.35 && t < 0.55 ? Math.sin(((t - 0.35) / 0.2) * Math.PI) * 4 : 0;
