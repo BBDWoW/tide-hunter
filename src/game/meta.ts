@@ -132,10 +132,12 @@ export const ROD_RATES: [Tier, number][] = [['broken', 10], ['N', 55], ['B', 25]
 export const TURN_RATES: Partial<Record<Tier, number>> = { broken: 0.15, N: 0.08, B: 0.06, A: 0.04, S: 0.03 };
 export const ROD_NAME: Record<Tier, string> = { broken: '破損釣竿', N: '普通釣竿', B: '綠色釣竿', A: '藍色釣竿', S: '紅色釣竿', SSR: '金色釣竿' };
 
-/** 可以抽到的生物：每一族的最初型態（包含霸主，不含環境形態） */
+/** 五片海域的霸主：只能靠超特殊事件「神之手」得到，抽不到 */
+export const ZONE_BOSSES = new Set(['whale', 'frostking', 'lavadragon', 'mainframe_leviathan', 'nether_whale']);
+/** 可以抽到的生物：每一族的最初型態（不含霸主、環境形態） */
 export function gachaPool(r: Rarity): string[] {
   const targets = new Set(Object.values(FORMS).flatMap((f) => (f.evolve ?? []).map((e) => e.to)));
-  return Object.values(FORMS).filter((f) => !f.secret && !targets.has(f.id) && !f.recolor && f.rarity === r).map((f) => f.id);
+  return Object.values(FORMS).filter((f) => !f.secret && !ZONE_BOSSES.has(f.id) && !targets.has(f.id) && !f.recolor && f.rarity === r).map((f) => f.id);
 }
 export interface PullResult { rod: Tier; path: Tier[]; tier: Tier; form: string | null; mutant: boolean; bayId?: string }
 export function rollPull(rnd: () => number = Math.random): PullResult {

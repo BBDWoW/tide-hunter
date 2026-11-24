@@ -204,7 +204,7 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
           )}
           {tab === 'recruit' && (
             <div class="item-list">
-              <p>在港口邊拋下釣竿，就有機會釣到新的夥伴！所有生物都可能出現，連霸主也是。</p>
+              <p>在港口邊拋下釣竿，就有機會釣到新的夥伴！各種生物都可能出現（霸主除外，霸主只能在冒險中靠特別的機緣得到）。</p>
               <p class="small dim">一次 ◆ 200，十連 ◆ 1800。釣竿的顏色代表稀有度，水面變色就是「轉」，會再升一級。稀有的夥伴非常難釣到。</p>
               <MenuItem onClick={onGacha} hot><Icon name="rod" /> 前往招募</MenuItem>
             </div>
