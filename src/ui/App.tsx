@@ -1,3 +1,5 @@
+import { setTimeOfDay } from '../render/scene';
+import { fx } from '../render/fx';
 import { GuardianReward, ZoneCutscene } from './Special';
 import { GodHandScreen, settleGodHand } from './GodHand';
 import { ChestReveal } from './Treasure';
@@ -9,7 +11,7 @@ const devGH = import.meta.env.DEV && new URLSearchParams(location.search).has('g
 const devCut = import.meta.env.DEV ? new URLSearchParams(location.search).get('cut')?.split('-') ?? null : null;
 import { HandFilter } from './Icon';
 import { useEffect, useState } from 'preact/hooks';
-import { GODHAND_CHANCE, rollGodHand, dailyPartner, MAX_STAR, pearlMul, todayKey, boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollCrew, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
+import { NIGHT_STYLE, timeOfDay, GODHAND_CHANCE, rollGodHand, dailyPartner, MAX_STAR, pearlMul, todayKey, boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollCrew, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
 import { AfterBattle, ResumeBoon } from './AfterBattle';
 import { Battle, type BattleResult } from './Battle';
 import { Fishing } from './Fishing';
@@ -91,6 +93,9 @@ export function App() {
   // 背景音樂：依畫面與所在海域切換
   useEffect(() => {
     const k = screen.k, theme = run && !['title', 'port', 'dex', 'help', 'starter', 'end'].includes(k) ? zoneTheme(run) : 'sunset';
+    // 時段：冒險中依站數決定；主畫面、港口、圖鑑固定白天
+    const inRun = run && !['title', 'port', 'dex', 'help', 'starter', 'end', 'bay', 'gacha', 'zonepick', 'guardian', 'godhand'].includes(k);
+    setTimeOfDay(inRun ? timeOfDay(run!) : 'day', run ? NIGHT_STYLE[run.zone] : 'cute');
     const ghFight = k === 'battle' && !!(screen as { enc?: Encounter }).enc?.godhand;
     if (k === 'godhand' || ghFight) { setScene(ghFight ? 'godfight' : 'godhand', 'godhand'); return; }
     const song: SongId = k === 'battle' ? (boss ? 'boss' : 'battle') : k === 'fishing' ? 'fish' : ['voyage', 'event', 'zonepick', 'after'].includes(k) ? 'voyage' : 'bay';
@@ -246,6 +251,7 @@ export function App() {
   return <>
     <HandFilter />
     <main class="app" key={n}>{body}</main>
+    {n > 0 && !fx.reduce && <div class="wave-wipe" key={`w${n}`} aria-hidden="true"><i /><i /></div>}
     {devChest && <div class="frame" style={{ position: 'fixed', inset: 0, zIndex: 100, '--u': `${vp.u}px` }}><ChestReveal loot={{ title: '', text: '', tier: devChest as 'gold', items: [{ icon: 'legendlure', name: '傳說餌 ×1' }, { icon: 'shell', name: '貝殼幣 ×128' }] }} /></div>}
     {devCut && <ZoneCutscene zone={devCut[0] as DomainId} mode={devCut[1] as 'enter' | 'win'} onDone={() => {}} />}
     {newVersion && <UpdateToast version={newVersion} safe={SAFE_TO_UPDATE.has(screen.k)} />}

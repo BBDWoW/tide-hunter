@@ -127,6 +127,23 @@ export const ZONES: Record<ZoneId, ZoneInfo> = {
   },
 };
 export const zoneOf = (run: RunState) => ZONES[run.zone ?? 'shallows'];
+
+// ── 白天／黃昏／夜晚：跟著站數走，霸主（最後一站）一定在深夜 ──
+export type TimeOfDay = 'day' | 'dusk' | 'night';
+export function timeOfDay(run: RunState, station = run.station): TimeOfDay {
+  const last = Math.max(1, run.route.length - 1), p = station / last;
+  return p >= 0.7 ? 'night' : p >= 0.45 ? 'dusk' : 'day';
+}
+/** 各海域夜晚的氣氛：可愛神祕（螢光、星空）或帶點恐怖（黑影、眼睛） */
+export const NIGHT_STYLE: Record<ZoneId, 'cute' | 'spooky'> = { shallows: 'cute', ice: 'cute', lava: 'cute', forest: 'cute', core: 'cute', cyber: 'spooky', abyss: 'spooky', void: 'spooky' };
+export const TOD_INFO: Record<TimeOfDay, { name: string; desc: string }> = {
+  day: { name: '白天', desc: '風平浪靜。' },
+  dusk: { name: '黃昏', desc: '天色變暗，海裡的生物開始活躍：野生潮靈等級 +1，稍微容易遇到大魚。' },
+  night: { name: '夜晚', desc: '夜晚的海很危險也很迷人：野生潮靈等級 +2，大魚和異變個體更常出現，寶箱也比較好。' },
+};
+/** 時段造成的影響 */
+const todLv = (run: RunState) => ({ day: 0, dusk: 1, night: 2 })[timeOfDay(run)];
+const todLuck = (run: RunState) => ({ day: 0, dusk: 0.5, night: 1 })[timeOfDay(run)];
 export const spotName = (run: RunState, spot: SpotKind) => zoneOf(run).spots[spot];
 const firstStop = (run: RunState) => run.zoneNo === 0 && run.station === 0;
 
@@ -301,7 +318,7 @@ export type ShadowKind = 'fish' | 'treasure' | 'junk';
 export interface Shadow { size: 1 | 2 | 3; kind: ShadowKind; rarity: Rarity; x: number }
 
 export function rollShadows(run: RunState, lure: LureId, fishOnly = false): Shadow[] {
-  const r = run.rng, luck = boon(run, 'lucky');
+  const r = run.rng, luck = boon(run, 'lucky') + todLuck(run);
   const node = nodeOf(run);
   if (node.kind === 'boss') return [{ size: 3, kind: 'fish', rarity: FORMS[zoneOf(run).boss].rarity, x: 170 }];
   if (node.kind === 'treasure') return [118, 168, 218].map((x, i) => ({ size: (i === 1 ? 3 : 2) as 2 | 3, kind: 'treasure' as const, rarity: 'N' as Rarity, x }));
@@ -342,7 +359,7 @@ export function rollCrew(run: RunState): Encounter {
   const team: Mon[] = [];
   for (let i = 0; i < n; i++) {
     let id = pool[Math.floor(next(r) * pool.length)];
-    const lv = Math.max(3, Math.round(base - 1 + int(r, 0, 2) + (i === n - 1 ? 1 : 0)));
+    const lv = Math.max(3, Math.round(base - 1 + int(r, 0, 2) + (i === n - 1 ? 1 : 0) + todLv(run)));
     const ev = FORMS[id].evolve?.find((e) => lv >= e.level);
     if (ev) id = ev.to;
     const m = makeMon(id, lv, false, true, () => next(r));
@@ -375,11 +392,11 @@ export function rollEncounter(run: RunState, q: number, shadow: Shadow): Encount
   const bias = zoneOf(run).bias[nodeOf(run).spot];
   let formId = weighted(run.rng, pool.map((id) => [id, bias[id] ?? 1] as [string, number]));
   const elite = nodeOf(run).kind === 'elite' ? 2 : 0;
-  const lv = firstStop(run) ? 3 : Math.max(2, Math.round((zoneOf(run).special ? (run.specialLv ?? 10) : zoneOf(run).lvBase) + run.station * 0.8 + int(run.rng, 0, 2)) - ({ N: 0, B: 0, A: 1, S: 2, SSR: 2 } as const)[rarity] + elite);
+  const lv = firstStop(run) ? 3 : Math.max(2, Math.round((zoneOf(run).special ? (run.specialLv ?? 10) : zoneOf(run).lvBase) + run.station * 0.8 + int(run.rng, 0, 2)) - ({ N: 0, B: 0, A: 1, S: 2, SSR: 2 } as const)[rarity] + elite + todLv(run));
   const ev = FORMS[formId].evolve?.find((e) => lv >= e.level);
   if (ev) formId = ev.to;
   const mon = makeMon(formId, lv, false, true, () => next(run.rng));
-  if (next(run.rng) < MUTANT_CHANCE * (1 + boon(run, 'lucky') * 0.5)) makeMutant(mon);
+  if (next(run.rng) < MUTANT_CHANCE * (1 + boon(run, 'lucky') * 0.5) * (timeOfDay(run) === 'night' ? 2 : 1)) makeMutant(mon);
   return { mon, rarity };
 }
 
@@ -417,7 +434,7 @@ export function rollTreasure(run: RunState, kind: 'treasure' | 'junk', bonus = 0
     return { title: '釣到了垃圾……', text: `是${j}。賣給回收商換了 5 枚貝殼幣。`, tier: 'junk', items: [{ icon: 'broken', name: j }, { icon: 'shell', name: '貝殼幣 ×5' }] };
   }
   const node = run.route[run.station]?.[run.picked ?? 0];
-  const up = (node?.kind === 'treasure' ? 0.12 : 0) + boon(run, 'lucky') * 0.04 + bonus;
+  const up = (node?.kind === 'treasure' ? 0.12 : 0) + boon(run, 'lucky') * 0.04 + (timeOfDay(run) === 'night' ? 0.08 : 0) + bonus;
   const x = next(r);
   const tier: ChestTier = x < 0.12 + up ? 'gold' : x < 0.45 + up * 1.5 ? 'silver' : 'wood';
   const items: LootItem[] = [];

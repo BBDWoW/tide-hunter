@@ -774,3 +774,17 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 .big-panel .item-list { overflow: visible; overscroll-behavior: auto; }
 /* 直式：視窗在下螢幕，整頁一起捲；視窗本身不要變成捲動區，否則手指在視窗上滑會卡住、頁面不動 */
 .lower-panel, .lower-panel .big-panel { overflow-x: clip; overflow-y: visible; overscroll-behavior: auto; touch-action: auto; }
+/* 海圖上的時段標籤 */
+.tod-chip { align-self: flex-start; width: fit-content; display: inline-flex; align-items: center; gap: 0.25em; margin-left: 0.6em; font-size: 0.72em; padding: 0 0.5em; border: 1px solid; vertical-align: middle; }
+.tod-day { color: #ffe07a; border-color: #ffe07a; }
+.tod-dusk { color: #ffab7a; border-color: #ffab7a; }
+.tod-night { color: #b8c8ff; border-color: #8aa0ff; background: rgba(20, 24, 70, 0.6); }
+
+/* ── 換畫面的浪花轉場：一道浪從下往上捲過畫面，退開後露出新的畫面 ── */
+.wave-wipe { position: fixed; inset: 0; z-index: 80; pointer-events: none; overflow: hidden; }
+.wave-wipe i { position: absolute; left: -10%; width: 120%; height: 140%; top: 0;
+  background: linear-gradient(0deg, #e8fbff 0 3%, #7fd8f0 3% 9%, #2fa4d6 9% 30%, #0d5f9e 30% 100%);
+  clip-path: polygon(0 0, 100% 0, 100% 96%, 94% 99%, 88% 96%, 82% 99%, 76% 96%, 70% 99%, 64% 96%, 58% 99%, 52% 96%, 46% 99%, 40% 96%, 34% 99%, 28% 96%, 22% 99%, 16% 96%, 10% 99%, 4% 96%, 0% 99%);
+  animation: wave-out 0.62s cubic-bezier(0.55, 0, 0.4, 1) both; }
+.wave-wipe i + i { background: rgba(232, 251, 255, 0.55); animation-duration: 0.5s; animation-delay: 0.04s; }
+@keyframes wave-out { from { transform: translateY(-8%); } to { transform: translateY(-145%); } }

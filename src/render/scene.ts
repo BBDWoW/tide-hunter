@@ -7,7 +7,61 @@ import { fx, partMul } from './fx';
 
 export const W = 256, H = 144;
 /** 橫向延伸：bleed = 左右各多畫幾個像素；wide = 這一格已經畫了延伸的背景 */
-export const view = { bleed: 0, wide: false };
+export const view = { bleed: 0, wide: false, tod: 'day' as 'day' | 'dusk' | 'night', night: 'cute' as 'cute' | 'spooky' };
+/** 目前的時段與夜晚氣氛（App 依冒險進度設定；主畫面、港口固定白天） */
+export function setTimeOfDay(tod: 'day' | 'dusk' | 'night', night: 'cute' | 'spooky' = 'cute') { view.tod = tod; view.night = night; }
+
+/** 時段濾鏡：黃昏偏暖、夜晚變暗，夜裡再加上星星和螢光（可愛）或黑影與眼睛（恐怖）
+ *  sky：有天空的場景（海面），否則是由上往下看的海圖 */
+export function drawTimeTint(ctx: CanvasRenderingContext2D, t: number, hz: number, sky = true, darkTheme = false) {
+  if (view.tod === 'day') return;
+  const b = view.bleed, x0 = -b, w = W + b * 2;
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  if (view.tod === 'dusk') { g.addColorStop(0, darkTheme ? '#ffd0b8' : '#ffa47c'); g.addColorStop(1, darkTheme ? '#e8d0e0' : '#c49ac8'); }
+  else { g.addColorStop(0, darkTheme ? '#8890c8' : '#4a5ab0'); g.addColorStop(1, darkTheme ? '#6a70b0' : '#2c3478'); }
+  ctx.fillStyle = g; ctx.fillRect(x0, 0, w, H);
+  ctx.restore();
+  if (view.tod === 'dusk') {
+    // 地平線上一抹暖光
+    if (sky) { const gl = ctx.createLinearGradient(0, hz - 14, 0, hz + 6); gl.addColorStop(0, 'rgba(255,150,90,0)'); gl.addColorStop(0.7, 'rgba(255,150,90,0.25)'); gl.addColorStop(1, 'rgba(255,150,90,0)'); ctx.fillStyle = gl; ctx.fillRect(x0, hz - 14, w, 20); }
+    return;
+  }
+  // ── 夜晚 ──
+  if (sky) for (let i = 0; i < 46; i++) {
+    const x = x0 + ((i * 97) % w), y = (i * 37) % Math.max(8, hz - 4);
+    const tw = Math.sin(t * (1.5 + (i % 5) * 0.4) + i) > 0.2 ? 0.9 : 0.35;
+    ctx.fillStyle = `rgba(255,250,230,${tw})`; ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+  }
+  const top = sky ? hz + 4 : 0;
+  if (view.night === 'cute') {
+    // 螢光海：水面上一閃一閃的青綠色光點
+    for (let i = 0; i < 40; i++) {
+      const x = x0 + ((i * 61 + t * (2 + (i % 3))) % w), y = top + ((i * 43) % Math.max(10, H - top - 2));
+      const a = Math.max(0, Math.sin(t * 1.8 + i * 1.7));
+      if (a < 0.15) continue;
+      ctx.fillStyle = i % 3 ? `rgba(110,255,220,${a * 0.9})` : `rgba(160,220,255,${a * 0.9})`;
+      ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+      if (a > 0.8) { ctx.fillStyle = `rgba(110,255,220,${(a - 0.8) * 1.5})`; ctx.fillRect(Math.round(x) - 1, Math.round(y), 3, 1); ctx.fillRect(Math.round(x), Math.round(y) - 1, 1, 3); }
+    }
+  } else {
+    // 恐怖：水下飄過的黑影，偶爾睜開的眼睛
+    for (let k = 0; k < 3; k++) {
+      const x = x0 + ((k * 113 + t * (4 + k * 2)) % (w + 60)) - 30, y = top + 12 + ((k * 37) % Math.max(12, H - top - 20));
+      ctx.fillStyle = 'rgba(0,0,10,0.35)';
+      ctx.beginPath(); ctx.ellipse(x, y, 16 + k * 6, 4 + k, 0, 0, 7); ctx.fill();
+    }
+    for (let i = 0; i < 6; i++) {
+      const ph = (t * 0.35 + i * 0.37) % 1; if (ph > 0.22) continue; // 只睜開一下下
+      const open = Math.sin((ph / 0.22) * Math.PI);
+      const x = x0 + ((i * 89 + 17) % w), y = top + 8 + ((i * 53) % Math.max(12, H - top - 14));
+      const col = i % 2 ? '255,70,70' : '255,220,90';
+      ctx.fillStyle = `rgba(${col},${open})`;
+      ctx.fillRect(Math.round(x), Math.round(y), 2, Math.max(1, Math.round(open * 2))); ctx.fillRect(Math.round(x) + 5, Math.round(y), 2, Math.max(1, Math.round(open * 2)));
+    }
+  }
+}
 
 // ── 小工具 ──
 type RGB = [number, number, number];
@@ -206,7 +260,12 @@ function drawWideBg(ctx: CanvasRenderingContext2D, bg: CanvasImageSource) {
   ctx.save(); ctx.translate(W * 2, 0); ctx.scale(-1, 1); ctx.drawImage(bg, W - w, 0, w, H, W - w, 0, w, H); ctx.restore();
 }
 
+const DARK_THEMES = new Set(['lava', 'void', 'core', 'cyber', 'abyss']);
 export function drawSea(ctx: CanvasRenderingContext2D, t: number, id: ThemeId = 'day') {
+  seaBase(ctx, t, id);
+  if (id !== 'sunset') drawTimeTint(ctx, t, THEMES[id].horizon, true, DARK_THEMES.has(id));
+}
+function seaBase(ctx: CanvasRenderingContext2D, t: number, id: ThemeId = 'day') {
   const th = THEMES[id], hz = th.horizon;
   const b = view.bleed, WW = W + b * 2;
   drawWideBg(ctx, backdrop(id));
@@ -356,12 +415,13 @@ export function monSlot(side: 0 | 1, form: string) {
 }
 
 export function drawBattleBg(ctx: CanvasRenderingContext2D, t: number, theme: ThemeId = 'day') {
-  drawSea(ctx, t, theme);
+  seaBase(ctx, t, theme);
   const e = BATTLE.enemy, p = BATTLE.player;
   foamRing(ctx, e.x, e.y + 1, 38, 9, t, '#f2fdff');
   ctx.drawImage(reef(theme), e.x - 40, e.y - 13);
   foamRing(ctx, p.x, p.y + 2, 60, 13, t + 1, '#f2fdff');
   ctx.drawImage(shoal(theme), p.x - 60, p.y - 13);
+  drawTimeTint(ctx, t, THEMES[theme].horizon, true, DARK_THEMES.has(theme));
 }
 
 function shadow(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: number) {
@@ -784,7 +844,9 @@ function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number, theme = '
   const dark = theme === 'lava' || theme === 'void' || theme === 'core' || theme === 'cyber' || theme === 'abyss';
   const FOG: Record<string, [string, string]> = { cyber: ['#1a1040', '#120a30'], abyss: ['#080c1a', '#04060e'], lava: ['#3a2622', '#2a1a18'], void: ['#1e1030', '#140a22'], core: ['#0a2a40', '#061c30'], forest: ['#e0f0e0', '#c4dcc4'] };
   const [f1, f2] = FOG[theme] ?? ['#e4edf8', '#c6d4e8'];
-  const fog = hex(f1), fog2 = hex(f2);
+  // 黃昏、夜晚時霧也跟著變暗
+  const dim = (c: RGB): RGB => view.tod === 'night' ? [Math.round(c[0] * 0.38 + 10), Math.round(c[1] * 0.4 + 12), Math.round(c[2] * 0.5 + 30)] : view.tod === 'dusk' ? [Math.round(c[0] * 0.92), Math.round(c[1] * 0.78), Math.round(c[2] * 0.8)] : c;
+  const fog = dim(hex(f1)), fog2 = dim(hex(f2));
   for (let y = 0; y < H; y++) {
     const wave = Math.sin(y * 0.18 + t * 0.6) * 3 + Math.sin(y * 0.05 - t * 0.3) * 4;
     const x0 = Math.round(fx + wave);
@@ -799,12 +861,23 @@ function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number, theme = '
   // 霧上的雲團
   for (let k = 0; k < 6; k++) {
     const cx = fx + 14 + ((k * 37 + t * 3) % Math.max(20, W + view.bleed - fx)), cy = 14 + k * 22;
+    if (view.tod === 'night' && !dark) continue; // 夜裡的霧不畫白雲
     ctx.drawImage(cloudSprite(dark ? (theme as ThemeId) : 'day', k % 5), Math.round(cx - 30), cy);
   }
 }
 
-export function drawChart(ctx: CanvasRenderingContext2D, t: number, route: ChartNode[][], station: number, picked: number | null, path: number[], seed: number, theme = 'day') {
+/** 海圖動畫：sail = 小船正在開往下一站（0→1）；reveal = 剛到新的一站，霧散開、島浮出來（0→1） */
+export interface ChartAnim { sail?: { from: [number, number]; to: [number, number]; p: number }; reveal?: number }
+const easeOut = (x: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
+function flag(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, t: number) {
+  if (h <= 0) return;
+  ctx.fillStyle = '#3a2210'; ctx.fillRect(x, y - h, 1, h);
+  const wave = Math.floor(t * 4) % 2;
+  ctx.fillStyle = '#ff5a6e'; ctx.fillRect(x + 1, y - h, 4, 2); ctx.fillRect(x + 1 + wave, y - h + 2, 3, 1);
+}
+export function drawChart(ctx: CanvasRenderingContext2D, t: number, route: ChartNode[][], station: number, picked: number | null, path: number[], seed: number, theme = 'day', anim: ChartAnim = {}) {
   drawWideBg(ctx, chartBase(route, seed, theme));
+  drawTimeTint(ctx, t, 0, false, DARK_THEMES.has(theme));
   const b = view.bleed;
   ctx.fillStyle = 'rgba(232,251,255,0.35)';
   for (let i = 0; i < 30; i++) { const x = ((i * 53 + t * 5) % (W + b * 2 + 10)) - 5 - b, y = (i * 29) % H; ctx.fillRect(Math.round(x), y, 3, 1); ctx.fillRect(Math.round(x) + 3, y - 1, 2, 1); }
@@ -818,7 +891,7 @@ export function drawChart(ctx: CanvasRenderingContext2D, t: number, route: Chart
   }
   // 從目前位置到下一站各岔路的虛線
   const from = chosen.length ? chartPos(chosen.length - 1, chosen[chosen.length - 1], route[chosen.length - 1].length) : null;
-  if (from && picked === null && station < route.length) {
+  if (from && picked === null && !anim.sail && station < route.length) {
     route[station].forEach((_, j) => {
       const [x1, y1] = chartPos(station, j, route[station].length), n = Math.ceil(Math.hypot(x1 - from[0], y1 - from[1]) / 4);
       ctx.fillStyle = 'rgba(255,255,255,0.8)';
@@ -830,20 +903,43 @@ export function drawChart(ctx: CanvasRenderingContext2D, t: number, route: Chart
     const [x, y] = chartPos(i, j, opts.length);
     const past = i < station || (i === station && picked !== null && picked !== j);
     const onPath = chosen[i] === j;
-    ctx.globalAlpha = i < station ? (onPath ? 0.75 : 0.25) : past ? 0.35 : 1;
-    nodeIcon(ctx, o.kind, x, y);
+    // 新揭開的一站：島從海面浮上來，冒出一圈水花
+    const rise = i === station ? easeOut(((anim.reveal ?? 1) - 0.25 - j * 0.12) / 0.6) : 1;
+    if (rise <= 0) return;
+    ctx.globalAlpha = (i < station ? (onPath ? 0.75 : 0.25) : past ? 0.35 : 1) * rise;
+    nodeIcon(ctx, o.kind, x, Math.round(y + (1 - rise) * 10));
     ctx.globalAlpha = 1;
+    if (rise < 1) { const rr = 4 + rise * 10; ctx.fillStyle = `rgba(232,251,255,${1 - rise})`; for (let k = 0; k < 16; k++) { const an = (k / 16) * Math.PI * 2; ctx.fillRect(Math.round(x + Math.cos(an) * rr), Math.round(y - 2 + Math.sin(an) * rr * 0.4), 1, 1); } }
     if (i === station && (picked === null || picked === j)) {
       ctx.fillStyle = '#ffcf4a';
       const r = 10 + Math.sin(t * 5) * 1.5;
       for (let a2 = 0; a2 < 32; a2++) { if (a2 % 2) continue; const an = (a2 / 32) * Math.PI * 2; ctx.fillRect(Math.round(x + Math.cos(an) * r), Math.round(y - 8 + Math.sin(an) * r * 0.8), 1, 1); }
     }
   }));
-  // 迷霧：下一站之後的海域都被雲霧遮住
-  if (station < route.length - 1) drawFog(ctx, t, chartPos(station + 1, 0, 1)[0] - 13, theme);
-  // 小船：在目前所在的位置
-  const at = picked !== null ? chartPos(station, picked, route[station].length) : from ?? chartPos(0, 0, 1);
-  const [bx, by] = at, bob = Math.round(Math.sin(t * 3));
+  // 走過的每一站插上小旗子（剛打完的那一站，旗子在揭開霧的時候升起來）
+  const rv = anim.reveal ?? 1, re = easeOut(rv);
+  for (let i = 0; i < Math.min(station, path.length); i++) {
+    const [fx2, fy2] = chartPos(i, path[i], route[i].length);
+    const latest = i === station - 1;
+    flag(ctx, fx2 + 5, fy2 - 13, latest ? Math.round(8 * easeOut(rv * 1.6)) : 8, t);
+    if (latest && rv < 0.8) for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2, d = 4 + rv * 14; ctx.fillStyle = `rgba(255,224,122,${1 - rv / 0.8})`; ctx.fillRect(Math.round(fx2 + 6 + Math.cos(a) * d), Math.round(fy2 - 16 + Math.sin(a) * d * 0.7), 1, 1); }
+  }
+  // 迷霧：下一站之後的海域都被雲霧遮住；剛抵達新的一站時，霧從上一站的位置往後退開
+  if (station < route.length - 1) {
+    const fogNow = chartPos(station + 1, 0, 1)[0] - 13, fogPrev = chartPos(station, 0, 1)[0] - 13;
+    drawFog(ctx, t, rv < 1 ? fogPrev + (fogNow - fogPrev) * re : fogNow, theme);
+  }
+  // 小船：在目前所在的位置；開船時沿著航線前進，後面拖著水波
+  let at = picked !== null ? chartPos(station, picked, route[station].length) : from ?? chartPos(0, 0, 1);
+  if (anim.sail) {
+    const { from: a, to: c2, p } = anim.sail, e = easeOut(p * 0.9 + p * p * 0.1);
+    at = [a[0] + (c2[0] - a[0]) * e, a[1] + (c2[1] - a[1]) * e];
+    for (let k = 1; k <= 6; k++) {
+      const q = Math.max(0, e - k * 0.05), wx = a[0] + (c2[0] - a[0]) * q, wy = a[1] + (c2[1] - a[1]) * q;
+      ctx.fillStyle = `rgba(232,251,255,${0.7 - k * 0.1})`; ctx.fillRect(Math.round(wx) - 2, Math.round(wy) + 4, 2, 1); ctx.fillRect(Math.round(wx) + 1, Math.round(wy) + 5, 2, 1);
+    }
+  }
+  const [bx, by] = [Math.round(at[0]), Math.round(at[1])], bob = Math.round(Math.sin(t * 3));
   ctx.fillStyle = '#5a321c'; ctx.fillRect(bx - 5, by + 3 + bob, 11, 2); ctx.fillStyle = '#8a5530'; ctx.fillRect(bx - 6, by + 2 + bob, 13, 1);
   ctx.fillStyle = '#f4f8ff'; ctx.fillRect(bx, by - 5 + bob, 1, 7); ctx.fillRect(bx + 1, by - 4 + bob, 3, 4);
 }

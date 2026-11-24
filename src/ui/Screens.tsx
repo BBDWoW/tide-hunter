@@ -2,21 +2,21 @@ import { ZoneCutscene } from './Special';
 import { drawEventArt, EVENT_ART } from '../render/eventArt';
 import { DOMAINS, isDomain, type DomainId } from '../data/domains';
 import { Icon } from './Icon';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { FORMS, STARTERS } from '../data/creatures';
 import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/types';
 import { ITEMS, statusLabel, type ItemId } from '../game/battle';
 import { ancestryOf, blockRate, dodgeRate, formOf, maxHp, xpToNext, type Mon } from '../game/creature';
 import { bringBackSlots, releaseValue, achStats, ACHIEVEMENTS, bayCap, bringBack, buyUpgrade, claimable, claimAchievement, loadMeta, saveMeta, titleOf, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
-import { MAX_STAR, STAR_RULES, todayKey, campHealMul, heldPrice, campSearch, campTrain, buyHeld, equipHeld, refreshCost, refreshShop, shopHeld, canUseOutside, enterSpecial, FINAL_ZONE, ZONE_CHOICES, healParty, loadDex, loadRun, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
+import { timeOfDay, TOD_INFO, MAX_STAR, STAR_RULES, todayKey, campHealMul, heldPrice, campSearch, campTrain, buyHeld, equipHeld, refreshCost, refreshShop, shopHeld, canUseOutside, enterSpecial, FINAL_ZONE, ZONE_CHOICES, healParty, loadDex, loadRun, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
 import { APP_VERSION, CHANGELOG, hasUnreadNews, markNewsRead } from '../game/version';
 import { loadSound, saveSound, sfx, type SoundSettings } from '../audio/engine';
 import { fx, setReduceFx } from '../render/fx';
 import { BOONS, LURES } from '../data/boons';
 import { HELD, resonance, type HeldId } from '../data/held';
-import { chartPos, drawChart, drawDeep, drawPort, drawSea, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
+import { chartPos, drawChart, type ChartAnim, drawDeep, drawPort, drawSea, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
 import { Tip, AbilityLines, Bar, Elems, IvStars, EnvHint, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 
@@ -230,6 +230,9 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
 }
 
 // ── 航程（海圖） ──
+// 同一站只播一次「霧散開」動畫（開關視窗、重新整理畫面不重播）
+let revealSeen = '';
+const SAIL_MS = 900, REVEAL_MS = 1300;
 export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: RunState; onGo: () => void; onNext: () => void; onQuit: () => void }) {
   const opts = run.route[run.station];
   if (run.picked === null && opts.length === 1) run.picked = 0;
@@ -242,10 +245,30 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
   const [hover, setHover] = useState(0);
   const [, force] = useState(0);
   // 點路線：釣點、精英、寶藏、事件、船隊直接出發；營地、商店、入口要先看選項
+  // 海圖動畫：剛到這一站時霧散開、島浮出來；選好航線後小船先開過去再出發
+  const revealT0 = useRef(revealSeen === `${run.seed}-${run.zone}-${run.zoneNo}-${run.station}` ? -1e9 : performance.now());
+  revealSeen = `${run.seed}-${run.zone}-${run.zoneNo}-${run.station}`;
+  const sail = useRef<{ from: [number, number]; to: [number, number]; t0: number } | null>(null);
   const choose = (j: number) => {
-    run.picked = j; saveRun(run); setPanel(null);
+    if (sail.current) return;
+    const path = run.path, last = path.length - 1;
+    const from: [number, number] = last >= 0 ? chartPos(last, path[last], run.route[last].length) : chartPos(0, 0, 1);
+    const to = chartPos(run.station, j, opts.length);
+    setPanel(null);
+    if (fx.reduce || run.station === 0) return arrive(j);
+    sfx('cast');
+    sail.current = { from, to, t0: performance.now() };
+    force((n) => n + 1);
+    setTimeout(() => { sail.current = null; arrive(j); }, SAIL_MS);
+  };
+  const arrive = (j: number) => {
+    run.picked = j; saveRun(run);
     if (['fish', 'elite', 'treasure', 'event', 'crew'].includes(opts[j].kind)) { run.notice = undefined; onGo(); return; }
     force((n) => n + 1);
+  };
+  const chartAnim = (): ChartAnim => {
+    const now = performance.now(), sp = sail.current;
+    return { reveal: Math.min(1, (now - revealT0.current) / REVEAL_MS), sail: sp ? { from: sp.from, to: sp.to, p: Math.min(1, (now - sp.t0) / SAIL_MS) } : undefined };
   };
 
   const node = run.picked !== null ? opts[run.picked] : null;
@@ -283,10 +306,11 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
 
   return (<>
     <GameScreen vp={vp}
-      scene={<SceneCanvas draw={(c, t) => drawChart(c, t, run.route, run.station, run.picked, run.path, run.seed, zoneOf(run).theme)} label="海圖與航線" />}
+      scene={<SceneCanvas draw={(c, t) => drawChart(c, t, run.route, run.station, run.picked, run.path, run.seed, zoneOf(run).theme, chartAnim())} label="海圖與航線" />}
       overlay={<>
-        <Win class="banner left"><span class="eyebrow">{run.daily ? '每日 · ' : ''}{run.star ? `${'★'.repeat(run.star)} · ` : ''}{zoneOf(run).special ? '特殊區域' : `海域 ${run.zoneNo + 1}`} · {zoneOf(run).name}{isDomain(run.zone) && <span class="voy-domain" style={{ color: DOMAINS[run.zone].color }}> · 領域「{DOMAINS[run.zone].name}」</span>}</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b></Win>
+        <Win class="banner left"><span class="eyebrow">{run.daily ? '每日 · ' : ''}{run.star ? `${'★'.repeat(run.star)} · ` : ''}{zoneOf(run).special ? '特殊區域' : `海域 ${run.zoneNo + 1}`} · {zoneOf(run).name}{isDomain(run.zone) && <span class="voy-domain" style={{ color: DOMAINS[run.zone].color }}> · 領域「{DOMAINS[run.zone].name}」</span>}</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b><span class={`tod-chip tod-${timeOfDay(run)}`}><Icon name={timeOfDay(run) === 'night' ? 'moon' : 'sun'} /> {TOD_INFO[timeOfDay(run)].name}</span></Win>
         <Win class="banner right"><span class="res"><Icon name="shell" /> {run.shells}</span><span class="res">捕捉餌 {run.catchBait}</span></Win>
+        {run.picked === null && !panel && timeOfDay(run) !== 'day' && <Tip id={`tod-${timeOfDay(run)}`}>{TOD_INFO[timeOfDay(run)].name}：{TOD_INFO[timeOfDay(run)].desc}</Tip>}
         {run.picked === null && !panel && <Tip id="voyage">點海圖上的圖示選擇航線。釣點會遇到野生潮靈，精英更強，掛旗子的船隊會連續派出好幾隻。右上角可以看隊伍和背包。</Tip>}
         <div class="voy-tools">
           <button class={`tool-btn ${panel === 'party' ? 'on' : ''}`} onClick={() => setPanel(panel === 'party' ? null : 'party')}><Icon name="party" /> 隊伍</button>

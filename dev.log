@@ -1,11 +1,18 @@
 
-  VITE v7.3.7  ready in 194 ms
+  VITE v7.3.7  ready in 1181 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
-3:42:25 AM [vite] src/data/changelog.json changed, restarting server...
-3:42:25 AM [vite] server restarted.
-3:46:39 AM [vite] src/data/changelog.json changed, restarting server...
-3:46:40 AM [vite] server restarted.
-3:48:08 AM [vite] src/data/changelog.json changed, restarting server...
-3:48:08 AM [vite] server restarted.
+2:27:08 PM [vite] (client) page reload src/render/scene.ts
+2:27:08 PM [vite] (client) hmr update /src/styles.css
+2:27:38 PM [vite] (client) page reload src/render/scene.ts
+2:27:53 PM [vite] (client) page reload src/render/scene.ts
+2:27:53 PM [vite] (client) page reload src/ui/Screens.tsx
+2:27:56 PM [vite] (client) page reload src/ui/Screens.tsx
+2:28:03 PM [vite] (client) page reload src/ui/Screens.tsx
+2:28:09 PM [vite] (client) page reload src/ui/Screens.tsx
+2:28:48 PM [vite] (client) page reload src/ui/App.tsx
+2:28:48 PM [vite] (client) hmr update /src/styles.css
+2:28:58 PM [vite] (client) hmr update /src/styles.css
+2:33:04 PM [vite] src/data/changelog.json changed, restarting server...
+2:33:04 PM [vite] server restarted.
