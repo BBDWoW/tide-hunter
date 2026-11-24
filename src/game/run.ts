@@ -1,7 +1,7 @@
 import { HELD, HELD_IDS, resonance, type HeldId } from '../data/held';
 // 一局冒險的狀態：隊伍、道具、航程站點、存檔
 import { ABYSS_POOL, CORE_POOL, CYBER_POOL, FOREST_POOL, FORMS, ICE_POOL, LAVA_POOL, VOID_POOL, ZONE1_POOL } from '../data/creatures';
-import { effectiveness, RARITY_ORDER, type Rarity } from '../data/types';
+import { effectiveness, ELEM, RARITY_ORDER, type Elem, type Rarity } from '../data/types';
 import { formOf, makeMon, makeMutant, maxHp, MUTANT_CHANCE, type Mon } from './creature';
 import { int, makeRng, newSeed, next, weighted, type Rng } from './rng';
 import type { ItemId } from './battle';
@@ -131,6 +131,7 @@ export const zoneOf = (run: RunState) => ZONES[run.zone ?? 'shallows'];
 // ── 白天／黃昏／夜晚：跟著站數走，霸主（最後一站）一定在深夜 ──
 export type TimeOfDay = 'day' | 'dusk' | 'night';
 export function timeOfDay(run: RunState, station = run.station): TimeOfDay {
+  if (run.dailyRule?.id === 'night') return 'night';
   const last = Math.max(1, run.route.length - 1), p = station / last;
   return p >= 0.7 ? 'night' : p >= 0.45 ? 'dusk' : 'day';
 }
@@ -142,7 +143,7 @@ export const TOD_INFO: Record<TimeOfDay, { name: string; desc: string }> = {
   night: { name: '夜晚', desc: '夜晚的海很危險也很迷人：野生潮靈等級 +2，大魚和異變個體更常出現，寶箱也比較好。' },
 };
 /** 時段造成的影響 */
-const todLv = (run: RunState) => ({ day: 0, dusk: 1, night: 2 })[timeOfDay(run)];
+const todLv = (run: RunState) => ({ day: 0, dusk: 1, night: 2 })[timeOfDay(run)] + (run.dailyRule?.id === 'strong' ? 2 : 0);
 const todLuck = (run: RunState) => ({ day: 0, dusk: 0.5, night: 1 })[timeOfDay(run)];
 export const spotName = (run: RunState, spot: SpotKind) => zoneOf(run).spots[spot];
 const firstStop = (run: RunState) => run.zoneNo === 0 && run.station === 0;
@@ -152,6 +153,7 @@ export interface RunState {
   zone: ZoneId;
   zoneNo: number; // 第幾片海域（0 起算）
   pendingZone?: boolean; // 已打倒霸主、還沒選下一片海域
+  dailyRule?: { id: DailyRuleId; elem?: Elem }; // 每日挑戰的今日規則
   godHand?: GodHandEvent; // 超特殊事件：神之手（打倒霸主後 0.5%）
   guardianWin?: ZoneId; // 打倒了守護者、還沒選獎勵（存檔後可以接著選）
   returnTo?: { zone: ZoneId; route: RouteNode[][]; station: number; path: number[] }; // 在特殊區域時，原本的航線
@@ -198,9 +200,10 @@ export const starOf = (run: RunState) => run.star ?? 0;
 /** 對手的能力加成（潮位 1、5） */
 export function foeMods(run: RunState) {
   const k = 1 + (starOf(run) >= 1 ? 0.1 : 0) + (starOf(run) >= 5 ? 0.1 : 0);
-  return { atk: k, def: k, energy: 0, crit: 0 };
+  const re = run.dailyRule?.id === 'element' ? run.dailyRule.elem : undefined;
+  return { atk: k, def: k, energy: 0, crit: 0, reso: re ? { [re]: 0.3 } : undefined };
 }
-export const priceMul = (run: RunState) => (1 - (run.perks?.discount ?? 0)) * (starOf(run) >= 2 ? 1.25 : 1);
+export const priceMul = (run: RunState) => (1 - (run.perks?.discount ?? 0)) * (starOf(run) >= 2 ? 1.25 : 1) * (run.dailyRule?.id === 'treasure' ? 1.5 : 1);
 export const campHealMul = (run: RunState) => (starOf(run) >= 5 ? 0.5 : 1);
 export const pearlMul = (star: number) => 1 + star * 0.2;
 
@@ -212,6 +215,30 @@ export function dailySeed(day: string): number {
   return h >>> 0;
 }
 export const DAILY_STAR = 1;
+
+// ── 每日挑戰的「今日特殊規則」：每天輪換一條 ──
+export type DailyRuleId = 'night' | 'glass' | 'mutant' | 'treasure' | 'harvest' | 'element' | 'drought' | 'strong';
+const RULE_ELEMS: Elem[] = ['water', 'fire', 'grass', 'elec', 'ice', 'dark', 'rock', 'fly'];
+export function dailyRule(day: string): { id: DailyRuleId; elem?: Elem } {
+  const h = dailySeed(day + '#rule');
+  const ids: DailyRuleId[] = ['night', 'glass', 'mutant', 'treasure', 'harvest', 'element', 'drought', 'strong'];
+  const id = ids[h % ids.length];
+  return id === 'element' ? { id, elem: RULE_ELEMS[(h >>> 8) % RULE_ELEMS.length] } : { id };
+}
+export function dailyRuleInfo(rule: { id: DailyRuleId; elem?: Elem }): { name: string; desc: string } {
+  const el = rule.elem ? ELEM[rule.elem].name : '';
+  return ({
+    night: { name: '永夜之海', desc: '今天整趟航程都是夜晚：敵人更強，但大魚、異變個體和好寶箱也更多。' },
+    glass: { name: '玻璃大砲', desc: '全隊攻擊 +30%，但防禦 −30%。速戰速決！' },
+    mutant: { name: '異色之日', desc: '異變個體的出現機率變成 5 倍。' },
+    treasure: { name: '寶藏海域', desc: '航線上的寶藏點變多、寶箱更好，但商店價格 ×1.5。' },
+    harvest: { name: '豐收之日', desc: '開局多 3 個捕捉餌，收服時晃動更容易成功。' },
+    element: { name: `${el}屬之日`, desc: `所有${el}屬性技能威力 +30%（敵我都是）。` },
+    drought: { name: '乾旱航線', desc: '戰鬥後不會自動回復 HP，但開局多帶 3 瓶海藻藥膏。' },
+    strong: { name: '強敵之海', desc: '野生潮靈和船隊等級 +2，但獲得的經驗值 ×1.5。' },
+  } as const)[rule.id];
+}
+export const ruleOf = (run: RunState) => run.dailyRule?.id;
 /** 今天的每日挑戰夥伴（從第一片海域的 N／B 幼體和御三家裡挑） */
 export function dailyPartner(day: string): Mon {
   const rng = makeRng(dailySeed(day) ^ 0x5bd1e995);
@@ -224,15 +251,16 @@ export function newRun(first: Mon, meta?: Meta, opt: { star?: number; daily?: st
   const seed = opt.daily ? dailySeed(opt.daily) : newSeed(), rng = makeRng(seed);
   const up = (id: UpgradeId) => (meta && !opt.daily ? upLv(meta, id) : 0);
   const star = opt.daily ? DAILY_STAR : opt.star ?? 0, lean = star >= 3 ? 1 : 0;
+  const rule = opt.daily ? dailyRule(opt.daily) : undefined;
   return {
-    star, daily: opt.daily,
+    star, daily: opt.daily, dailyRule: rule,
     version: 4, seed, rng, zone: 'shallows', zoneNo: 0,
     party: [first],
-    items: { potion: 3 + up('supply') - lean, superpotion: 0, revive: 1, ether: 1 },
-    catchBait: Math.max(0, 1 + up('bait') - lean), lures: { star: up('star'), legend: up('legend') }, boons: {},
+    items: { potion: 3 + up('supply') - lean + (rule?.id === 'drought' ? 3 : 0), superpotion: 0, revive: 1, ether: 1 },
+    catchBait: Math.max(0, 1 + up('bait') - lean) + (rule?.id === 'harvest' ? 3 : 0), lures: { star: up('star'), legend: up('legend') }, boons: {},
     perks: { reel: up('rod') * 0.08, discount: up('discount') * 0.1, camp: up('herbal') * 0.15 },
     lifeStones: up('kiln'),
-    route: generateRoute(rng), picked: null, path: [],
+    route: generateRoute(rng, ROUTE_LEN, false, rule?.id === 'treasure'), picked: null, path: [],
     station: 0, shells: up('supply') * 20, caught: 0, battlesWon: 0,
   };
 }
@@ -240,7 +268,7 @@ export function newRun(first: Mon, meta?: Meta, opt: { star?: number; daily?: st
 // 產生分岔航線：第一站固定釣點、最後一站是霸主，中間每站 2–3 個選項
 // 主海域有機率在中段出現通往特殊區域的「神秘入口」
 const SPECIALS: ZoneId[] = ['forest', 'void', 'core'];
-function generateRoute(rng: Rng, len = ROUTE_LEN, special = false): RouteNode[][] {
+function generateRoute(rng: Rng, len = ROUTE_LEN, special = false, moreTreasure = false): RouteNode[][] {
   const spots: SpotKind[] = ['shallow', 'reef', 'wreck', 'deep'];
   const sp = () => spots[Math.floor(next(rng) * spots.length)];
   const route: RouteNode[][] = [[{ kind: 'fish', spot: special ? sp() : 'shallow' }]];
@@ -248,7 +276,7 @@ function generateRoute(rng: Rng, len = ROUTE_LEN, special = false): RouteNode[][
     const n = next(rng) < 0.45 ? 3 : 2, opts: RouteNode[] = [];
     const weights: [NodeKind, number][] = special
       ? [['fish', 40], ['elite', 20], ['treasure', 18], ['event', 16]]
-      : [['fish', 42], ['treasure', 10], ['event', 16]];
+      : [['fish', 42], ['treasure', moreTreasure ? 26 : 10], ['event', 16]];
     if (!special && i >= 3) weights.push(['elite', 16], ['camp', 12]);
     if (!special && i >= 2) weights.push(['shop', 12], ['crew', 11]);
     for (let k = 0; k < n; k++) {
@@ -396,7 +424,7 @@ export function rollEncounter(run: RunState, q: number, shadow: Shadow): Encount
   const ev = FORMS[formId].evolve?.find((e) => lv >= e.level);
   if (ev) formId = ev.to;
   const mon = makeMon(formId, lv, false, true, () => next(run.rng));
-  if (next(run.rng) < MUTANT_CHANCE * (1 + boon(run, 'lucky') * 0.5) * (timeOfDay(run) === 'night' ? 2 : 1)) makeMutant(mon);
+  if (next(run.rng) < MUTANT_CHANCE * (1 + boon(run, 'lucky') * 0.5) * (timeOfDay(run) === 'night' ? 2 : 1) * (run.dailyRule?.id === 'mutant' ? 5 : 1)) makeMutant(mon);
   return { mon, rarity };
 }
 
@@ -434,7 +462,7 @@ export function rollTreasure(run: RunState, kind: 'treasure' | 'junk', bonus = 0
     return { title: '釣到了垃圾……', text: `是${j}。賣給回收商換了 5 枚貝殼幣。`, tier: 'junk', items: [{ icon: 'broken', name: j }, { icon: 'shell', name: '貝殼幣 ×5' }] };
   }
   const node = run.route[run.station]?.[run.picked ?? 0];
-  const up = (node?.kind === 'treasure' ? 0.12 : 0) + boon(run, 'lucky') * 0.04 + (timeOfDay(run) === 'night' ? 0.08 : 0) + bonus;
+  const up = (node?.kind === 'treasure' ? 0.12 : 0) + boon(run, 'lucky') * 0.04 + (timeOfDay(run) === 'night' ? 0.08 : 0) + (run.dailyRule?.id === 'treasure' ? 0.12 : 0) + bonus;
   const x = next(r);
   const tier: ChestTier = x < 0.12 + up ? 'gold' : x < 0.45 + up * 1.5 ? 'silver' : 'wood';
   const items: LootItem[] = [];
@@ -501,7 +529,11 @@ export function applyBoon(run: RunState, id: string): string {
   return `獲得「${b.name}」`;
 }
 export function battleMods(run: RunState) {
-  return { atk: 1 + boon(run, 'atk') * 0.1, def: 1 + boon(run, 'def') * 0.1, energy: boon(run, 'energy') + boon(run, 'g_core'), crit: boon(run, 'crit') * 0.06 + boon(run, 'g_void') * 0.12, reso: resonance(run.party.map((m) => FORMS[m.form].elems)) };
+  const g = run.dailyRule?.id === 'glass';
+  const reso = resonance(run.party.map((m) => FORMS[m.form].elems));
+  const re = run.dailyRule?.id === 'element' ? run.dailyRule.elem : undefined;
+  if (re) reso[re] = (reso[re] ?? 0) + 0.3;
+  return { atk: (1 + boon(run, 'atk') * 0.1) * (g ? 1.3 : 1), def: (1 + boon(run, 'def') * 0.1) * (g ? 0.7 : 1), energy: boon(run, 'energy') + boon(run, 'g_core'), crit: boon(run, 'crit') * 0.06 + boon(run, 'g_void') * 0.12, reso };
 }
 
 export function healParty(run: RunState, ratio: number, revive = false) {

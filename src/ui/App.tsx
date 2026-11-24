@@ -162,7 +162,7 @@ export function App() {
       afterBoss(r);
       return;
     }
-    healParty(r, 0.15 + boon(r, 'breeze') * 0.15);
+    if (r.dailyRule?.id !== 'drought') healParty(r, 0.15 + boon(r, 'breeze') * 0.15);
     // 林之恩惠：倒下的夥伴會醒來
     if (boon(r, 'g_forest')) for (const m of r.party) if (m.hp <= 0) m.hp = Math.ceil(maxHp(m) * 0.3);
     advance(r);

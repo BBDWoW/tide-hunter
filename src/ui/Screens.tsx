@@ -9,7 +9,7 @@ import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/ty
 import { ITEMS, statusLabel, type ItemId } from '../game/battle';
 import { ancestryOf, blockRate, dodgeRate, formOf, maxHp, xpToNext, type Mon } from '../game/creature';
 import { bringBackSlots, releaseValue, achStats, ACHIEVEMENTS, bayCap, bringBack, buyUpgrade, claimable, claimAchievement, loadMeta, saveMeta, titleOf, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
-import { timeOfDay, TOD_INFO, MAX_STAR, STAR_RULES, todayKey, campHealMul, heldPrice, campSearch, campTrain, buyHeld, equipHeld, refreshCost, refreshShop, shopHeld, canUseOutside, enterSpecial, FINAL_ZONE, ZONE_CHOICES, healParty, loadDex, loadRun, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
+import { dailyRule, dailyRuleInfo, timeOfDay, TOD_INFO, MAX_STAR, STAR_RULES, todayKey, campHealMul, heldPrice, campSearch, campTrain, buyHeld, equipHeld, refreshCost, refreshShop, shopHeld, canUseOutside, enterSpecial, FINAL_ZONE, ZONE_CHOICES, healParty, loadDex, loadRun, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
 import { APP_VERSION, CHANGELOG, hasUnreadNews, markNewsRead } from '../game/version';
 import { loadSound, saveSound, sfx, type SoundSettings } from '../audio/engine';
@@ -32,6 +32,7 @@ export function MenuItem({ children, onClick, disabled, hot, sel, sub, onHover }
 export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, onPort, onBay }: { vp: Viewport; hasSave: boolean; onNew: () => void; onDaily: () => void; onContinue: () => void; onDex: () => void; onHelp: () => void; onPort: () => void; onBay: () => void }) {
   const dex = loadDex(), meta = loadMeta();
   const [stars, setStars] = useState(false);
+  const [dailyInfo, setDailyInfo] = useState(false);
   // 有進行中的冒險時，開新局前先確認
   const [confirm, setConfirm] = useState<null | { k: 'new' | 'daily'; go: () => void }>(null);
   const guard = (k: 'new' | 'daily', go: () => void) => () => (hasSave ? setConfirm({ k, go }) : go());
@@ -39,6 +40,7 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
   const [star, setStar] = useState(meta.star ?? 0);
   const maxStar = meta.maxStar ?? 0;
   const today = todayKey(), daily = meta.daily?.day === today ? meta.daily : null;
+  const todayRule = dailyRuleInfo(dailyRule(today));
   const begin = () => { const m = loadMeta(); m.star = Math.min(star, maxStar); saveMeta(m); setStars(false); onNew(); };
   const openNew = () => (maxStar > 0 ? setStars(true) : onNew());
   const [news, setNews] = useState(false);
@@ -60,8 +62,15 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
         </div>
         <span class="app-version">v{APP_VERSION}</span>
       </>}
-      onPanelClose={sound || news || stars || confirm ? () => { setSound(false); setNews(false); setStars(false); setConfirm(null); } : undefined}
-      panel={confirm ? (
+      onPanelClose={sound || news || stars || confirm || dailyInfo ? () => { setSound(false); setNews(false); setStars(false); setConfirm(null); setDailyInfo(false); } : undefined}
+      panel={dailyInfo ? (
+        <Win class="big-panel confirm-panel" title={`每日挑戰　${today}`} onClose={() => setDailyInfo(false)}>
+          <p class="small dim">今天大家都用同一隻夥伴、同一條航線出發，比誰走得最遠。珍珠只有今天第一次結算時拿得到。</p>
+          <div class="daily-rule"><span class="small dim">今日特殊規則</span><b><Icon name="sparkle" /> {todayRule.name}</b><span>{todayRule.desc}</span></div>
+          {daily && <p class="small accent">今日最佳：{daily.best} 站{daily.win ? '・已通關' : ''}</p>}
+          <MenuItem onClick={() => { setDailyInfo(false); guard('daily', onDaily)(); }} hot>出發</MenuItem>
+        </Win>
+      ) : confirm ? (
         <Win class="big-panel confirm-panel" title="還有進行中的冒險" onClose={() => setConfirm(null)} closeLabel="取消">
           <p>目前的冒險還沒結束{saved ? `（${saved.daily ? '每日挑戰・' : ''}第 ${totalStation(saved)} 站・夥伴 ${saved.party.length} 隻）` : ''}。</p>
           <p class="warn-text">開始{confirm.k === 'daily' ? '每日挑戰' : '新的冒險'}會<b>放棄目前的進度</b>，沒辦法復原。</p>
@@ -109,7 +118,7 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
           <Win class="title-menu">
             {hasSave && <MenuItem onClick={onContinue} hot>繼續冒險</MenuItem>}
             <MenuItem onClick={guard('new', openNew)} hot={!hasSave} sub={maxStar > 0 && (meta.star ?? 0) > 0 ? '★'.repeat(meta.star ?? 0) : undefined}>新的冒險</MenuItem>
-            {meta.runs > 0 && <MenuItem onClick={guard('daily', onDaily)} sub={daily ? `今日最佳 ${daily.best} 站${daily.win ? '・通關' : ''}` : '今天還沒挑戰'}>每日挑戰</MenuItem>}
+            {meta.runs > 0 && <MenuItem onClick={() => setDailyInfo(true)} sub={todayRule.name}>每日挑戰</MenuItem>}
             {meta.bay.length > 0 && <MenuItem onClick={onBay} sub={`${meta.bay.length}/${bayCap(meta)}`}>棲息灣</MenuItem>}
             <MenuItem onClick={onPort} sub={claimable(meta, achStats(meta, dex)) ? `● 成就可領　◆ ${meta.pearls}` : `◆ ${meta.pearls}`}>港口</MenuItem>
             <MenuItem onClick={onDex} sub={`${dex.caught.length}/${Object.values(FORMS).filter((f) => !f.secret).length}`}>圖鑑</MenuItem>
@@ -308,7 +317,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={(c, t) => drawChart(c, t, run.route, run.station, run.picked, run.path, run.seed, zoneOf(run).theme, chartAnim())} label="海圖與航線" />}
       overlay={<>
-        <Win class="banner left"><span class="eyebrow">{run.daily ? '每日 · ' : ''}{run.star ? `${'★'.repeat(run.star)} · ` : ''}{zoneOf(run).special ? '特殊區域' : `海域 ${run.zoneNo + 1}`} · {zoneOf(run).name}{isDomain(run.zone) && <span class="voy-domain" style={{ color: DOMAINS[run.zone].color }}> · 領域「{DOMAINS[run.zone].name}」</span>}</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b><span class={`tod-chip tod-${timeOfDay(run)}`}><Icon name={timeOfDay(run) === 'night' ? 'moon' : 'sun'} /> {TOD_INFO[timeOfDay(run)].name}</span></Win>
+        <Win class="banner left"><span class="eyebrow">{run.daily ? `每日 · ${run.dailyRule ? dailyRuleInfo(run.dailyRule).name + ' · ' : ''}` : ''}{run.star ? `${'★'.repeat(run.star)} · ` : ''}{zoneOf(run).special ? '特殊區域' : `海域 ${run.zoneNo + 1}`} · {zoneOf(run).name}{isDomain(run.zone) && <span class="voy-domain" style={{ color: DOMAINS[run.zone].color }}> · 領域「{DOMAINS[run.zone].name}」</span>}</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b><span class={`tod-chip tod-${timeOfDay(run)}`}><Icon name={timeOfDay(run) === 'night' ? 'moon' : 'sun'} /> {TOD_INFO[timeOfDay(run)].name}</span></Win>
         <Win class="banner right"><span class="res"><Icon name="shell" /> {run.shells}</span><span class="res">捕捉餌 {run.catchBait}</span></Win>
         {run.picked === null && !panel && timeOfDay(run) !== 'day' && <Tip id={`tod-${timeOfDay(run)}`}>{TOD_INFO[timeOfDay(run)].name}：{TOD_INFO[timeOfDay(run)].desc}</Tip>}
         {run.picked === null && !panel && <Tip id="voyage">點海圖上的圖示選擇航線。釣點會遇到野生潮靈，精英更強，掛旗子的船隊會連續派出好幾隻。右上角可以看隊伍和背包。</Tip>}
@@ -624,7 +633,7 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
           <h3>攜帶道具與屬性共鳴</h3>
           <p class="small">每隻夥伴可以帶一個攜帶道具（鯊齒、硬殼片、吸血珊瑚、不屈珍珠……），從寶箱、精英、船隊、營地、商店和事件取得，在隊伍畫面裝上或更換。隊伍裡同屬性的夥伴有 3 隻時，該屬性的技能威力 +15%，4 隻以上 +25%。</p>
           <h3>潮位與每日挑戰</h3>
-          <p class="small">通關後可以解鎖更高的<b>潮位</b>（★1～★5），對手更強、物價更高，但結算珍珠每顆星 +20%。<b>每日挑戰</b>每天一個固定的航線與夥伴，珍珠只有當天第一次結算時拿得到。</p>
+          <p class="small">通關後可以解鎖更高的<b>潮位</b>（★1～★5），對手更強、物價更高，但結算珍珠每顆星 +20%。<b>每日挑戰</b>每天一個固定的航線與夥伴，還有一條每天輪換的「今日特殊規則」（例如永夜之海、玻璃大砲、異色之日），珍珠只有當天第一次結算時拿得到。</p>
           <h3>技能數量</h3>
           <p>每隻夥伴都有 4 個技能槽，技能要升級才學得到。第 1 格固定是<b>普攻</b>（不耗能量的攻擊），學新技能時不能把它忘掉。</p>
           <h3>棲息灣與招募</h3>

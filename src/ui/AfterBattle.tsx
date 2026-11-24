@@ -54,7 +54,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
       run.battlesWon++;
       // 船隊：每一隻都算經驗（稍微打折），貝殼幣加倍
       const foes = result.team ?? [enemy];
-      const reward = Math.floor(foes.reduce((a, f) => a + xpReward(f), 0) * (foes.length > 1 ? 0.75 : 1) * (result.outcome === 'caught' ? 0.7 : 1) * (1 + boon(run, 'xp') * 0.3));
+      const reward = Math.floor(foes.reduce((a, f) => a + xpReward(f), 0) * (foes.length > 1 ? 0.75 : 1) * (result.outcome === 'caught' ? 0.7 : 1) * (1 + boon(run, 'xp') * 0.3) * (run.dailyRule?.id === 'strong' ? 1.5 : 1));
       const coins = Math.floor(foes.reduce((a, f) => a + 8 + f.lv * 2, 0) * (nodeOf(run).kind === 'elite' ? 2 : 1));
       run.shells += coins;
       out.push({ uid: '_coins', text: `獲得 ${coins} 枚貝殼幣（共 ${run.shells}）` });
