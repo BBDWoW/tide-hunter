@@ -805,3 +805,11 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 .hatch-rays { position: absolute; left: 50%; top: 30%; width: 260px; height: 260px; margin: -130px 0 0 -130px; background: repeating-conic-gradient(rgba(255, 240, 180, 0.14) 0 10deg, transparent 10deg 30deg); border-radius: 50%; animation: spin 8s linear infinite; z-index: -1; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .reduce-fx .egg-canvas.ready, .reduce-fx .hatch-rays { animation: none; }
+/* 購買提示 */
+.buy-toasts { position: fixed; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 60; display: flex; flex-direction: column; gap: 6px; pointer-events: none; width: max-content; max-width: calc(100vw - 32px); }
+.buy-toast { display: flex; align-items: center; gap: 0.6em; padding: 6px 12px; background: rgba(5, 10, 32, 0.94); border: 1px solid #9cf5b8; color: #fff; font-size: 14px; box-shadow: 0 2px 0 rgba(0,0,0,0.4); animation: buyIn 0.22s ease-out; }
+.buy-toast .bt-ok { color: #9cf5b8; }
+.buy-toast .grow { display: flex; flex-direction: column; min-width: 0; }
+.buy-toast .cost { color: #ffcf4a; white-space: nowrap; }
+@keyframes buyIn { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .buy-toast { animation: none; } }

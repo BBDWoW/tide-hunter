@@ -17,7 +17,7 @@ import { fx, setReduceFx } from '../render/fx';
 import { BOONS, LURES } from '../data/boons';
 import { HELD, resonance, type HeldId } from '../data/held';
 import { chartPos, drawChart, type ChartAnim, drawDeep, drawPort, drawSea, drawStarterScene, drawTitle, PEDESTALS } from '../render/scene';
-import { Tip, AbilityLines, Bar, Elems, IvStars, EnvHint, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
+import { useBuyToast, Tip, AbilityLines, Bar, Elems, IvStars, EnvHint, RarityTag, SkillLine, Sprite, StageTag, StyleMeter } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 
 export function MenuItem({ children, onClick, disabled, hot, sel, sub, onHover }: { children: ComponentChildren; onClick: () => void; disabled?: boolean; hot?: boolean; sel?: boolean; sub?: ComponentChildren; onHover?: () => void }) {
@@ -184,6 +184,7 @@ export function StarterPick({ vp, onPick, onBack }: { vp: Viewport; onPick: (for
 export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void; onGacha: () => void }) {
   const [meta, setMeta] = useState(loadMeta);
   const [tab, setTab] = useState<'up' | 'recruit' | 'bay' | 'ach'>('up');
+  const [buyNote, showBuy] = useBuyToast();
   const dex = loadDex(), st = achStats(meta, dex), canClaim = claimable(meta, st);
   const [, force] = useState(0);
   const refresh = () => { setMeta(loadMeta()); force((n) => n + 1); };
@@ -192,6 +193,7 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
       onPanelClose={onBack} outsideClose={false}
       panel={
         <Win class="big-panel port" title={`港口　珍珠 ◆ ${meta.pearls}`} onClose={onBack} closeLabel="返回標題">
+          {buyNote}
           <div class="tabs">
             {([['up', '設施升級'], ['recruit', '招募夥伴'], ['ach', `成就${canClaim ? ` ●${canClaim}` : ''}`]] as const).map(([k, label]) => (
               <button key={k} class={`tab ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}>{label}</button>
@@ -202,7 +204,7 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
               {(Object.keys(UPGRADES) as UpgradeId[]).map((id) => {
                 const u = UPGRADES[id], lv = upLv(meta, id), cost = u.costs[lv];
                 return (
-                  <button class="pick shop-row" key={id} disabled={cost === undefined || meta.pearls < cost} onClick={() => { buyUpgrade(meta, id); refresh(); }}>
+                  <button class="pick shop-row" key={id} disabled={cost === undefined || meta.pearls < cost} onClick={() => { if (buyUpgrade(meta, id) !== false) { sfx('coin'); showBuy({ name: `${u.name} 升到 Lv${lv + 1}`, cost: cost!, cur: 'pearl', left: meta.pearls, note: u.desc(lv + 1) }); } refresh(); }}>
                     <span class="grow"><b>{u.name} <span class="num dim">Lv{lv}/{u.costs.length}</span></b>
                       <span class="small dim">{lv ? `目前：${u.desc(lv)}` : '尚未建造'}{cost !== undefined ? `　→ 下一級：${u.desc(lv + 1)}` : '　（已滿級）'}</span></span>
                     <span class="num">{cost !== undefined ? `◆ ${cost}` : 'MAX'}</span>
@@ -369,22 +371,33 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
   );
 }
 
+const SHOP_ICON: Record<string, string> = { bait: 'bait', star: 'starlure', legend: 'legendlure', potion: 'potion', superpotion: 'elixir', revive: 'revive', lifestone: 'lifestone' };
+/** 買完之後背包裡有幾個 */
+function shopOwned(run: RunState, id: string): number {
+  if (id === 'bait') return run.catchBait;
+  if (id === 'star' || id === 'legend') return run.lures[id];
+  if (id === 'lifestone') return run.lifeStones ?? 0;
+  return (run.items as Record<string, number>)[id] ?? 0;
+}
+
 function ShopList({ run, onChange }: { run: RunState; onChange: () => void }) {
   const stock = shopHeld(run);
+  const [buyNote, showBuy] = useBuyToast();
   return (
     <div class="item-list">
+      {buyNote}
       <h3 class="sub-h">攜帶道具</h3>
       {stock.map((h) => { const price = heldPrice(run, h); return (
-        <button class="pick shop-row" key={h} disabled={run.shells < price} onClick={() => { buyHeld(run, h); onChange(); }}>
+        <button class="pick shop-row" key={h} disabled={run.shells < price} onClick={() => { if (buyHeld(run, h)) { sfx('coin'); showBuy({ name: HELD[h].name, icon: HELD[h].icon, cost: price, cur: 'shell', left: run.shells, note: '已放進背包，可以在隊伍畫面裝上' }); } onChange(); }}>
           <span class="grow"><b><Icon name={HELD[h].icon} /> {HELD[h].name}</b><span class="small dim">{HELD[h].desc}</span></span>
           <span class="num"><Icon name="shell" /> {price}</span>
         </button>
       ); })}
       {!stock.length && <p class="small dim">攜帶道具賣完了。</p>}
-      <button class="chip-btn" disabled={run.shells < refreshCost(run)} onClick={() => { refreshShop(run); onChange(); }}><Icon name="refresh" /> 換一批（<Icon name="shell" /> {refreshCost(run)}）</button>
+      <button class="chip-btn" disabled={run.shells < refreshCost(run)} onClick={() => { const c = refreshCost(run); if (refreshShop(run)) { sfx('coin'); showBuy({ name: '換了一批攜帶道具', icon: 'refresh', cost: c, cur: 'shell', left: run.shells }); } onChange(); }}><Icon name="refresh" /> 換一批（<Icon name="shell" /> {refreshCost(run)}）</button>
       <h3 class="sub-h">補給</h3>
       {SHOP.map((it) => (
-        <button class="pick shop-row" key={it.id} disabled={run.shells < priceOf(run, it)} onClick={() => { run.shells -= priceOf(run, it); it.buy(run); onChange(); }}>
+        <button class="pick shop-row" key={it.id} disabled={run.shells < priceOf(run, it)} onClick={() => { const c = priceOf(run, it); if (run.shells < c) return; run.shells -= c; it.buy(run); sfx('coin'); showBuy({ name: it.name, icon: SHOP_ICON[it.id], cost: c, cur: 'shell', left: run.shells, note: `已放進背包，現在有 ${shopOwned(run, it.id)} 個` }); onChange(); }}>
           <span class="grow"><b>{it.name}</b><span class="small dim">{it.desc}</span></span>
           <span class="num"><Icon name="shell" /> {priceOf(run, it)}</span>
         </button>

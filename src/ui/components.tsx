@@ -1,6 +1,7 @@
 import { Icon } from './Icon';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
+import { createPortal } from 'preact/compat';
 import { ABILITIES, abilitiesOf, FORMS, recolorOf } from '../data/creatures';
 import { ELEM, RARITY, STAGE_NAME, type Elem, type Rarity } from '../data/types';
 import { animFrame, drawSprite, PAL, spriteRes, spriteSize } from '../render/pixel';
@@ -138,4 +139,29 @@ export function Tip({ id, children, inline }: { id: string; children: ComponentC
     setShow(false);
   };
   return <button class={`tip ${inline ? 'inline' : ''}`} onClick={close} onPointerDown={(e) => e.stopPropagation()}><span><Icon name="bulb" /> {children}</span><small>知道了 ✕</small></button>;
+}
+
+/** 買東西後的小提示：顯示買了什麼、扣了多少、還剩多少。連續買會一條條疊起來，幾秒後自己消失 */
+export interface BuyNote { name: string; icon?: string; cost: number; cur: 'shell' | 'pearl'; left: number; note?: string }
+export function useBuyToast() {
+  const [list, setList] = useState<(BuyNote & { id: number })[]>([]);
+  const show = (n: BuyNote) => {
+    const id = Math.random();
+    setList((l) => [...l.slice(-2), { ...n, id }]);
+    setTimeout(() => setList((l) => l.filter((x) => x.id !== id)), 2600);
+  };
+  // 畫到 body 最上層，才不會被面板的捲動區域裁掉
+  const node = list.length ? createPortal(
+    <div class="buy-toasts" role="status" aria-live="polite">
+      {list.map((n) => (
+        <div class="buy-toast" key={n.id}>
+          <span class="bt-ok"><Icon name="bag" /></span>
+          <span class="grow"><b>{n.icon && <Icon name={n.icon} />} {n.name}</b>{n.note && <span class="small dim">{n.note}</span>}</span>
+          <span class="num cost">−{n.cur === 'shell' ? <Icon name="shell" /> : '◆'} {n.cost}</span>
+          <span class="num small dim">剩 {n.left}</span>
+        </div>
+      ))}
+    </div>, document.body,
+  ) : null;
+  return [node, show] as const;
 }
