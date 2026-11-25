@@ -9,8 +9,11 @@ const shinyUrls = import.meta.glob('../art/shiny/*.png', { eager: true, query: '
 import MANIFEST from '../art/sprite_manifest.json';
 // size：圖檔裡每一格的邊長（高解析版是 2 倍）；logical：在遊戲世界裡的大小（48 或 64）
 export interface SpriteArt { img: HTMLImageElement; size: number; frames: number; logical: number }
-const M = MANIFEST as unknown as Record<string, { logical: number; frame: number; sockets: Record<string, [number, number]> }>;
+const M = MANIFEST as unknown as Record<string, { logical: number; frame: number; sockets: Record<string, [number, number]>; idle?: number[] }>;
 export const spriteSockets = (id: string) => M[id]?.sockets;
+/** 霸主專屬版：每一格整隻身體上下浮動幾個貼圖像素（美術附的 king-idle） */
+export const spriteIdle = (id: string) => M[id]?.idle;
+export const spriteTexel = (id: string) => (M[id] ? M[id].logical / M[id].frame : 1);
 const sprites = new Map<string, SpriteArt>();
 const shinies = new Map<string, SpriteArt>();
 const scenes = new Map<string, HTMLImageElement>();

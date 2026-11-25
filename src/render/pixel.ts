@@ -1,4 +1,4 @@
-import { shinyArt, spriteArt } from './art';
+import { shinyArt, spriteArt, spriteIdle, spriteTexel } from './art';
 // 48×48 像素生物繪製器：用幾何圖元畫出色塊，再自動加上明暗與外框。
 
 export const SIZE = 48;
@@ -284,11 +284,15 @@ export function drawSprite(
   const { f = 0, flip = false, alpha = 1, scale = 1, tint, recolor } = opt;
   const cv = baked(id, f, pal, tint, recolor);
   const w = Math.round(spriteSize(id) * scale);
+  // 霸主專屬版的整體浮動：依這一格的位移往上下挪，對齊到畫布的實際像素（畫布是 2 倍解析度）
+  const idle = spriteIdle(id);
+  if (idle) y = Math.round((Math.round(y) + idle[f % idle.length] * spriteTexel(id) * scale) * 2) / 2;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.globalAlpha *= alpha;
-  if (flip) { ctx.translate(Math.round(x) + w, Math.round(y)); ctx.scale(-1, 1); ctx.drawImage(cv, 0, 0, w, w); }
-  else ctx.drawImage(cv, Math.round(x), Math.round(y), w, w);
+  const yy = idle ? y : Math.round(y);
+  if (flip) { ctx.translate(Math.round(x) + w, yy); ctx.scale(-1, 1); ctx.drawImage(cv, 0, 0, w, w); }
+  else ctx.drawImage(cv, Math.round(x), yy, w, w);
   ctx.restore();
 }
 

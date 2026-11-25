@@ -192,7 +192,7 @@ const F: Form[] = [
   { id: 'aurorawhale', name: '極光鯨', family: 'aurorawhale', stage: 3, rarity: 'SSR', category: '神獸', elems: ['ice', 'fly'], sprite: 'aurorawhale', pal: 'aurora',
     base: { hp: 110, atk: 92, def: 88, spd: 82 }, ability: 'waterbarrier', extra: ['dragonpresence'],
     learn: [[1, 'aurorabeam'], [1, 'icebeam'], [1, 'gust'], [1, 'surge'], [17, 'auroraveil'], [1, 'icewall'], [20, 'blizzard']], desc: '只在極光之夜浮出海面的神鯨，身上流動著七彩的光。' },
-  { id: 'frostking', name: '冰冠海豹王', family: 'frostking', stage: 3, rarity: 'A', category: '巨獸', elems: ['ice', 'water'], sprite: 'frostking', pal: 'seal',
+  { id: 'frostking', name: '冰冠海豹王', family: 'frostking', stage: 3, rarity: 'A', category: '巨獸', elems: ['ice', 'water'], sprite: 'frostking', scale: 0.8, pal: 'seal',
     base: { hp: 112, atk: 90, def: 86, spd: 58 }, ability: 'colossal',
     learn: [[1, 'frostfang'], [1, 'frostcrack'], [1, 'hail'], [1, 'tidewave'], [1, 'icebeam'], [1, 'auroraveil']], desc: '冰封峽灣的霸主，頭戴萬年不化的冰冠的巨型海豹。' },
   // ── 熔岩裂谷 ──
@@ -213,7 +213,7 @@ const F: Form[] = [
   { id: 'magmacore', name: '熔核巨獸', family: 'magmacore', stage: 3, rarity: 'SSR', category: '巨獸', elems: ['fire', 'rock'], sprite: 'magmacore', pal: 'magma',
     base: { hp: 112, atk: 112, def: 104, spd: 50 }, ability: 'colossal', extra: ['blazing'],
     learn: [[1, 'roar'], [1, 'lavaflow'], [1, 'obsidianedge'], [1, 'eruption'], [16, 'lavafloor'], [20, 'coreburst']], desc: '心臟是一顆熔岩核心的巨獸，傳說裂谷就是牠翻身時撕開的。' },
-  { id: 'lavadragon', name: '熔岩海龍王', family: 'lavadragon', stage: 3, rarity: 'A', category: '龍', elems: ['fire', 'water'], sprite: 'lavadragon', pal: 'lavaeel',
+  { id: 'lavadragon', name: '熔岩海龍王', family: 'lavadragon', stage: 3, rarity: 'A', category: '龍', elems: ['fire', 'water'], sprite: 'lavadragon', scale: 0.8, pal: 'lavaeel',
     base: { hp: 100, atk: 78, def: 76, spd: 58 }, ability: 'colossal',
     learn: [[1, 'heatup'], [1, 'tidewave'], [1, 'lavaflow'], [1, 'eruption'], [1, 'lavafloor']], desc: '熔岩裂谷的霸主，在岩漿與海水的交界處沉睡。' },
   // ── 美術包新增角色（31 隻） ──
@@ -265,7 +265,7 @@ const F: Form[] = [
   { id: 'mushroom_sprite', name: '傘菇妖', family: 'mushroom', stage: 2, rarity: 'B', category: '抽象', elems: ['grass', 'dark'], sprite: 'mushroom_sprite', pal: 'water',
     base: { hp: 62, atk: 66, def: 62, spd: 52 }, ability: 'stinger',
     learn: [[1, 'leafblade'], [1, 'sporecloud'], [11, 'venomstrike'], [13, 'opportunist'], [15, 'thornburst'], [15, 'drainvine']], desc: '頂著毒傘的妖精，會在聖林的陰影裡惡作劇。' },
-  { id: 'vine_antler_deer', name: '藤角鹿', family: 'vinedeer', stage: 3, rarity: 'A', category: '巨獸', elems: ['grass'], sprite: 'vine_antler_deer', pal: 'water',
+  { id: 'vine_antler_deer', name: '藤角鹿', family: 'vinedeer', stage: 3, rarity: 'A', category: '巨獸', elems: ['grass'], sprite: 'vine_antler_deer', scale: 0.8, pal: 'water',
     base: { hp: 84, atk: 90, def: 80, spd: 78 }, ability: 'regen',
     learn: [[1, 'leafblade'], [1, 'vinebind'], [1, 'photosynth'], [12, 'thornburst'], [14, 'sacredgrove']], desc: '聖林域的守護者，鹿角上纏繞的藤蔓會開出花。' },
   { id: 'shadow_soul_flame', name: '影魂火', family: 'soulflame', stage: 1, rarity: 'N', category: '抽象', elems: ['dark', 'fire'], sprite: 'shadow_soul_flame', pal: 'water',
@@ -280,7 +280,7 @@ const F: Form[] = [
   { id: 'phantom_cub', name: '虛影幼獸', family: 'voidline', stage: 1, rarity: 'S', category: '巨獸', elems: ['dark'], sprite: 'phantom_cub', pal: 'water',
     base: { hp: 60, atk: 70, def: 56, spd: 74 }, ability: 'firststrike',
     learn: [[1, 'darkbite'], [8, 'shadowsneak'], [10, 'bonecurse'], [15, 'opportunist'], [19, 'bloodtide']], desc: '半透明的小獸，眨眼間就會從視線裡消失。' },
-  { id: 'void_star_dragon', name: '虛無星龍', family: 'voidline', stage: 3, rarity: 'S', category: '龍', elems: ['dark', 'fly'], sprite: 'void_star_dragon', pal: 'water',
+  { id: 'void_star_dragon', name: '虛無星龍', family: 'voidline', stage: 3, rarity: 'S', category: '龍', elems: ['dark', 'fly'], sprite: 'void_star_dragon', scale: 0.8, pal: 'water',
     base: { hp: 90, atk: 106, def: 78, spd: 96 }, ability: 'lure', extra: ['dragonpresence'],
     learn: [[14, 'gust'], [14, 'abyssmaw'], [14, 'seafog'], [15, 'opportunist'], [16, 'datastorm']], desc: '無稽區的主宰，鱗片上倒映著不存在的星空。' },
   { id: 'cubelet', name: '立方子', family: 'cubelet', stage: 1, rarity: 'N', category: '機械', elems: ['data'], sprite: 'cubelet', pal: 'water',
@@ -295,7 +295,7 @@ const F: Form[] = [
   { id: 'domain_coreling', name: '域核幼體', family: 'domaincore', stage: 1, rarity: 'S', category: '抽象', elems: ['data'], sprite: 'domain_coreling', pal: 'water',
     base: { hp: 58, atk: 66, def: 62, spd: 70 }, ability: 'static',
     learn: [[1, 'bitshot'], [1, 'glitchwave'], [6, 'focus'], [10, 'scanlock'], [12, 'datastorm'], [17, 'reboot']], desc: '剛剛誕生的域核，發出閃爍的光芒。' },
-  { id: 'domain_realm_core', name: '域界核心', family: 'domaincore', stage: 3, rarity: 'S', category: '抽象', elems: ['data'], sprite: 'domain_realm_core', pal: 'water',
+  { id: 'domain_realm_core', name: '域界核心', family: 'domaincore', stage: 3, rarity: 'S', category: '抽象', elems: ['data'], sprite: 'domain_realm_core', scale: 0.8, pal: 'water',
     base: { hp: 92, atk: 100, def: 90, spd: 86 }, ability: 'waterbarrier',
     learn: [[14, 'datagrid'], [14, 'datastorm'], [15, 'crash'], [16, 'firewall'], [17, 'focus']], desc: '支撐整個域核區域的核心，環繞著它的光帶就是區域的邊界。' },
   { id: 'cube_coreling', name: '方核幼體', family: 'cubecore', stage: 1, rarity: 'A', category: '機械', elems: ['data', 'water'], sprite: 'cube_coreling', pal: 'water',
@@ -321,7 +321,7 @@ const F: Form[] = [
     base: { hp: 77, atk: 32, def: 66, spd: 65 }, ability: 'oceanpower', extra: ['waterbarrier'],
     learn: [[1, 'seagodbreath'], [1, 'moxu_choir'], [1, 'moxu_palace'], [1, 'moxu_lens']], desc: '統領萬潮的存在。所有海域的霸主都聽從祂的潮聲，祂在最深的海裡，等待一個配得上「潮汐獵手」之名的人。' },
   // ── 霸主 ──
-  { id: 'whale', name: '鯨嘯', family: 'whale', stage: 3, rarity: 'A', category: '巨獸', elems: ['water'], sprite: 'whale', pal: 'whale',
+  { id: 'whale', name: '鯨嘯', family: 'whale', stage: 3, rarity: 'A', category: '巨獸', elems: ['water'], sprite: 'whale', scale: 0.8, pal: 'whale',
     base: { hp: 110, atk: 74, def: 70, spd: 46 }, ability: 'colossal',
     learn: [[1, 'surge'], [1, 'hightide'], [1, 'bubblebarrage'], [1, 'tidewave'], [1, 'whalecry']], desc: '淺灘的霸主。一聲長嘯就能掀起巨浪。' },
   // ── 第三片海域：電子海域 ──
@@ -347,7 +347,7 @@ const F: Form[] = [
     base: { hp: 96, atk: 84, def: 86, spd: 60 }, ability: 'waterbarrier', learn: [[1, 'bitshot'], [1, 'tidewave'], [1, 'scanlock'], [1, 'datagrid'], [21, 'datastorm']], desc: '身上刻滿發光的密碼，據說背上的鑰匙能打開資料海的最深處。' },
   { id: 'zero_dragon', name: '零式電龍', family: 'zero_dragon', stage: 3, rarity: 'SSR', category: '龍', elems: ['data', 'elec'], sprite: 'zero_dragon', pal: 'water',
     base: { hp: 90, atk: 104, def: 80, spd: 100 }, ability: 'dragonpresence', extra: ['static'], learn: [[1, 'datastorm'], [1, 'stormfang'], [1, 'scanlock'], [1, 'datagrid'], [22, 'thunderstorm']], desc: '傳說中第一個誕生在資料海裡的生命。身體一半是實體、一半是發光的線框。' },
-  { id: 'mainframe_leviathan', name: '主機海皇', family: 'mainframe_leviathan', stage: 3, rarity: 'A', category: '龍', elems: ['data', 'elec'], sprite: 'mainframe_leviathan', pal: 'water',
+  { id: 'mainframe_leviathan', name: '主機海皇', family: 'mainframe_leviathan', stage: 3, rarity: 'A', category: '龍', elems: ['data', 'elec'], sprite: 'mainframe_leviathan', scale: 0.8, pal: 'water',
     base: { hp: 100, atk: 82, def: 84, spd: 56 }, ability: 'colossal', learn: [[1, 'thunder'], [1, 'bitshot'], [1, 'datastorm'], [1, 'reboot'], [1, 'datagrid']], desc: '電子海域的霸主。胸口的核心處理器是整片資料海的心臟。' },
   // ── 第三片海域：深淵 ──
   { id: 'lanternlarva', name: '燈籠幼魚', family: 'lanternlarva', stage: 1, rarity: 'N', category: '魚類', elems: ['dark', 'water'], sprite: 'lanternlarva', pal: 'water',
@@ -372,7 +372,7 @@ const F: Form[] = [
     base: { hp: 84, atk: 78, def: 96, spd: 44 }, ability: 'sturdy', learn: [[1, 'darkbite'], [1, 'frostfang'], [1, 'seafog'], [18, 'frostcrack'], [21, 'abyssmaw'], [15, 'icewall']], desc: '沉在海底的古老銅鐘化成的靈。鐘響的時候，整片海都會結霜。' },
   { id: 'abyss_eye', name: '淵瞳神', family: 'abyss_eye', stage: 3, rarity: 'SSR', category: '神獸', elems: ['dark', 'water'], sprite: 'abyss_eye', pal: 'water',
     base: { hp: 96, atk: 102, def: 88, spd: 86 }, ability: 'waterbarrier', extra: ['dragonpresence'], learn: [[1, 'abyssmaw'], [1, 'seagodbreath'], [1, 'seafog'], [1, 'inkshot'], [22, 'abyssveil']], desc: '深淵的守望者。巨大的眼睛看得見海裡所有的祕密。' },
-  { id: 'nether_whale', name: '冥海巨鯨', family: 'nether_whale', stage: 3, rarity: 'A', category: '巨獸', elems: ['dark', 'water'], sprite: 'nether_whale', pal: 'water',
+  { id: 'nether_whale', name: '冥海巨鯨', family: 'nether_whale', stage: 3, rarity: 'A', category: '巨獸', elems: ['dark', 'water'], sprite: 'nether_whale', scale: 0.8, pal: 'water',
     base: { hp: 125, atk: 90, def: 80, spd: 48 }, ability: 'colossal', learn: [[1, 'darkbite'], [1, 'soulsip'], [1, 'tidewave'], [1, 'engulf'], [1, 'abyssveil']], desc: '深淵的霸主。全身佈滿傷痕的遠古巨鯨，張開嘴就是一片星空。' },
   // ── 環境形態：在特定區域進化才會出現（沿用原本的圖換色） ──
   { id: 'ghost_jelly', name: '幽靈水母', family: 'jelly', stage: 2, rarity: 'B', category: '水母', elems: ['water', 'dark'], sprite: 'ghost_jelly', pal: 'jelly', regional: true,

@@ -2,7 +2,7 @@
 import { FORMS, recolorOf } from '../data/creatures';
 import { ELEM, type Elem } from '../data/types';
 import { animFrame, drawSprite, drawSpriteMini, PAL, spriteSize } from './pixel';
-import { sceneArt } from './art';
+import { sceneArt, spriteIdle } from './art';
 import { fx, partMul } from './fx';
 
 export const W = 256, H = 144;
@@ -410,8 +410,10 @@ export interface Beam { x0: number; y0: number; x1: number; y1: number; life: nu
 
 /** 角色站的位置。pos：最終決戰 1 對 2 時，統領者退到後面（back）、被召喚的霸主站在前面（ally） */
 export function monSlot(side: 0 | 1, form: string, pos?: 'back' | 'ally') {
-  const f = FORMS[form], sc = f?.scale ?? 1, base = side === 0 ? BATTLE.player : pos ? BATTLE[pos] : BATTLE.enemy;
+  const f = FORMS[form], sc = f?.scale ?? 1, b0 = side === 0 ? BATTLE.player : pos ? BATTLE[pos] : BATTLE.enemy;
   const size = spriteSize(f?.sprite ?? '') * sc;
+  // 霸主專屬版（96 大小）比較高：站的位置往下移一點，頭頂才不會超出畫面
+  const base = side === 1 && !pos && spriteIdle(f?.sprite ?? '') ? { x: b0.x, y: b0.y + 6 } : b0;
   return { x: base.x - size / 2, y: base.y - size + 3, scale: sc, cx: base.x, cy: base.y - size / 2 + 2, bx: base.x, by: base.y };
 }
 
@@ -445,7 +447,9 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
     const ph = (t + i * 1.7) % (m.low ? 5 : 3.4);
     const hop = !m.low && ph < 0.32 ? -Math.round(Math.sin((ph / 0.32) * Math.PI) * 2) : 0;
     const shiver = m.low && ph < 0.4 ? Math.round(Math.sin(t * 50)) : 0;
-    const sy = m.y + Math.round(Math.sin(t * (m.low ? 1.4 : 2.4) + i) * 1.2) + hop + (m.oy ?? 0);
+    // 霸主專屬版自帶整體浮動（spriteIdle），不再疊加通用的呼吸浮動，只保留 HP 很低時的發抖
+    const own = !!spriteIdle(FORMS[m.form].sprite);
+    const sy = m.y + (own ? 0 : Math.round(Math.sin(t * (m.low ? 1.4 : 2.4) + i) * 1.2) + hop) + (m.oy ?? 0);
     return { sx, sy, sxx: sx + shiver, rect: { x: Math.round(sx + shiver), y: Math.round(sy), w: spriteSize(FORMS[m.form].sprite) * m.scale } };
   });
   const rects = pos.map((p) => p?.rect ?? null);
