@@ -221,22 +221,66 @@ function CaughtCard({ mon }: { mon: Mon }) {
   );
 }
 
+/** 技能的完整資訊：屬性、威力、能量、命中、說明 */
+function SkillInfo({ id, tag }: { id: string; tag?: string }) {
+  const s = SKILLS[id];
+  return (
+    <div class="skill-info">
+      {tag && <span class="si-tag">{tag}</span>}
+      <b>{s.name}</b>
+      <span class="si-stats"><Elems list={s.elem ? [s.elem] : []} />{!s.elem && <span class="small dim">無屬性</span>}
+        <span class="num small">{s.power ? `威力 ${s.power}` : '變化技'}</span><span class="num small">能量 {s.cost}</span><span class="num small">命中 {s.acc}</span></span>
+      <span class="small">{s.desc}</span>
+    </div>
+  );
+}
+
+// 技能槽滿了：先點一招看比較，確認後才真的替換
 function LearnPrompt({ mon, skill, onPick }: { mon: Mon; skill: string; onPick: (forget: number | null) => void }) {
   const f = formOf(mon);
+  const [sel, setSel] = useState<number | 'skip' | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  // 選好之後把比較框捲進畫面（橫向手機的面板很矮）
+  useEffect(() => { if (sel !== null) box.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, [sel]);
   return (
     <div class="prompt">
       <div class="learn-head">
         <Sprite form={mon.form} size={72} mutant={mon.mutant} />
         <span class="grow">
           <b>{f.name}</b> 想學習新技能，但技能槽已經滿了（{skillSlots(mon)} 招）。
-          <span class="learn-new"><SkillLine id={skill} /><span class="small dim">{SKILLS[skill].desc}</span></span>
+          <SkillInfo id={skill} tag="新技能" />
         </span>
       </div>
-      <p class="small">要忘記哪一招？（第 1 格的普攻不能忘記）</p>
-      <div class="grid2">
-        {mon.skills.map((s, i) => <MenuItem key={s} disabled={i === 0} onClick={() => onPick(i)} sub={i === 0 ? '普攻' : undefined}><SkillLine id={s} /></MenuItem>)}
-        <MenuItem onClick={() => onPick(null)}>放棄學習 {SKILLS[skill].name}</MenuItem>
+      <p class="small">點一招看看比較，確認後才會替換。（第 1 格的普攻不能忘記）</p>
+      <div class="learn-list">
+        {mon.skills.map((s, i) => (
+          <button key={s} class={`pick learn-old ${sel === i ? 'on' : ''}`} disabled={i === 0} aria-pressed={sel === i} onClick={() => { sfx('select'); setSel(i); }}>
+            <SkillLine id={s} />
+            <span class="small dim">{i === 0 ? '普攻，不能忘記' : SKILLS[s].desc}</span>
+          </button>
+        ))}
+        <button class={`pick learn-old skip ${sel === 'skip' ? 'on' : ''}`} aria-pressed={sel === 'skip'} onClick={() => { sfx('select'); setSel('skip'); }}>放棄學習 {SKILLS[skill].name}</button>
       </div>
+      {typeof sel === 'number' && (
+        <div class="learn-compare" ref={box}>
+          <SkillInfo id={mon.skills[sel]} tag="忘記" />
+          <span class="lc-arrow">→</span>
+          <SkillInfo id={skill} tag="學會" />
+          <div class="lc-btns">
+            <MenuItem onClick={() => onPick(sel)} hot>確定替換</MenuItem>
+            <MenuItem onClick={() => setSel(null)}>再想想</MenuItem>
+          </div>
+        </div>
+      )}
+      {sel === 'skip' && (
+        <div class="learn-compare" ref={box}>
+          <span class="grow">確定不學 <b>{SKILLS[skill].name}</b> 嗎？之後就學不到了。</span>
+          <div class="lc-btns">
+            <MenuItem onClick={() => onPick(null)} hot>確定放棄</MenuItem>
+            <MenuItem onClick={() => setSel(null)}>再想想</MenuItem>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -813,3 +813,19 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 .buy-toast .cost { color: #ffcf4a; white-space: nowrap; }
 @keyframes buyIn { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .buy-toast { animation: none; } }
+/* 學新技能：選要忘記的招式、比較後確認 */
+.learn-list { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.learn-old { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }
+.learn-old.on { outline: 2px solid var(--amber); background: rgba(255, 207, 74, 0.12); }
+.learn-old.skip { justify-content: center; }
+.skill-info { display: grid; gap: 2px; margin-top: 0.4em; padding: 0.4em 0.6em; background: rgba(255, 255, 255, 0.05); border-left: 3px solid var(--amber); }
+.skill-info .si-tag { font-size: 11px; color: var(--amber); }
+.skill-info .si-stats { display: flex; flex-wrap: wrap; gap: 0.6em; align-items: center; }
+.learn-compare { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; margin-top: 8px; padding: 8px; border: 1px solid var(--amber); background: rgba(5, 10, 32, 0.6); }
+.learn-compare .skill-info { margin: 0; height: 100%; }
+.learn-compare .learn-compare-old, .learn-compare .skill-info:first-child { border-left-color: #ff7a7a; }
+.learn-compare .lc-arrow { color: var(--amber); font-size: 1.3em; }
+.learn-compare .lc-btns { grid-column: 1 / -1; display: flex; gap: 8px; }
+.learn-compare .lc-btns > * { flex: 1; }
+.learn-compare > .grow { grid-column: 1 / -1; }
+@media (max-width: 520px) { .learn-list { grid-template-columns: 1fr; } }
