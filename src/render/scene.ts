@@ -345,7 +345,7 @@ function seaBase(ctx: CanvasRenderingContext2D, t: number, id: ThemeId = 'day') 
 }
 
 // ── 戰鬥地形 ──
-export const BATTLE = { player: { x: 66, y: 100 }, enemy: { x: 190, y: 66 } };
+export const BATTLE = { player: { x: 66, y: 100 }, enemy: { x: 190, y: 66 }, back: { x: 206, y: 62 }, ally: { x: 136, y: 74 } };
 
 const PLAT: Record<string, { rim: [string, string]; top: [string, string]; side: [string, string]; mid: [string, string]; deco: string[]; grass: string | null; rtop: [string, string]; rtop2: [string, string]; rbot: [string, string]; rmid: [string, string] }> = {
   day: { rim: ['#8fd8e8', '#bfeff6'], top: ['#fff4d0', '#f6e2a8'], side: ['#b8915a', '#c9a468'], mid: ['#e0c080', '#ecd394'], deco: ['#fffaf0', '#ff9a8a'], grass: '#5fae5a', rtop: ['#7ab86a', '#5fa25a'], rtop2: ['#a6d48a', '#8cc474'], rbot: ['#5a6878', '#6a7888'], rmid: ['#a8b0b8', '#8c96a2'] },
@@ -402,16 +402,17 @@ function foamRing(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: num
   }
 }
 
-export interface MonView { form: string; x: number; y: number; flip: boolean; flash: number; shake: number; lunge: number; alpha: number; scale: number; tint?: string; aura?: string; mutant?: boolean; enter?: number; low?: boolean; ox?: number; oy?: number }
+export interface MonView { form: string; x: number; y: number; flip: boolean; flash: number; shake: number; lunge: number; alpha: number; scale: number; tint?: string; aura?: string; mutant?: boolean; enter?: number; low?: boolean; ox?: number; oy?: number; base?: { x: number; y: number } }
 /** 戰鬥畫面的額外演出：場地、畫面震動、全畫面閃光 */
 export interface BattleFx { field?: string | null; quake?: number; flash?: number; flashColor?: string; fxLayer?: (ctx: CanvasRenderingContext2D, which: 'back' | 'front', rects: ({ x: number; y: number; w: number } | null)[]) => void }
 export interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; g?: number }
 export interface Beam { x0: number; y0: number; x1: number; y1: number; life: number; color: string }
 
-export function monSlot(side: 0 | 1, form: string) {
-  const f = FORMS[form], sc = f?.scale ?? 1, base = side === 0 ? BATTLE.player : BATTLE.enemy;
+/** 角色站的位置。pos：最終決戰 1 對 2 時，統領者退到後面（back）、被召喚的霸主站在前面（ally） */
+export function monSlot(side: 0 | 1, form: string, pos?: 'back' | 'ally') {
+  const f = FORMS[form], sc = f?.scale ?? 1, base = side === 0 ? BATTLE.player : pos ? BATTLE[pos] : BATTLE.enemy;
   const size = spriteSize(f?.sprite ?? '') * sc;
-  return { x: base.x - size / 2, y: base.y - size + 3, scale: sc, cx: base.x, cy: base.y - size / 2 + 2 };
+  return { x: base.x - size / 2, y: base.y - size + 3, scale: sc, cx: base.x, cy: base.y - size / 2 + 2, bx: base.x, by: base.y };
 }
 
 export function drawBattleBg(ctx: CanvasRenderingContext2D, t: number, theme: ThemeId = 'day') {
@@ -451,7 +452,7 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
   bfx.fxLayer?.(ctx, 'back', rects);
   for (const [i, m] of mons.entries()) {
     if (!m || m.alpha <= 0) continue;
-    const base = i === 0 ? BATTLE.player : BATTLE.enemy;
+    const base = m.base ?? (i === 0 ? BATTLE.player : BATTLE.enemy);
     const w = Math.round((spriteSize(FORMS[m.form].sprite) / 48) * 15 * m.scale);
     ctx.globalAlpha = m.alpha; shadow(ctx, base.x, base.y, w); ctx.globalAlpha = 1;
   }

@@ -4,7 +4,7 @@
 import { DOMAINS, type DomainId } from '../data/domains';
 import { FIELDS, SKILLS, type FieldId, type Skill, type StatKey, type StatusId } from '../data/skills';
 import { effectiveness, ELEM } from '../data/types';
-import { blockRate, dodgeRate, formOf, isBasicAttack, maxHp, statsOf, type Mon } from './creature';
+import { blockRate, dodgeRate, formOf, isBasicAttack, makeMon, maxHp, statsOf, type Mon } from './creature';
 import { hasAb } from '../data/creatures';
 import type { HeldId } from '../data/held';
 import type { Elem } from '../data/types';
@@ -55,12 +55,16 @@ export interface BattleState {
   traps?: [number, number]; // 各自場地上的暗礁剩餘回合
   domain?: DomainId; // 特殊區域的領域效果（整場戰鬥都在）
   godhand?: GodHandState; // 神之手之戰：撐過 survive 回合就贏
+  final?: FinalState; // 最終決戰：統領者・潮汐默旭
 }
+/** 最終決戰：兩條血、第二條血時召喚霸主變成 1 對 2、每 4 回合放一次大絕招、玩家可以用漁夫的釣竿 */
+export interface FinalState { phase: 1 | 2; ally: number | null; ultIn: number; rodCd: number; rodUses: number; summoned?: string }
 export interface GodHandState { survive: number; rewinds: number; loveTurn: number; passion: string[]; pulled: Record<string, string[]>; saved: Record<string, string[]> }
 export const isGodHand = (m: Mon) => m.form === 'godhand';
 
 export type Action =
-  | { type: 'skill'; slot: number } // slot = -1 → 掙扎
+  | { type: 'skill'; slot: number; target?: number } // slot = -1 → 掙扎、-2 → 統領者的大絕招；target：1 對 2 時要打哪一隻（對手隊伍的位置）
+  | { type: 'rod' } // 最終決戰：漁夫的釣竿
   | { type: 'switch'; to: number }
   | { type: 'item'; item: ItemId; target: number }
   | { type: 'run' }
@@ -74,7 +78,9 @@ export const ITEMS: Record<ItemId, { name: string; desc: string; revive?: boolea
   ether: { name: '能量海膽', desc: '出場中的夥伴獲得 3 點能量。' },
 };
 
-export type BEvent =
+/** slot：最終決戰 1 對 2 時，這個事件是對手的哪一隻（對手隊伍的位置） */
+export type BEvent = BEventBase & { slot?: number };
+type BEventBase =
   | { t: 'msg'; text: string }
   | { t: 'use'; side: SideId; skill: string }
   | { t: 'miss'; side: SideId }
@@ -95,8 +101,19 @@ export type BEvent =
   | { t: 'pull'; side: SideId; skills: string[] }
   | { t: 'rewind'; turn: number }
   | { t: 'toss'; side: SideId; hits: number }
+  | { t: 'phase2'; side: SideId; hp: number; max: number }
+  | { t: 'summon'; side: SideId; slot: number; form: string; lv: number; hp: number; max: number }
+  | { t: 'rod'; side: SideId }
+  | { t: 'ultwarn' }
   | { t: 'end'; winner: SideId };
 
+/** 統領者的大絕招（不在技能表裡，每 4 回合自動施放） */
+export const MOXU_ULT: Skill = { id: 'moxu_ult', name: '萬潮歸一', elem: 'water', power: 80, cost: 0, acc: 100, desc: '把五片海域的潮水全部召喚過來，一口氣砸下去。', anim: 'beam' };
+export const ULT_EVERY = 4, ROD_CD = 3, ROD_DMG = 0.1, ROD_WEAKEN = 0.9;
+/** 平衡用：每條血是原本 HP 的幾倍、召喚的霸主比統領者低幾級 */
+export const FINAL_TUNE = { barHp: 0.7, summonDrop: 3 };
+/** 第二條血時會被召喚出來的霸主 */
+export const FINAL_SUMMONS = ['whale', 'frostking', 'lavadragon', 'mainframe_leviathan', 'nether_whale'];
 export const STRUGGLE: Skill = { id: 'struggle', name: '掙扎', elem: null, power: 35, cost: 0, acc: 100, desc: '能量不足時使用。', anim: 'hit' };
 export const MAX_ENERGY = 5;
 const STATUS_NAME: Record<StatusId, string> = { burn: '灼傷', para: '麻痺', poison: '中毒', freeze: '冰凍', glitch: '資料錯亂', sleep: '睡眠', blind: '致盲', bleed: '流血' };
@@ -138,7 +155,7 @@ function bubble(s: BattleState, side: SideId, ev?: BEvent[]) {
 }
 
 const stageMult = (s: number) => (s >= 0 ? (2 + s) / 2 : 2 / (2 - s));
-const nameOf = (s: BattleState, side: SideId) => isGodHand(active(s, side)) ? '神之手' : (side === 1 && s.wild ? '野生的 ' : side === 1 ? '對手的 ' : '') + formOf(active(s, side)).name;
+const nameOf = (s: BattleState, side: SideId) => isGodHand(active(s, side)) ? '神之手' : (side === 1 && s.final ? '' : side === 1 && s.wild ? '野生的 ' : side === 1 ? '對手的 ' : '') + formOf(active(s, side)).name;
 
 function effSpeed(s: BattleState, side: SideId): number {
   const m = active(s, side), v = volOf(s, side), f = formOf(m);
@@ -152,7 +169,7 @@ function effSpeed(s: BattleState, side: SideId): number {
 }
 
 export function skillFor(m: Mon, slot: number): Skill {
-  return slot < 0 ? STRUGGLE : SKILLS[m.skills[slot]] ?? STRUGGLE;
+  return slot === -2 ? MOXU_ULT : slot < 0 ? STRUGGLE : SKILLS[m.skills[slot]] ?? STRUGGLE;
 }
 
 export function canAfford(s: BattleState, side: SideId, slot: number): boolean {
@@ -162,6 +179,7 @@ export function canAfford(s: BattleState, side: SideId, slot: number): boolean {
 
 // ── 主流程：雙方各一個行動，結算一回合 ──
 export function resolveTurn(s: BattleState, actions: [Action, Action]): BEvent[] {
+  if (s.final) return resolveFinal(s, actions);
   const ev: BEvent[] = [];
   if (s.over) return ev;
   // 無法忽視的愛：這回合玩家只能用技能
@@ -172,7 +190,7 @@ export function resolveTurn(s: BattleState, actions: [Action, Action]): BEvent[]
   }
   const prio = (side: SideId): number => {
     const a = actions[side];
-    if (a.type === 'switch' || a.type === 'item' || a.type === 'run') return 10;
+    if (a.type === 'switch' || a.type === 'item' || a.type === 'run' || a.type === 'rod') return 10;
     if (a.type === 'pass') return 9;
     return skillFor(active(s, side), a.slot).fx?.priority ?? 0;
   };
@@ -219,6 +237,7 @@ function doAction(s: BattleState, side: SideId, a: Action, ev: BEvent[]) {
   }
   if (a.type === 'switch') { switchIn(s, side, a.to, ev); return; }
   if (a.type === 'item') { useItem(s, side, a.item, a.target, ev); return; }
+  if (a.type === 'rod') { if (s.final) doRod(s, ev); return; }
   useSkill(s, side, a.slot, ev);
 }
 
@@ -596,6 +615,7 @@ function afterHitAbilities(s: BattleState, att: SideId, def: SideId, ev: BEvent[
 
 function checkFaints(s: BattleState, ev: BEvent[]) {
   for (const side of [0, 1] as SideId[]) {
+    if (side === 1 && s.final) { finalFaint(s, ev); continue; }
     const m = active(s, side);
     if (m.hp > 0 || s.needSwitch[side]) continue;
     const sd0 = s.sides[side];
@@ -626,6 +646,7 @@ function checkEnrage(s: BattleState, ev: BEvent[]) {
   if (s.over) return;
   for (const side of [0, 1] as SideId[]) {
     const sd = s.sides[side], m = active(s, side);
+    if (side === 1 && s.final && sd.active !== 0) continue;
     if (!sd.boss || sd.enraged || m.hp <= 0 || m.hp > maxHp(m) / 2) continue;
     sd.enraged = true;
     const v = volOf(s, side);
@@ -639,9 +660,9 @@ function checkEnrage(s: BattleState, ev: BEvent[]) {
 
 export const VORTEX_TURN = 20;
 
-function endOfTurn(s: BattleState, ev: BEvent[]) {
-  if (s.turn === VORTEX_TURN) ev.push({ t: 'msg', text: '海面開始捲起漩渦！每回合雙方都會受到傷害。' });
-  for (const side of [0, 1] as SideId[]) {
+function endOfTurn(s: BattleState, ev: BEvent[], only?: SideId) {
+  if (s.turn === VORTEX_TURN && only === undefined) ev.push({ t: 'msg', text: '海面開始捲起漩渦！每回合雙方都會受到傷害。' });
+  for (const side of (only === undefined ? [0, 1] : [only]) as SideId[]) {
     if (s.over) return;
     const m = active(s, side), v = volOf(s, side), f = formOf(m);
     if (m.hp <= 0) continue;
@@ -701,7 +722,7 @@ function endOfTurn(s: BattleState, ev: BEvent[]) {
     v.energy = Math.min(MAX_ENERGY, v.energy + 1 + (s.domain === 'core' && (side === 0 || s.turn % 2 === 0) ? 1 : 0) + (bn(s, side, 'L_tideking') ? 1 : 0) + (hasAb(f, 'tidegod') || hasAb(f, 'dragonpresence') ? 1 : 0));
     ev.push({ t: 'energy', side, value: v.energy });
   }
-  if (s.over) return;
+  if (s.over || only !== undefined) return;
   if (s.field) {
     s.field.turns--;
     if (s.field.turns <= 0) { ev.push({ t: 'msg', text: `「${FIELDS[s.field.id].name}」消失了。` }); s.field = null; ev.push({ t: 'field', id: null, turns: 0 }); }
@@ -787,6 +808,8 @@ function godHandAi(s: BattleState, side: SideId): Action {
 }
 
 export function aiChoose(s: BattleState, side: SideId): Action {
+  // 統領者：大絕招倒數到 0 就施放
+  if (s.final && side === 1 && s.sides[1].active === 0 && s.final.ultIn <= 0) return { type: 'skill', slot: -2 };
   if (s.godhand && isGodHand(active(s, side))) return godHandAi(s, side);
   const me = active(s, side), foe: SideId = side === 0 ? 1 : 0, tg = active(s, foe);
   const v = volOf(s, side), hpRatio = me.hp / maxHp(me), myElems = formOf(me).elems;
@@ -831,3 +854,138 @@ export function aiForcedSwitch(s: BattleState, side: SideId): number {
 
 export const statusLabel = (st: StatusId | null) => (st ? STATUS_NAME[st] : '');
 export const elemColor = (e: keyof typeof ELEM) => ELEM[e].color;
+
+// ── 最終決戰：統領者・潮汐默旭 ──
+export function startFinal(s: BattleState) {
+  s.final = { phase: 1, ally: null, ultIn: ULT_EVERY - 1, rodCd: 0, rodUses: 0 };
+  const main = s.sides[1].team[0];
+  main.hpFixed = Math.round(maxHp(main) * FINAL_TUNE.barHp); main.hp = main.hpFixed;
+}
+/** 對手場上的位置：0 = 統領者，ally = 被召喚的霸主 */
+export const finalSlots = (s: BattleState) => [0, ...(s.final?.ally != null ? [s.final.ally] : [])].filter((i) => s.sides[1].team[i]?.hp > 0);
+export const canRod = (s: BattleState) => !!s.final && s.final.phase === 2 && s.final.rodCd <= 0 && !s.over;
+
+/** 暫時把某一隻設成出場中，執行完再換回統領者（引擎裡大部分邏輯都只看「出場中」的那一隻） */
+function withSlot<T>(s: BattleState, idx: number, fn: () => T): T {
+  s.sides[1].active = idx;
+  try { return fn(); } finally { s.sides[1].active = 0; }
+}
+/** 幫對手方的事件標上是哪一隻 */
+function tagSlot(ev: BEvent[], from: number, idx: number) {
+  for (let i = from; i < ev.length; i++) { const e = ev[i] as { side?: number; slot?: number }; if (e.side === 1 && e.slot === undefined) e.slot = idx; }
+}
+
+function finalFaint(s: BattleState, ev: BEvent[]) {
+  const F = s.final!, S1 = s.sides[1], main = S1.team[0];
+  if (F.ally != null) {
+    const al = S1.team[F.ally];
+    if (al.hp <= 0) {
+      al.status = null;
+      ev.push({ t: 'faint', side: 1, slot: F.ally });
+      ev.push({ t: 'msg', text: `${formOf(al).name} 倒下了，沉回了海裡！` });
+      F.ally = null;
+    }
+  }
+  if (main.hp > 0 || s.over) return;
+  if (F.phase === 1) {
+    // 第一條血沒了：第二條血補滿，召喚一隻霸主
+    F.phase = 2; main.hp = maxHp(main); main.status = null; S1.enraged = false;
+    const v = S1.vol[main.uid]; v.stages = { atk: 0, def: 0, spd: 0 }; v.shield = 0; v.charged = false;
+    ev.push({ t: 'msg', text: '潮汐・默旭：「……不錯。那就讓你們見識，萬潮真正的力量。」' });
+    ev.push({ t: 'phase2', side: 1, slot: 0, hp: main.hp, max: main.hp });
+    const id = FINAL_SUMMONS[Math.floor(next(s.rng) * FINAL_SUMMONS.length)];
+    const al = makeMon(id, Math.max(1, main.lv - FINAL_TUNE.summonDrop), true, true);
+    S1.team.push(al); S1.vol[al.uid] = freshVol(); F.ally = S1.team.length - 1; F.summoned = id;
+    ev.push({ t: 'summon', side: 1, slot: F.ally, form: id, lv: al.lv, hp: al.hp, max: maxHp(al) });
+    ev.push({ t: 'msg', text: `${formOf(al).name} 回應了統領者的潮聲，加入了戰鬥！` });
+    ev.push({ t: 'msg', text: '漁夫握緊了釣竿……現在可以使用「漁夫的釣竿」了！' });
+    return;
+  }
+  main.status = null;
+  ev.push({ t: 'faint', side: 1, slot: 0 });
+  ev.push({ t: 'msg', text: '潮汐・默旭 的最後一條潮，平息了。' });
+  s.over = { winner: 0 }; ev.push({ t: 'end', winner: 0 });
+}
+
+/** 漁夫的釣竿：魚線和魚鉤橫掃全場，對手每一隻都受到最大 HP 10% 的傷害，攻擊、防禦各降低 10% */
+function doRod(s: BattleState, ev: BEvent[]) {
+  const F = s.final!, S1 = s.sides[1];
+  if (!canRod(s)) { ev.push({ t: 'msg', text: '釣竿還沒準備好……' }); return; }
+  F.rodCd = ROD_CD; F.rodUses++;
+  ev.push({ t: 'rod', side: 0 });
+  ev.push({ t: 'msg', text: '漁夫跳了出來，甩起釣竿——魚線和魚鉤橫掃整片海面！' });
+  const targets = finalSlots(s);
+  for (const i of targets) {
+    const m = S1.team[i], d = Math.max(1, Math.floor(maxHp(m) * ROD_DMG));
+    m.hp = Math.max(0, m.hp - d);
+    ev.push({ t: 'dmg', side: 1, slot: i, amount: d, hp: m.hp, eff: 1, crit: false, shield: S1.vol[m.uid].shield });
+  }
+  const mods = (S1.mods = { ...(S1.mods ?? NO_MODS) });
+  mods.atk *= ROD_WEAKEN; mods.def *= ROD_WEAKEN;
+  for (const i of targets) if (S1.team[i].hp > 0) ev.push({ t: 'stat', side: 1, slot: i, key: 'atk', delta: -1 });
+  ev.push({ t: 'msg', text: '對手的攻擊和防禦都降低了 10%！' });
+  finalFaint(s, ev);
+}
+
+function resolveFinal(s: BattleState, actions: [Action, Action]): BEvent[] {
+  const ev: BEvent[] = [];
+  if (s.over) return ev;
+  const F = s.final!, S1 = s.sides[1];
+  S1.active = 0;
+  type Act = { side: SideId; idx: number; a: Action };
+  const acts: Act[] = [{ side: 0, idx: 0, a: actions[0] }, { side: 1, idx: 0, a: actions[1] }];
+  if (F.ally != null && S1.team[F.ally].hp > 0) { const ai = F.ally; acts.push({ side: 1, idx: ai, a: withSlot(s, ai, () => aiChoose(s, 1)) }); }
+  const prio = (x: Act): number => {
+    const a = x.a;
+    if (a.type === 'switch' || a.type === 'item' || a.type === 'run' || a.type === 'rod') return 10;
+    if (a.type === 'pass') return 9;
+    return x.side === 0 ? skillFor(active(s, 0), a.slot).fx?.priority ?? 0 : withSlot(s, x.idx, () => skillFor(active(s, 1), a.slot).fx?.priority ?? 0);
+  };
+  const speed = (x: Act) => (x.side === 0 ? effSpeed(s, 0) : withSlot(s, x.idx, () => effSpeed(s, 1)));
+  const key = acts.map((x) => ({ x, p: prio(x), sp: speed(x) * (s.domain === 'void' ? -1 : 1), r: next(s.rng) }));
+  key.sort((a, b) => b.p - a.p || b.sp - a.sp || a.r - b.r);
+  const start0 = active(s, 0).uid;
+  let usedUlt = false;
+  for (const { x } of key) {
+    if (s.over) break;
+    const from = ev.length;
+    if (x.side === 0) {
+      const me = active(s, 0);
+      if (me.hp <= 0) continue;
+      if (x.a.type === 'skill' && me.uid !== start0) continue;
+      if (x.a.type === 'rod') doRod(s, ev);
+      else if (x.a.type === 'skill') {
+        let tgt = x.a.target ?? 0;
+        if (!finalSlots(s).includes(tgt)) tgt = 0;
+        const a = x.a;
+        withSlot(s, tgt, () => {
+          doAction(s, 0, a, ev); tagSlot(ev, from, tgt);
+          for (let i = from; i < ev.length; i++) { const e = ev[i]; if (e.t === 'use' && e.side === 0) e.slot = tgt; } // 讓畫面知道打的是哪一隻
+        });
+      } else doAction(s, 0, x.a, ev);
+    } else {
+      if (!finalSlots(s).includes(x.idx)) continue;
+      if (x.a.type === 'skill' && active(s, 0).hp <= 0) continue;
+      const a = x.a;
+      withSlot(s, x.idx, () => { doAction(s, 1, a, ev); tagSlot(ev, from, x.idx); });
+      if (x.idx === 0 && a.type === 'skill' && a.slot === -2) usedUlt = true;
+    }
+    tagSlot(ev, from, 0);
+    checkFaints(s, ev);
+    checkEnrage(s, ev);
+  }
+  if (!s.over) {
+    let from = ev.length;
+    endOfTurn(s, ev); tagSlot(ev, from, 0);
+    const ai = F.ally;
+    if (ai != null && S1.team[ai].hp > 0 && !s.over) withSlot(s, ai, () => { from = ev.length; endOfTurn(s, ev, 1); tagSlot(ev, from, ai); });
+    checkEnrage(s, ev);
+  }
+  if (!s.over) {
+    F.ultIn = usedUlt ? ULT_EVERY - 1 : F.ultIn - 1;
+    if (F.ultIn === 0) { ev.push({ t: 'ultwarn' }); ev.push({ t: 'msg', text: '海水開始往統領者身邊倒捲……下一回合是大絕招「萬潮歸一」！' }); }
+    if (F.rodCd > 0) F.rodCd--;
+  }
+  s.turn++;
+  return ev;
+}

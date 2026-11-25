@@ -8,7 +8,7 @@ import { FORMS } from '../data/creatures';
 import { FIELDS, SKILLS, type FieldId, type StatusId } from '../data/skills';
 import { effectiveness, ELEM, RARITY, type Elem } from '../data/types';
 import {
-  active, aiChoose, aiForcedSwitch, canAfford, createBattle, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, resolveTurn, restorePulled, statusLabel, volOf,
+  active, aiChoose, aiForcedSwitch, canAfford, canRod, createBattle, finalSlots, MOXU_ULT, startFinal, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, resolveTurn, restorePulled, statusLabel, volOf,
   type Action, type BattleState, type BEvent, type ItemId, type SideId,
 } from '../game/battle';
 import { blockRate, dodgeRate, formOf, maxHp, statsOf, type Mon } from '../game/creature';
@@ -18,7 +18,7 @@ import { foeMods, battleMods, boon, LANDING_BONUS, zoneOf } from '../game/run';
 import type { Encounter, RunState } from '../game/run';
 import { spriteSize } from '../render/pixel';
 import { drawFx, FX_FRAMES, FX_MS, fxOffset, fxSkill, hasFx, loadFx } from '../render/vfx';
-import { auraColor, burst, drawBattle, drawNet, H, monSlot, W, type Beam, type MonView, type Particle } from '../render/scene';
+import { auraColor, burst, drawBattle, drawNet, fisherCanvas, H, monSlot, W, type Beam, type MonView, type Particle } from '../render/scene';
 import { Tip, AbilityLines, Bar, ElemChip, Elems, Energy, IvStars, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
@@ -31,12 +31,65 @@ interface Intent { key: string; act: Action; icon: string; name: string; elem: E
 
 type Mode = 'busy' | 'main' | 'skills' | 'switch' | 'force' | 'items' | 'itemTarget' | 'reel' | 'lifestone';
 interface Disp { form: string; lv: number; hp: number; max: number; energy: number; status: StatusId | null; shield: number; trap?: number; mutant?: boolean }
-interface Popup { id: number; side: SideId; text: string; cls: string; label?: string; dx: number }
+interface Popup { id: number; side: number; text: string; cls: string; label?: string; dx: number } // side：畫面上的角色（0 我方、1 對手、2 被召喚的霸主）
 
 const SPEED_KEY = 'tidehunter.speed';
 /** 場地類特效鋪滿的範圍（場景座標，避開下方操作列） */
 const FX_ARENA = { x: 20, y: 2, w: 216, h: 117 };
 const DASH = 0.5; // 近戰衝刺的時間（秒）
+const ROD_T = 1.7, ULT_T = 1.9; // 漁夫的釣竿、大絕招動畫的長度（秒）
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+/** 漁夫的釣竿：漁夫從左下跳出來 → 甩竿，魚線帶著魚鉤橫掃過每一隻對手 → 落回去 */
+function drawRod(c: CanvasRenderingContext2D, t: number, foes: ({ cx: number; cy: number } | null)[]) {
+  const img = fisherCanvas(false), fw = img.width * 2, fh = img.height * 2; // 放大兩倍，看得清楚
+  const jump = clamp01(t / 0.35), fall = clamp01((t - 1.35) / 0.3);
+  const fx = 24 + jump * 14, fy = 160 - Math.sin(jump * Math.PI * 0.5) * 84 + fall * 110;
+  // 跳出來時的水花
+  if (t < 0.45) { c.fillStyle = 'rgba(220,245,255,0.8)'; for (let i = 0; i < 8; i++) c.fillRect(Math.round(fx + 6 + Math.cos(i) * (6 + t * 30)), Math.round(120 - Math.abs(Math.sin(i * 2)) * t * 40), 2, 2); }
+  c.imageSmoothingEnabled = false; c.drawImage(img, Math.round(fx), Math.round(fy - fh), fw, fh);
+  // 甩竿：0.35～1.35 秒，魚鉤從漁夫身邊沿著弧線甩過整片海面
+  const sw = clamp01((t - 0.35) / 1.0);
+  if (sw > 0 && fall < 1) {
+    const hx0 = fx + fw, hy0 = fy - fh + 2; // 竿尖
+    const ease = sw < 0.5 ? 2 * sw * sw : 1 - Math.pow(-2 * sw + 2, 2) / 2;
+    const hookX = hx0 + ease * 210, hookY = 70 + Math.sin(ease * Math.PI * 2) * 18 - Math.sin(ease * Math.PI) * 20;
+    // 魚線（二次曲線）
+    c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 1; c.beginPath(); c.moveTo(hx0, hy0);
+    c.quadraticCurveTo((hx0 + hookX) / 2, Math.min(hy0, hookY) - 40, hookX, hookY); c.stroke();
+    // 甩過的軌跡
+    for (let k = 1; k < 10; k++) {
+      const e2 = Math.max(0, ease - k * 0.025), x = hx0 + e2 * 210, y = 70 + Math.sin(e2 * Math.PI * 2) * 18 - Math.sin(e2 * Math.PI) * 20;
+      c.fillStyle = `rgba(255,231,160,${0.5 - k * 0.05})`; c.fillRect(Math.round(x), Math.round(y), 2, 2);
+    }
+    // 魚鉤
+    c.fillStyle = '#ffe7a0'; c.fillRect(Math.round(hookX), Math.round(hookY), 2, 5); c.fillRect(Math.round(hookX) - 2, Math.round(hookY) + 4, 3, 2); c.fillRect(Math.round(hookX) - 3, Math.round(hookY) + 2, 1, 2);
+    // 掃過對手時閃一下
+    for (const f of foes) if (f && Math.abs(f.cx - hookX) < 14) { c.fillStyle = 'rgba(255,255,255,0.7)'; c.beginPath(); c.arc(f.cx, f.cy, 14, 0, 7); c.fill(); }
+  }
+}
+/** 大絕招「萬潮歸一」：天色變暗 → 五片海域顏色的巨浪從右邊捲過整個畫面 → 白光 */
+const ULT_COLORS = ['#7fe3ff', '#d8f4ff', '#ff8a3a', '#5ff1ff', '#9a7aff'];
+function drawUlt(c: CanvasRenderingContext2D, t: number, time: number) {
+  const dark = clamp01(t / 0.4) * (1 - clamp01((t - 1.5) / 0.4));
+  c.fillStyle = `rgba(4,8,28,${0.55 * dark})`; c.fillRect(-200, 0, 656, 144);
+  const p = clamp01((t - 0.45) / 0.95);
+  if (p > 0 && p < 1) {
+    const front = 300 - p * 520; // 浪頭的位置（往左跑）
+    ULT_COLORS.forEach((col, k) => {
+      c.fillStyle = col; c.globalAlpha = 0.85 - k * 0.08;
+      for (let x = Math.floor(front); x < 460; x += 3) {
+        const top = 20 + k * 14 + Math.sin(x * 0.06 + time * 6 + k) * 6 + Math.max(0, 40 - (x - front) * 0.8);
+        c.fillRect(x, Math.round(top), 3, 144);
+      }
+    });
+    c.globalAlpha = 1;
+    // 浪頭的白色泡沫
+    c.fillStyle = '#ffffff';
+    for (let i = 0; i < 40; i++) c.fillRect(Math.round(front + Math.sin(i * 7.3) * 10), Math.round(20 + i * 3 + Math.sin(time * 9 + i) * 2), 3, 2);
+  }
+  const flash = clamp01((t - 1.35) / 0.15) * (1 - clamp01((t - 1.5) / 0.4));
+  if (flash > 0) { c.fillStyle = `rgba(255,255,255,${flash * 0.8})`; c.fillRect(-200, 0, 656, 144); }
+}
 // 觸控裝置（沒有滑鼠移過去）：第一下看說明，再點一次才使用
 const TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(hover: none)').matches;
 // 動畫是「hit」但其實是丟出去／從遠處打的招式，不衝過去
@@ -65,6 +118,12 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const bsRef = useRef<BattleState | null>(null);
   if (!bsRef.current) {
     bsRef.current = createBattle(makeRng((next(run.rng) * 2 ** 32) >>> 0), { team: run.party, name: '你', mods: battleMods(run) }, { team: enc.team ?? [enc.mon], name: boss ? '霸主' : enc.crew ?? '野生', boss, mods: foeMods(run) }, !enc.team, isDomain(run.zone) ? run.zone : undefined, !!enc.godhand);
+    if (enc.final) {
+      startFinal(bsRef.current);
+      // 開發用：網址加 ?finalhp=1 讓統領者開場只剩 1 HP，方便測第二條血
+      const fh = import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('finalhp')) : 0;
+      if (fh > 0) bsRef.current.sides[1].team[0].hp = fh;
+    }
   }
   const bs = bsRef.current;
   const crew = !!enc.team; // 對手船隊：多隻敵人、不能收服
@@ -77,7 +136,15 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     const m = active(bs, side);
     return { form: m.form, lv: m.lv, hp: m.hp, max: maxHp(m), energy: volOf(bs, side).energy, status: m.status, shield: volOf(bs, side).shield, mutant: m.mutant };
   };
-  const disp = useRef<[Disp, Disp]>([snap(0), snap(1)]);
+  const disp = useRef<Disp[]>([snap(0), snap(1)]); // [我方, 對手, 被召喚的霸主]
+  // 最終決戰 1 對 2：被召喚的霸主在對手隊伍的哪個位置、玩家要打哪一隻
+  const allySlot = useRef<number | null>(null);
+  const [target, setTarget] = useState(0);
+  const [cut, setCut] = useState<{ title: string; lines: string[]; tone?: string } | null>(null);
+  /** 事件對應到畫面上的哪一隻 */
+  const vi = (e: { side: number; slot?: number }) => (e.side === 0 ? 0 : e.slot != null && e.slot === allySlot.current ? 2 : 1);
+  /** 畫面上第 v 隻的站位 */
+  const posOf = (v: number, form: string) => (v === 0 ? monSlot(0, form) : monSlot(1, form, allySlot.current != null ? (v === 2 ? 'ally' : 'back') : undefined));
   const [, setTick] = useState(0);
   const rerender = () => setTick((x) => x + 1);
   const [mode, setMode] = useState<Mode>('busy');
@@ -106,7 +173,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     if (intentRef.current?.key === key) return;
     const act = aiChoose(bs, 1);
     const foeM = active(bs, 1);
-    const sk = act.type === 'skill' ? (act.slot < 0 ? null : SKILLS[foeM.skills[act.slot]]) : null;
+    const sk = act.type === 'skill' ? (act.slot === -2 ? MOXU_ULT : act.slot < 0 ? null : SKILLS[foeM.skills[act.slot]]) : null;
     const it: Intent = sk
       ? { key, act, icon: sk.power > 0 ? 'attack' : sk.fx?.heal ? 'heal' : sk.fx?.status || (sk.fx?.stat && !sk.fx.stat.self) ? 'hinder' : 'buff', name: sk.name, elem: sk.elem, atk: sk.power > 0 }
       : { key, act, icon: 'attack', name: '掙扎', elem: null, atk: true };
@@ -119,9 +186,11 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   };
   const anim = useRef({
     mons: [mkView(0, disp.current[0].form), mkView(1, disp.current[1].form)] as MonView[],
-    lungeT: [0, 0], dashT: [0, 0], shakeT: [0, 0], fade: [1, 1] as number[], enter: [0, 0] as number[],
+    lungeT: [0, 0, 0], dashT: [0, 0, 0], shakeT: [0, 0, 0], fade: [1, 1, 0] as number[], enter: [0, 0, 0] as number[],
+    dashTo: [1, 0, 0] as number[], // 衝刺的目標（畫面上的第幾隻）
     parts: [] as Particle[], beams: [] as Beam[],
-    fx: [] as { code: string; side: SideId; e: number }[], // 播放中的技能特效（e = 已播放幾格）
+    fx: [] as { code: string; from: number; to: number; e: number; big?: boolean }[], // 播放中的技能特效（e = 已播放幾格；big：統領者的招式放大）
+    rod: -1, ult: -1, // 漁夫的釣竿、大絕招的動畫進度（秒，-1 = 沒有在播）
     quake: 0, flash: 0, flashColor: '#ffffff',
   });
   // 開發用：網址加 ?field=storm 可以直接看場地特效
@@ -130,7 +199,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const hurry = useRef(false); // 點訊息框：這一輪的演出加速
   const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, hurry.current ? ms * 0.15 : fastRef.current ? ms * 0.45 : ms));
   const say = (text: string) => setLog((l) => [...l.slice(-30), text]);
-  const pop = (side: SideId, text: string, cls: string, label?: string) => {
+  const pop = (side: number, text: string, cls: string, label?: string) => {
     const id = Math.random();
     setPopups((p) => [...p, { id, side, text, cls, label, dx: (Math.random() - 0.5) * 8 }]);
     setTimeout(() => setPopups((p) => p.filter((x) => x.id !== id)), cls === 'crit' || cls === 'super' ? 1300 : 1000);
@@ -141,16 +210,17 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   // 每一格畫面：更新動畫狀態後繪製
   const draw = (ctx: CanvasRenderingContext2D, t: number, dt: number) => {
     const a = anim.current;
-    for (const side of [0, 1] as SideId[]) {
+    for (let side = 0; side < a.mons.length; side++) {
       const v = a.mons[side];
       a.enter[side] = Math.min(1, a.enter[side] + dt * 2.2);
-      const p = monSlot(side, v.form), e = 1 - Math.pow(1 - a.enter[side], 3);
+      const p = posOf(side, v.form), e = 1 - Math.pow(1 - a.enter[side], 3);
       v.x = p.x + (1 - e) * (side === 0 ? -90 : 90);
-      v.y = p.y;
+      v.y = p.y; v.base = { x: p.bx, y: p.by };
+      if (side === 2) v.y = p.y + (1 - e) * 40; // 被召喚的霸主從海裡升上來
       // 近戰：衝到對手面前再退回來
       a.dashT[side] = Math.max(0, a.dashT[side] - dt);
       if (a.dashT[side] > 0) {
-        const other: SideId = side === 0 ? 1 : 0, tg = monSlot(other, a.mons[other].form);
+        const other = a.dashTo[side], tg = posOf(other, a.mons[other]?.form ?? v.form);
         const k = Math.sin((1 - a.dashT[side] / DASH) * Math.PI);
         v.x += (tg.cx - p.cx - (side === 0 ? 28 : -28)) * k;
         v.y += (tg.cy - p.cy) * k;
@@ -168,20 +238,22 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     const spd = hurry.current ? 4 : fastRef.current ? 2 : 1;
     for (const f of a.fx) f.e += (dt * 1000 * spd) / FX_MS;
     a.fx = a.fx.filter((f) => f.e < FX_FRAMES);
-    for (const side of [0, 1] as SideId[]) { a.mons[side].ox = 0; a.mons[side].oy = 0; }
+    for (const v of a.mons) { v.ox = 0; v.oy = 0; }
     for (const f of a.fx) {
-      const fr = Math.floor(f.e), foe: SideId = f.side === 0 ? 1 : 0;
-      for (const [sd, who] of [[f.side, 'caster'], [foe, 'target']] as const) {
-        const v = a.mons[sd], [ox, oy] = fxOffset(f.code, fr, who, v.flip);
-        v.ox = (v.ox ?? 0) + ox; v.oy = (v.oy ?? 0) + oy;
+      const fr = Math.floor(f.e);
+      for (const [sd, who] of [[f.from, 'caster'], [f.to, 'target']] as const) {
+        const v = a.mons[sd]; if (!v) continue;
+        const [ox, oy] = fxOffset(f.code, fr, who, v.flip);
+        v.ox = (v.ox ?? 0) + ox * (f.big ? 2 : 1); v.oy = (v.oy ?? 0) + oy * (f.big ? 2 : 1);
       }
     }
     const fxLayer = (c: CanvasRenderingContext2D, which: 'back' | 'front', rects: ({ x: number; y: number; w: number } | null)[]) => {
       for (const f of a.fx) {
-        const foe: SideId = f.side === 0 ? 1 : 0, r0 = rects[f.side], r1 = rects[foe];
+        const r0 = rects[f.from], r1 = rects[f.to];
         if (!r0 || !r1) continue;
-        const actor = (sd: SideId, r: { x: number; y: number; w: number }) => { const sp = FORMS[a.mons[sd].form].sprite; return { rect: r, sprite: sp, facesLeft: a.mons[sd].flip, logical: spriteSize(sp) }; };
-        const A = actor(f.side, r0), B = actor(foe, r1), fr = Math.floor(f.e);
+        // 統領者的招式：特效放大成 1.8 倍
+        const actor = (sd: number, r: { x: number; y: number; w: number }, big?: boolean) => { const sp = FORMS[a.mons[sd].form].sprite; return { rect: r, sprite: sp, facesLeft: a.mons[sd].flip, logical: spriteSize(sp) / (big ? 1.8 : 1) }; };
+        const A = actor(f.from, r0, f.big), B = actor(f.to, r1), fr = Math.floor(f.e);
         if (which === 'back') drawFx(c, f.code, 'back', fr, A, B, FX_ARENA);
         else { drawFx(c, f.code, 'front', fr, A, B, FX_ARENA); drawFx(c, f.code, 'particles', fr, A, B, FX_ARENA); }
       }
@@ -192,6 +264,13 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     drawBattle(ctx, t, dt, a.mons, a.parts, a.beams, zoneOf(run).theme, { field: fieldRef.current, quake: q, flash: fl, flashColor: a.flashColor, fxLayer });
     if (a.mons[1].form === 'godhand' && a.fade[1] > 0) { const c = monSlot(1, 'godhand'); drawGodHand(ctx, t, c.cx, a.mons[1].y ?? c.y, c.scale, 0, false); }
     if (net.current) { const c = monSlot(1, a.mons[1].form); const n = net.current; n.glow = Math.max(0, n.glow - dt); drawNet(ctx, c.cx, c.cy + 6, n.wob, n.glow); }
+    // 1 對 2：目前選的攻擊目標上方有一個上下跳的箭頭
+    if (allySlot.current != null && (mode === 'main' || mode === 'skills') && finalSlots(bs).length > 1) {
+      const tv = target === allySlot.current ? 2 : 1, m = a.mons[tv];
+      if (m) { const p = posOf(tv, m.form), y = Math.round(p.y - 6 + Math.sin(t * 6) * 2); ctx.fillStyle = '#ffcf4a'; ctx.fillRect(p.cx - 3, y, 7, 2); ctx.fillRect(p.cx - 2, y + 2, 5, 1); ctx.fillRect(p.cx - 1, y + 3, 3, 1); ctx.fillRect(p.cx, y + 4, 1, 1); }
+    }
+    if (a.rod >= 0) { a.rod += dt * (hurry.current ? 3 : fastRef.current ? 1.5 : 1); drawRod(ctx, a.rod, a.mons.map((m, i) => (i === 0 || !m || a.fade[i] <= 0 ? null : posOf(i, m.form)))); if (a.rod > ROD_T) a.rod = -1; }
+    if (a.ult >= 0) { a.ult += dt * (hurry.current ? 3 : fastRef.current ? 1.5 : 1); drawUlt(ctx, a.ult, t); if (a.ult > ULT_T) a.ult = -1; }
   };
 
   // 先把雙方隊伍會用到的技能特效圖載進來
@@ -237,41 +316,49 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     await pause(350);
     setIntro(null);
   }
-  const center = (side: SideId) => { const v = anim.current.mons[side]; const p = monSlot(side, v.form); return { x: p.cx, y: p.cy }; };
+  const center = (v: number) => { const m = anim.current.mons[v] ?? anim.current.mons[1]; const p = posOf(v, m.form); return { x: p.cx, y: p.cy }; };
 
   async function apply(e: BEvent) {
     const a = anim.current, d = disp.current;
     switch (e.t) {
       case 'msg': say(e.text); await wait(560); break;
       case 'use': {
+        // 施術者、目標在畫面上是第幾隻（1 對 2 時看 slot）
+        const from = vi(e), to = e.side === 0 ? (e.slot != null && e.slot === allySlot.current ? 2 : 1) : 0;
+        const moxu = from !== 0 && a.mons[from]?.form === 'tide_moxu';
+        if (e.skill === 'moxu_ult') { await playUlt(); break; }
         const sk = SKILLS[e.skill] ?? { anim: 'hit', elem: null };
-        const foe: SideId = e.side === 0 ? 1 : 0, c = center(foe), me = center(e.side);
+        const c = center(to), me = center(from);
         const kind = sk.anim ?? 'hit';
+        a.dashTo[from] = to;
         sfx(kind === 'buff' ? 'buff' : kind === 'heal' ? 'item' : `skill:${sk.elem ?? 'none'}`);
+        // 統領者的招式：畫面先暗一下、閃光、震動、四周冒出光點
+        if (moxu) { jolt(3.5, 0.45, '#7fd8ff'); sfx('enrage'); for (let k = 0; k < 3; k++) burst(a.parts, me.x + (Math.random() - 0.5) * 40, me.y + (Math.random() - 0.5) * 30, 'buff', 'water'); await wait(260); }
         if (hasFx(e.skill)) {
           // 有專屬特效的招式：播特效，角色只做衝刺／前傾的動作
-          loadFx(e.skill); a.fx.push({ code: e.skill, side: e.side, e: 0 });
+          loadFx(e.skill); a.fx.push({ code: e.skill, from, to, e: 0, big: moxu });
+          if (moxu) setTimeout(() => jolt(4, 0.3, '#ffffff'), 420);
           const st = fxSkill(e.skill).style;
-          if (st === 'dash' || (kind === 'hit' && (sk as { power?: number }).power && !RANGED_HIT.has(e.skill) && st !== 'self')) { a.dashT[e.side] = DASH; await wait(DASH * 900); break; }
-          if (st !== 'self' && st !== 'field') a.lungeT[e.side] = 0.25;
-          await wait(450); break;
+          if (st === 'dash' || (kind === 'hit' && (sk as { power?: number }).power && !RANGED_HIT.has(e.skill) && st !== 'self')) { a.dashT[from] = DASH; await wait(DASH * 900); break; }
+          if (st !== 'self' && st !== 'field') a.lungeT[from] = 0.25;
+          await wait(moxu ? 650 : 450); break;
         }
         if (kind === 'buff' || kind === 'heal') { burst(a.parts, me.x, me.y, kind, sk.elem); }
         else if (kind === 'hit' && (sk as { power?: number }).power && !RANGED_HIT.has(e.skill)) {
           // 近戰招式：衝過去打
-          a.dashT[e.side] = DASH;
+          a.dashT[from] = DASH;
           setTimeout(() => burst(a.parts, c.x, c.y - 4, 'hit', sk.elem), DASH * 500);
           await wait(DASH * 700); break;
         } else {
-          a.lungeT[e.side] = 0.25;
-          if (kind === 'beam') a.beams.push({ x0: me.x, y0: me.y - 6, x1: c.x, y1: c.y - 6, life: 0.35, color: sk.elem ? '#ffffff' : '#ffffff' });
+          a.lungeT[from] = 0.25;
+          if (kind === 'beam') a.beams.push({ x0: me.x, y0: me.y - 6, x1: c.x, y1: c.y - 6, life: 0.35, color: '#ffffff' });
           setTimeout(() => burst(a.parts, c.x, c.y - 4, kind === 'splash' ? 'splash' : 'hit', sk.elem), 150);
         }
         await wait(260); break;
       }
       case 'miss': break;
-      case 'dodge': { sfx('dodge'); a.shakeT[e.side] = 0.15; a.lungeT[e.side] = 0.25; pop(e.side, '閃避！', 'miss'); await wait(200); break; }
-      case 'block': { sfx('block'); pop(e.side, '格擋', 'block'); break; }
+      case 'dodge': { const v = vi(e); sfx('dodge'); a.shakeT[v] = 0.15; a.lungeT[v] = 0.25; pop(v, '閃避！', 'miss'); await wait(200); break; }
+      case 'block': { sfx('block'); pop(vi(e), '格擋', 'block'); break; }
       case 'toss': {
         tossLeft.current = e.hits; tossTotal.current = e.hits; sfx('cast'); await wait(200); break;
       }
@@ -283,39 +370,41 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         sfx('reveal'); jolt(2, 0.5, '#7ab8ff'); setRewind(Math.random()); await wait(900); setRewind(0); rerender(); break;
       }
       case 'dmg': {
+        const v = vi(e);
         if (tossLeft.current > 0) {
           // 拋接：每次 1 點，快速彈跳
           tossLeft.current--;
-          d[e.side].hp = e.hp; const v = a.mons[e.side], base = monSlot(e.side, v.form).y;
-          v.y = base - 16 - Math.random() * 10; sfx('hit');
-          rerender(); await wait(90); v.y = base; await wait(50);
-          if (tossLeft.current === 0) { pop(e.side, `-${tossTotal.current}`, 'big', `拋接 ×${tossTotal.current}`); rerender(); await wait(400); }
+          d[v].hp = e.hp; const m = a.mons[v], base = posOf(v, m.form).y;
+          m.y = base - 16 - Math.random() * 10; sfx('hit');
+          rerender(); await wait(90); m.y = base; await wait(50);
+          if (tossLeft.current === 0) { pop(v, `-${tossTotal.current}`, 'big', `拋接 ×${tossTotal.current}`); rerender(); await wait(400); }
           break;
         }
-        d[e.side].hp = e.hp; d[e.side].shield = e.shield;
-        a.mons[e.side].flash = 0.35; a.shakeT[e.side] = 0.3;
+        d[v].hp = e.hp; d[v].shield = e.shield;
+        a.mons[v].flash = 0.35; a.shakeT[v] = 0.3;
         // 打擊感：暴擊與效果絕佳會震動畫面、閃光，並停頓一下（hit-stop）
-        const big = e.amount >= d[e.side].max * 0.25;
+        const big = e.amount >= d[v].max * 0.25;
         if (e.crit) { sfx('crit'); jolt(3.5, 0.35); }
         else if (e.eff >= 2) { sfx('super'); jolt(2.5, 0.22, '#ffe08a'); }
         else if (e.eff > 0 && e.eff < 1) sfx('weak');
         else { sfx('hit'); if (big) jolt(1.5); }
-        pop(e.side, `-${e.amount}`, e.crit ? 'crit' : e.eff >= 2 ? 'super' : e.eff < 1 ? 'weak' : big ? 'big' : '', e.crit ? '暴擊！' : e.eff >= 2 ? '效果絕佳' : e.eff > 0 && e.eff < 1 ? '效果不好' : undefined);
+        pop(v, `-${e.amount}`, e.crit ? 'crit' : e.eff >= 2 ? 'super' : e.eff < 1 ? 'weak' : big ? 'big' : '', e.crit ? '暴擊！' : e.eff >= 2 ? '效果絕佳' : e.eff > 0 && e.eff < 1 ? '效果不好' : undefined);
         rerender();
         if (e.crit || e.eff >= 2) await new Promise((r) => setTimeout(r, 110)); // 停頓不受快速模式影響
         await wait(420); break;
       }
       case 'heal': {
-        d[e.side].hp = e.hp; const c = center(e.side);
-        if (e.amount > 0) { sfx('heal'); burst(a.parts, c.x, c.y, 'heal', null); pop(e.side, `+${e.amount}`, 'heal'); }
+        const v = vi(e); d[v].hp = e.hp; const c = center(v);
+        if (e.amount > 0) { sfx('heal'); burst(a.parts, c.x, c.y, 'heal', null); pop(v, `+${e.amount}`, 'heal'); }
         rerender(); await wait(300); break;
       }
-      case 'shield': d[e.side].shield = e.amount; rerender(); break;
-      case 'status': if (e.status) sfx('status'); d[e.side].status = e.status; rerender(); break;
-      case 'stat': { sfx(e.delta > 0 ? 'buff' : 'debuff'); const c = center(e.side); if (e.delta > 0) burst(a.parts, c.x, c.y, 'buff', null); else a.shakeT[e.side] = 0.2; pop(e.side, e.delta > 0 ? '▲' : '▼', e.delta > 0 ? 'heal' : 'weak'); break; }
-      case 'energy': d[e.side].energy = e.value; rerender(); break;
+      case 'shield': d[vi(e)].shield = e.amount; rerender(); break;
+      case 'status': if (e.status) sfx('status'); d[vi(e)].status = e.status; rerender(); break;
+      case 'stat': { const v = vi(e); sfx(e.delta > 0 ? 'buff' : 'debuff'); const c = center(v); if (e.delta > 0) burst(a.parts, c.x, c.y, 'buff', null); else a.shakeT[v] = 0.2; pop(v, e.delta > 0 ? '▲' : '▼', e.delta > 0 ? 'heal' : 'weak'); break; }
+      case 'energy': d[vi(e)].energy = e.value; rerender(); break;
       case 'faint': {
-        if (boss && e.side === 1) {
+        const v = vi(e);
+        if (boss && v === 1) {
           // 霸主倒下：閃爍、連續爆開、畫面劇烈震動，慢慢消失
           sfx('bossdown'); a.shakeT[1] = 1.6;
           const c = center(1);
@@ -325,25 +414,30 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           await new Promise((r) => setTimeout(r, 1100));
           burst(a.parts, c.x, c.y, 'faint', null); burst(a.parts, c.x, c.y, 'faint', null); jolt(6, 0.7);
           for (let i = 0; i < 20; i++) { a.fade[1] = 1 - (i + 1) / 20; await new Promise((r) => setTimeout(r, 45)); }
+          // 被召喚的霸主也跟著沉回海裡
+          if (a.fade[2] > 0) for (let i = 0; i < 10; i++) { a.fade[2] = 1 - (i + 1) / 10; await wait(30); }
           break;
         }
-        sfx('faint'); const c = center(e.side); burst(a.parts, c.x, c.y, 'faint', null);
-        for (let i = 0; i < 10; i++) { a.fade[e.side] = 1 - (i + 1) / 10; await wait(40); }
+        sfx(v === 2 ? 'bossdown' : 'faint'); const c = center(v); burst(a.parts, c.x, c.y, 'faint', null);
+        if (v === 2) { jolt(4, 0.4); burst(a.parts, c.x, c.y + 10, 'splash', 'water'); if (target === allySlot.current) setTarget(0); }
+        for (let i = 0; i < 10; i++) { a.fade[v] = 1 - (i + 1) / 10; await wait(40); }
+        rerender();
         break;
       }
       case 'switch': {
+        const v = vi(e);
         if (e.side === 0) participants.current.add(bs.sides[0].team[e.index].uid);
-        a.fade[e.side] = 1; a.enter[e.side] = 0;
-        a.mons[e.side] = { ...a.mons[e.side], form: e.form, scale: monSlot(e.side, e.form).scale, y: monSlot(e.side, e.form).y, aura: auraColor(e.form), mutant: bs.sides[e.side].team[e.index].mutant };
+        a.fade[v] = 1; a.enter[v] = 0;
+        a.mons[v] = { ...a.mons[v], form: e.form, scale: posOf(v, e.form).scale, y: posOf(v, e.form).y, aura: auraColor(e.form), mutant: bs.sides[e.side].team[e.index].mutant };
         const m = bs.sides[e.side].team[e.index];
-        d[e.side] = { form: e.form, lv: m.lv, hp: e.hp, max: maxHp(m), energy: e.energy, status: e.status, shield: 0, mutant: m.mutant };
+        d[v] = { form: e.form, lv: m.lv, hp: e.hp, max: maxHp(m), energy: e.energy, status: e.status, shield: 0, mutant: m.mutant };
         sfx('enter');
         // 落地時濺起水花
-        setTimeout(() => { const c = center(e.side); burst(a.parts, c.x, c.y + 14, 'splash', 'water'); }, 380);
+        setTimeout(() => { const c = center(v); burst(a.parts, c.x, c.y + 14, 'splash', 'water'); }, 380);
         rerender(); await wait(350); break;
       }
       case 'field': if (e.id && e.id !== fieldRef.current) { sfx('buff'); jolt(1, 0.2, '#ffffff'); } fieldRef.current = e.id; setField(e.id ? { id: e.id, turns: e.turns } : null); break;
-      case 'trap': d[e.side].trap = e.turns; rerender(); break;
+      case 'trap': d[e.side === 0 ? 0 : 1].trap = e.turns; rerender(); break;
       case 'item': {
         // 用道具的結果：固定顯示 2.5 秒（不受快速、加速影響），看得清楚回了多少
         if (e.side !== 0) break;
@@ -354,13 +448,71 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         await wait(700); break;
       }
       case 'enrage': {
-        const c = center(e.side), v = a.mons[e.side];
-        v.aura = '#ff3040'; v.flash = 0.6; a.shakeT[e.side] = 0.8; sfx('enrage'); jolt(5, 0.4, '#ff2030');
+        const v = vi(e), c = center(v), m = a.mons[v];
+        m.aura = '#ff3040'; m.flash = 0.6; a.shakeT[v] = 0.8; sfx('enrage'); jolt(5, 0.4, '#ff2030');
         burst(a.parts, c.x, c.y, 'faint', 'fire'); burst(a.parts, c.x, c.y, 'buff', 'fire');
-        pop(e.side, '狂暴！', 'crit'); await wait(700); break;
+        pop(v, '狂暴！', 'crit'); await wait(700); break;
+      }
+      case 'phase2': {
+        // 第一條血沒了：劇情字卡 → 第二條血補滿
+        const m = a.mons[1], c = center(1);
+        sfx('bossdown'); a.shakeT[1] = 1.2;
+        for (let k = 0; k < 4; k++) setTimeout(() => { burst(a.parts, c.x + (Math.random() - 0.5) * 30, c.y + (Math.random() - 0.5) * 24, 'hit', 'water'); jolt(4, 0.3, '#7fd8ff'); m.flash = 0.2; }, k * 200);
+        await new Promise((r) => setTimeout(r, 900));
+        await cutscene({ title: '第二條潮', lines: ['潮汐・默旭倒下的瞬間，四周的海水全部倒捲回祂身上……', '「……不錯。那就讓你們見識，萬潮真正的力量。」'], tone: 'blue' }, 3200);
+        sfx('heal'); jolt(5, 0.7, '#ffffff'); burst(a.parts, c.x, c.y, 'heal', 'water'); burst(a.parts, c.x, c.y, 'buff', 'water');
+        d[1].hp = e.hp; d[1].max = e.max; d[1].status = null; m.aura = auraColor('tide_moxu', true);
+        pop(1, 'HP 全滿！', 'heal'); rerender(); await wait(700);
+        break;
+      }
+      case 'summon': {
+        // 召喚霸主：劇情字卡 → 統領者退到後面 → 霸主從海裡升上來
+        const f = FORMS[e.form];
+        await cutscene({ title: '萬潮的召喚', lines: ['統領者舉起了手，所有海域的潮聲同時響起——', `「回應我吧，${f.name}！」`], tone: 'gold' }, 3000);
+        allySlot.current = e.slot;
+        const p = posOf(2, e.form);
+        a.mons[2] = { form: e.form, x: p.x, y: p.y + 40, flip: true, flash: 0.5, shake: 0, lunge: 0, alpha: 0, scale: p.scale, aura: auraColor(e.form, true), mutant: false, base: { x: p.bx, y: p.by } };
+        a.fade[2] = 1; a.enter[2] = 0;
+        const m = bs.sides[1].team[e.slot];
+        d[2] = { form: e.form, lv: e.lv, hp: e.hp, max: e.max, energy: bs.sides[1].vol[m.uid].energy, status: null, shield: 0 };
+        for (const k of m.skills) loadFx(k);
+        sfx('enrage'); jolt(6, 0.6, '#ffe7a0');
+        burst(a.parts, p.cx, p.by, 'splash', 'water'); burst(a.parts, p.cx, p.by - 6, 'splash', 'water');
+        rerender(); await wait(900);
+        pop(2, '登場！', 'crit');
+        break;
+      }
+      case 'rod': {
+        // 漁夫的釣竿：漁夫跳出來、甩竿橫掃全場
+        sfx('cast'); a.rod = 0; jolt(2, 0.2, '#ffe7a0');
+        setTimeout(() => { sfx('splash'); jolt(5, 0.4, '#ffffff'); }, 900);
+        await new Promise((r) => setTimeout(r, (ROD_T * 1000) / (hurry.current ? 3 : fastRef.current ? 1.5 : 1) - 250));
+        break;
+      }
+      case 'ultwarn': {
+        const m = a.mons[1]; m.aura = '#ff3040'; m.flash = 0.4; sfx('enrage'); jolt(2, 0.25, '#ff4060');
+        pop(1, '大絕招預告！', 'crit'); await wait(500); break;
       }
       case 'end': break;
     }
+  }
+
+  /** 劇情字卡：畫面變暗、上下黑邊，字一行一行出現。點一下可以跳過 */
+  async function cutscene(c: { title: string; lines: string[]; tone?: string }, ms: number) {
+    introSkip.current = false; setCut(c);
+    const end = Date.now() + (hurry.current ? ms * 0.4 : ms);
+    while (Date.now() < end && !introSkip.current) await new Promise((r) => setTimeout(r, 40));
+    setCut(null); await new Promise((r) => setTimeout(r, 200));
+  }
+  /** 大絕招「萬潮歸一」：天空變暗、五色的潮水從右邊捲過整個畫面 */
+  async function playUlt() {
+    const a = anim.current;
+    say('潮汐・默旭 使出了大絕招——「萬潮歸一」！');
+    a.mons[1].aura = auraColor('tide_moxu', true);
+    sfx('enrage'); a.ult = 0; jolt(3, 0.5, '#0a1430');
+    setTimeout(() => { sfx('skill:water'); jolt(8, 0.8, '#bdf2ff'); }, 700);
+    setTimeout(() => { sfx('crit'); jolt(6, 0.6, '#ffffff'); }, 1100);
+    await new Promise((r) => setTimeout(r, (ULT_T * 1000) / (hurry.current ? 3 : fastRef.current ? 1.5 : 1) - 300));
   }
 
   async function play(evs: BEvent[]) { for (const e of evs) await apply(e); }
@@ -420,6 +572,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
 
   async function submit(a: Action) {
     setMode('busy');
+    if (a.type === 'skill' && duo) a = { ...a, target: finalSlots(bs).includes(target) ? target : 0 };
     if (a.type === 'item') run.items[a.item]--;
     const it = intentRef.current, key = `${bs.turn}-${active(bs, 1).uid}`;
     const foeAct = it && it.key === key && (it.act.type !== 'skill' || canAfford(bs, 1, it.act.slot)) ? it.act : aiChoose(bs, 1);
@@ -489,6 +642,9 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   });
 
   const me = active(bs, 0), foe = active(bs, 1), [dp, de] = disp.current;
+  const duo = !!bs.final && finalSlots(bs).length > 1; // 1 對 2：可以選攻擊目標
+  const pickTarget = (i: number) => { sfx('select'); setTarget(i); };
+  const finalNote = bs.final ? `第 ${bs.final.phase}/2 條血・大絕招${bs.final.ultIn <= 0 ? '：下回合！' : ` ${bs.final.ultIn} 回合後`}` : undefined;
   const meAffordAny = me.skills.some((_, i) => canAfford(bs, 0, i));
   const loveLock = !!bs.godhand && bs.godhand.loveTurn === bs.turn; // 無法忽視的愛：只能攻擊
   const toggleFast = () => { const v = !fast; setFast(v); try { localStorage.setItem(SPEED_KEY, v ? 'fast' : 'normal'); } catch { /* 略過 */ } };
@@ -506,14 +662,16 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         {bossDown && <BossDown form={enc.mon.form} zone={final ? '萬潮的統領者' : zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
         {intro && <BossIntro phase={intro} form={enc.mon.form} lv={enc.mon.lv} zone={final ? '萬潮的統領者' : zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
         {!intro && <>
-        <HudBox onOpen={() => setInfo(1)} side={1} d={de} rarity={crew ? undefined : FORMS[de.form].rarity} boss={boss} intent={mode === 'main' || mode === 'skills' ? intent : null} warn={!!intent?.atk && effectiveness(intent.elem, formOf(active(bs, 0)).elems) >= 2} crewLeft={crew ? bs.sides[1].team.filter((m) => m.hp > 0).length : 0} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
+        <HudBox onOpen={() => (duo ? pickTarget(0) : setInfo(1))} sel={duo && target === 0} note={finalNote} side={1} d={de} rarity={crew ? undefined : FORMS[de.form].rarity} boss={boss} intent={mode === 'main' || mode === 'skills' ? intent : null} warn={!!intent?.atk && effectiveness(intent.elem, formOf(active(bs, 0)).elems) >= 2} crewLeft={crew ? bs.sides[1].team.filter((m) => m.hp > 0).length : 0} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
+        {allySlot.current != null && disp.current[2] && anim.current.fade[2] > 0 && <HudBox cls="hud-ally" onOpen={() => duo && pickTarget(allySlot.current!)} sel={duo && target === allySlot.current} side={1} d={disp.current[2]} rarity={FORMS[disp.current[2].form].rarity} boss />}
         {anim.current.fade[0] > 0 && <HudBox onOpen={() => setInfo(0)} side={0} d={dp} charged={volOf(bs, 0).charged} locked={volOf(bs, 0).lockOn} turns={active(bs, 0).statusTurns} />}
         </>}
         {popups.map((p) => {
-          const c = monSlot(p.side, disp.current[p.side].form);
+          const c = posOf(p.side, (disp.current[p.side] ?? disp.current[1]).form);
           return <span key={p.id} class={`pop ${p.cls}`} style={{ left: `${((c.cx + p.dx) / W) * 100}%`, top: `${((c.cy - 30) / H) * 100}%` }}>{p.label && <small>{p.label}</small>}{p.text}</span>;
         })}
         {bs.godhand && <div class="gh-counter"><Icon name="heart" /> 陪神之手玩：第 <b>{Math.min(bs.turn, bs.godhand.survive)}</b> / {bs.godhand.survive} 回合{bs.godhand.rewinds > 0 && <span>（被倒退 {bs.godhand.rewinds} 次）</span>}{loveLock && <em>只能攻擊！</em>}</div>}
+        {cut && <div class={`final-cut ${cut.tone ?? ''}`} onClick={() => { introSkip.current = true; }} role="button" aria-label="跳過劇情"><i class="bi-bar top" /><i class="bi-bar bottom" /><div class="fc-card"><b class="fc-title">{cut.title}</b>{cut.lines.map((l, i) => <p key={i} style={{ animationDelay: `${0.3 + i * 0.9}s` }}>{l}</p>)}</div><span class="bi-skip">點一下跳過</span></div>}
         {pulls && <div class="gh-pulls" key={pulls.id}>{pulls.names.map((n, i) => <span key={i} style={{ animationDelay: `${i * 0.18}s` }}>{n}</span>)}</div>}
         {rewind !== 0 && <div class="gh-rewind" key={rewind}>⟲ 時間倒退了</div>}
         {bs.domain && <div class="domain-chip" style={{ borderColor: DOMAINS[bs.domain].color, color: DOMAINS[bs.domain].color }} title={DOMAINS[bs.domain].desc}><Icon name="sparkle" /> 領域・{DOMAINS[bs.domain].name}<span>{DOMAINS[bs.domain].short}</span></div>}
@@ -522,7 +680,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         {mode === 'reel' && !vp.portrait && reel}
         {toast && <div class="item-toast" key={toast.id}><Sprite form={toast.form} size={48} /><span class="grow"><b><Icon name="heal" /> {toast.text}</b><Bar value={toast.hp} max={toast.max} /><span class="num small">HP {toast.from} → {toast.hp}/{toast.max}</span></span></div>}
         {mode === 'main' && !boss && <Tip id="battle">直接點技能出招（◆ 是能量消耗）。對手 HP 條下面的「下一步」是牠這回合要做的事。把對手打虛弱再按「捕捉」，比較容易收服。點 HP 框可以看詳細資料。</Tip>}
-        {mode === 'main' && boss && <Tip id="boss">霸主的 HP 掉到一半時會狂暴：攻擊提高，但防禦會露出破綻。霸主不能捕捉，也不能逃跑。</Tip>}
+        {mode === 'main' && final && <Tip id="final">統領者有兩條血，每 4 回合會放一次大絕招「萬潮歸一」（資料框會倒數）。打掉第一條血後，祂會召喚一隻霸主變成 1 對 2：用「攻擊目標」選要打哪一隻，「漁夫的釣竿」可以橫掃全場並降低對手能力。</Tip>}
+        {mode === 'main' && boss && !final && <Tip id="boss">霸主的 HP 掉到一半時會狂暴：攻擊提高，但防禦會露出破綻。霸主不能捕捉，也不能逃跑。</Tip>}
       </>}
       onPanelClose={info !== null ? () => setInfo(null) : mode === 'switch' || mode === 'itemTarget' ? () => setMode(mode === 'itemTarget' ? 'items' : 'main') : undefined}
       panel={info !== null ? <InfoPanel bs={bs} side={info} boss={boss} onClose={() => setInfo(null)} /> : picking && (
@@ -578,6 +737,12 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
             )}
             {mode === 'main' && (
               <div class="battle-main" onMouseLeave={() => { if (!TOUCH) setPeek(-1); }}>
+                {duo && (
+                  <div class="target-row" role="radiogroup" aria-label="攻擊目標">
+                    <span class="small dim">攻擊目標</span>
+                    {finalSlots(bs).map((i) => <button key={i} class={`chip-btn ${target === i ? 'hot' : ''}`} role="radio" aria-checked={target === i} onClick={() => pickTarget(i)}>{FORMS[bs.sides[1].team[i].form].name}</button>)}
+                  </div>
+                )}
                 <div class="cmd-grid">
                   {me.skills.map((id, i) => {
                     const sk = SKILLS[id], ok = canAfford(bs, 0, i);
@@ -595,6 +760,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                   <button class="act-btn" disabled={loveLock} onClick={() => setMode('switch')}><Icon name="swap" /> 換人</button>
                   <button class="act-btn" disabled={loveLock} onClick={() => { setHover(0); setMode('items'); }}><Icon name="bag" /> 道具</button>
                   {!boss && !gh && <button class="act-btn" onClick={() => submit({ type: 'run' })}><Icon name="flee" /> 逃跑</button>}
+                  {final && <button class={`act-btn rod-btn ${canRod(bs) ? 'ready' : ''}`} disabled={!canRod(bs)} onClick={() => submit({ type: 'rod' })} title="漁夫跳出來甩竿橫掃全場：每隻對手受到最大 HP 10% 的傷害，攻擊、防禦各降低 10%"><Icon name="rod" /> 漁夫的釣竿<small>{bs.final!.phase < 2 ? '第二條血時解鎖' : bs.final!.rodCd > 0 ? `${bs.final!.rodCd} 回合後` : '可以用！'}</small></button>}
                 </div>
               </div>
             )}
@@ -668,10 +834,10 @@ const URTag = () => <span class="rar rar-ur" title="超越傳說" aria-label="�
 /** 依角色顯示稀有度標籤（神之手 ∞、統領者 UR） */
 const RarTag = ({ form, r }: { form: string; r?: keyof typeof RARITY }) => (form === 'godhand' ? <InfTag /> : form === 'tide_moxu' ? <URTag /> : r ? <RarityTag r={r} /> : null);
 
-function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent, crewLeft, warn }: { side: SideId; d: Disp; rarity?: keyof typeof RARITY; boss?: boolean; charged?: boolean; locked?: boolean; turns?: number; onOpen?: () => void; intent?: Intent | null; crewLeft?: number; warn?: boolean }) {
+function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent, crewLeft, warn, cls = '', note, sel }: { side: SideId; d: Disp; rarity?: keyof typeof RARITY; boss?: boolean; charged?: boolean; locked?: boolean; turns?: number; onOpen?: () => void; intent?: Intent | null; crewLeft?: number; warn?: boolean; cls?: string; note?: string; sel?: boolean }) {
   const f = FORMS[d.form];
   return (
-    <div class={`hud hud-${side} clickable`} onClick={onOpen} role="button" aria-label={`查看 ${f.name} 的資料`}>
+    <div class={`hud hud-${side} ${cls} ${sel ? 'targeted' : ''} clickable`} onClick={onOpen} role="button" aria-label={`查看 ${f.name} 的資料`}>
       <div class="hud-top">
         <b class="hud-name">{f.name}</b>{d.mutant && <span class="mutant-tag">✦</span>}
         <RarTag form={d.form} r={rarity} />
@@ -685,6 +851,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
         <Energy value={d.energy} max={MAX_ENERGY} />
         {side === 0 && <span class="hpnum">{d.hp}/{d.max}</span>}
       </div>
+      {note && <div class="hud-note">{note}</div>}
       {intent && <div class={`hud-intent ${warn ? 'warn' : ''}`} title={warn ? '對你的夥伴效果絕佳！' : undefined}><span class="dim">下一步</span> <Icon name={intent.icon} /> {intent.name}{warn && ' ‼'}</div>}
     </div>
   );
