@@ -1,7 +1,7 @@
 // 場景繪製（256×144 像素）：海景全景、戰鬥地形、釣魚、標題、海圖、海底
 import { FORMS, recolorOf } from '../data/creatures';
 import { ELEM, type Elem } from '../data/types';
-import { animFrame, drawSprite, drawSpriteMini, PAL, spriteSize } from './pixel';
+import { animFrame, drawSprite, drawSpriteMini, PAL, spriteSize, miniSize } from './pixel';
 import { sceneArt, spriteIdle } from './art';
 import { fx, partMul } from './fx';
 
@@ -792,7 +792,7 @@ export function drawPort(ctx: CanvasRenderingContext2D, t: number, bay: { id: st
   // 小尺寸、分兩排在海面上漂（異變個體用異變的顏色）
   bay.slice(0, 10).forEach(({ id, mutant }, i) => {
     const f = FORMS[id]; if (!f) return;
-    const n = Math.ceil(spriteSize(f.sprite) / 2);
+    const n = miniSize(f.sprite); // 霸主專屬版跟一般大型夥伴一樣大，不會擠成一團
     const x = 64 + (i % 5) * 38 + (i >= 5 ? 19 : 0) + Math.sin(t * 0.5 + i * 1.7) * 6, y = 70 + (i >= 5 ? 22 : 0) + Math.sin(t * 1.3 + i) * 1.5;
     const flip = Math.cos(t * 0.5 + i * 1.7) < 0;
     shadowMini(ctx, x, y + n / 2 - 1, n);

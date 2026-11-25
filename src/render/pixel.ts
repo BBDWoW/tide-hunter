@@ -311,12 +311,14 @@ export function spritePixels(id: string, pal: Palette) {
 
 // ── 小尺寸版本（一半大小）：每 2×2 取最多的顏色，比直接縮放更能保住外框 ──
 const miniCache = new Map<string, HTMLCanvasElement>();
+/** miniSize：小圖的邊長（預設是世界大小的一半；霸主專屬版 96 → 0.5 會太大，交給呼叫端指定） */
+export const miniSize = (id: string) => Math.ceil(Math.min(64, spriteSize(id)) / 2);
 export function drawSpriteMini(ctx: CanvasRenderingContext2D, id: string, pal: Palette, x: number, y: number, opt: { f?: number; flip?: boolean; recolor?: Recolor } = {}) {
   const { f = 0, flip = false, recolor } = opt;
   const key = `${id}:${f}:${recolorKey(recolor)}`;
   let cv = miniCache.get(key);
   if (!cv) {
-    const big = baked(id, f, pal, undefined, recolor), n = big.width, h = Math.ceil(spriteSize(id) / 2), k = Math.max(1, Math.round(n / h));
+    const big = baked(id, f, pal, undefined, recolor), n = big.width, h = miniSize(id), k = Math.max(1, Math.round(n / h));
     const src = big.getContext('2d')!.getImageData(0, 0, n, n).data;
     cv = document.createElement('canvas'); cv.width = h; cv.height = h;
     const c2 = cv.getContext('2d')!, out = c2.createImageData(h, h);

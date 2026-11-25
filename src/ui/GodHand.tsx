@@ -8,7 +8,7 @@ import { RARITY } from '../data/types';
 import { formOf, makeMon, maxHp, type Mon } from '../game/creature';
 import { loadMeta, newBayMon, saveMeta, claimAchievement } from '../game/meta';
 import { godHandMatch, markCaught, PARTY_MAX, saveRun, type RunState } from '../game/run';
-import { PAL, animFrame, drawSprite } from '../render/pixel';
+import { PAL, animFrame, drawSprite, spriteSize } from '../render/pixel';
 import { drawSea } from '../render/scene';
 import { Bar, Sprite } from './components';
 import { Icon } from './Icon';
@@ -161,7 +161,9 @@ export function GodHandScreen({ vp, run, onFight, onDone }: { vp: Viewport; run:
     const intro = Math.min(1, t / 1.6);
     // 霸主在海面上；被抓走時往上升
     const lift = took ? Math.min(1, t / 2) * 26 : 0;
-    drawSprite(c, f.sprite, PAL[f.pal], X - 32, 72 - lift + Math.sin(t * 2) * 1, { f: animFrame(f.sprite, t) });
+    // 依霸主的實際大小置中、底部貼齊原本的位置（霸主專屬版是 96 大小，跟戰鬥一樣縮成 0.8 倍）
+    const sc = f.scale ?? 1, n = spriteSize(f.sprite) * sc;
+    drawSprite(c, f.sprite, PAL[f.pal], X - n / 2, 136 - n - lift + Math.sin(t * 2) * 1, { f: animFrame(f.sprite, t), scale: sc });
     const hy = -100 + intro * ((took ? -8 - lift : -2) + 100);
     drawGodHand(c, t, X, hy, 0.85, took ? 1 : 0);
   };
