@@ -115,7 +115,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
   if (!tasks) return null;
 
   const bossWin = isBoss(run) && result.outcome === 'win';
-  const doneLabel = !bossWin ? '繼續航行' : run.returnTo ? '回到原本的航線' : run.zoneNo < FINAL_ZONE ? '前往下一片海域' : '凱旋回港';
+  const doneLabel = !bossWin ? '繼續航行' : run.returnTo ? '回到原本的航線' : run.zoneNo < FINAL_ZONE ? '前往下一片海域' : '……海面好像不太對勁';
 
   // 一個畫面只做一件事：收服 → 經驗與升級 → 進化／學技能（一次一件）→ 選能力卡
   const hasTasks = !!tasks.length;

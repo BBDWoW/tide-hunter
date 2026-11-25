@@ -44,18 +44,20 @@ const RANGED_HIT = new Set(['ember', 'pebble', 'icepebble', 'rockslide', 'microq
 // 霸主登場台詞（依霸主）
 const BOSS_INTRO: Record<string, string[]> = {
   whale: ['海面隆起成一座小山……', '鯨嘯張開巨口，整片淺灘的海水都在往牠嘴裡流！'],
-  frostking: ['冰層發出劈啪的碎裂聲。', '冰冠海豹王緩緩抬頭，頭上的冰冠映著極光。'],
-  lavadragon: ['海水沸騰，蒸氣遮住了天空。', '熔岩海龍王從裂谷中升起，鱗片間流著岩漿！'],
-  mainframe_leviathan: ['所有的螢幕同時閃爍：「偵測到入侵者。」', '主機海皇啟動了——資料洪流從四面八方湧來！'],
-  nether_whale: ['燈光一盞一盞熄滅，只剩下深淵的黑。', '冥海巨鯨無聲地張開眼睛，比整艘船還要大。'],
   vine_antler_deer: ['樹林裡的藤蔓開始往同一個方向生長……', '藤角鹿踏著花瓣走來，森林在牠身後合攏。'],
   void_star_dragon: ['星光被一點一點吸走。', '虛無星龍盤旋在破碎的星空裡，低聲咆哮。'],
   domain_realm_core: ['空間像玻璃一樣出現裂痕。', '域界核心開始轉動，周圍的一切都被它改寫！'],
+  // 第二、三片海域的霸主會提到「統領者」（最終大Boss的伏筆）
+  frostking: ['冰層發出劈啪的碎裂聲。', '冰冠海豹王緩緩抬頭：「……又一個想往深處去的獵手。統領者會看著你的。」'],
+  lavadragon: ['海水沸騰，蒸氣遮住了天空。', '熔岩海龍王從裂谷中升起：「區區獵手，也想走到統領者面前？」'],
+  mainframe_leviathan: ['所有的螢幕同時閃爍：「偵測到入侵者。」', '主機海皇：「通報統領者——第三片海域，有獵手抵達。」'],
+  nether_whale: ['燈光一盞一盞熄滅，只剩下深淵的黑。', '冥海巨鯨的聲音在水裡迴盪：「再往下……就是統領者的潮聲了。」'],
+  tide_moxu: ['所有的浪，同時停了下來。', '潮汐・默旭：「我是統領萬潮之人。讓我看看，你們配不配得上『潮汐獵手』這個名字。」'],
 };
 // 霸主的稱號（登場字卡）
 const BOSS_TITLE: Record<string, string> = {
   whale: '吞潮的巨口', frostking: '萬年冰冠之王', lavadragon: '裂谷的熔岩君主', mainframe_leviathan: '資料深海的主宰',
-  nether_whale: '無光之海的沉默者', vine_antler_deer: '森林的守望者', void_star_dragon: '吞噬星光的虛無', domain_realm_core: '改寫世界的核心',
+  nether_whale: '無光之海的沉默者', tide_moxu: '統領萬潮之人', vine_antler_deer: '森林的守望者', void_star_dragon: '吞噬星光的虛無', domain_realm_core: '改寫世界的核心',
 };
 const readSpeed = () => { try { return localStorage.getItem(SPEED_KEY) !== 'normal'; } catch { return true; } }; // 預設快速
 
@@ -67,6 +69,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const bs = bsRef.current;
   const crew = !!enc.team; // 對手船隊：多隻敵人、不能收服
   const gh = !!enc.godhand; // 神之手之戰：撐過 20 回合
+  const final = !!enc.final; // 最終決戰：統領者・潮汐默旭
   const tossLeft = useRef(0), tossTotal = useRef(0);
   const [pulls, setPulls] = useState<{ id: number; names: string[] } | null>(null);
   const [rewind, setRewind] = useState(0);
@@ -201,10 +204,11 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       if (boss) await bossIntro();
       else { sfx('enter'); await wait(500); }
       if (crew) { say(`「${enc.crew}」的船隊攔住了去路！（${enc.team!.length} 隻）`); await wait(500); say(`${enc.crew}派出了 ${ef.name}！`); }
-      else if (boss) { for (const line of BOSS_INTRO[enc.mon.form] ?? []) { say(line); await wait(900); } say(`霸主「${ef.name}」擋住了去路！`); }
+      else if (boss) { for (const line of BOSS_INTRO[enc.mon.form] ?? []) { say(line); await wait(900); } say(final ? `統領者「${ef.name}」降臨了！這是最後的決戰！` : `霸主「${ef.name}」擋住了去路！`); }
       else if (gh) { say('一隻巨大的白色手，從雲裡伸了下來。'); await wait(900); say('神之手：「陪我玩 20 回合……好不好？」'); }
       else say(`野生的 ${ef.name} 出現了！`);
       if (gh) { /* 神之手：沒有稀有度 */ }
+      else if (final) { /* 統領者：不顯示稀有度提示 */ }
       else if (enc.rarity === 'SSR') say('★ 傳說級的氣息！這可能是唯一的機會！');
       else if (enc.rarity === 'S') say('☆ 史詩級的稀有生物！');
       if (enc.mon.mutant) say('✦ 是異變個體！牠的顏色跟一般的不一樣！');
@@ -499,8 +503,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={draw} label="戰鬥畫面" />}
       overlay={<>
-        {bossDown && <BossDown form={enc.mon.form} zone={zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
-        {intro && <BossIntro phase={intro} form={enc.mon.form} lv={enc.mon.lv} zone={zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
+        {bossDown && <BossDown form={enc.mon.form} zone={final ? '萬潮的統領者' : zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
+        {intro && <BossIntro phase={intro} form={enc.mon.form} lv={enc.mon.lv} zone={final ? '萬潮的統領者' : zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
         {!intro && <>
         <HudBox onOpen={() => setInfo(1)} side={1} d={de} rarity={crew ? undefined : FORMS[de.form].rarity} boss={boss} intent={mode === 'main' || mode === 'skills' ? intent : null} warn={!!intent?.atk && effectiveness(intent.elem, formOf(active(bs, 0)).elems) >= 2} crewLeft={crew ? bs.sides[1].team.filter((m) => m.hp > 0).length : 0} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
         {anim.current.fade[0] > 0 && <HudBox onOpen={() => setInfo(0)} side={0} d={dp} charged={volOf(bs, 0).charged} locked={volOf(bs, 0).lockOn} turns={active(bs, 0).statusTurns} />}
@@ -632,7 +636,7 @@ function BossDown({ form, zone, onSkip }: { form: string; zone: string; onSkip: 
       <div class="bi-card">
         <span class="bi-zone">{zone}</span>
         <b class="bi-name">討伐成功！</b>
-        <span class="bi-title">— {FORMS[form].name} 被擊敗了，海面恢復了平靜 —</span>
+        <span class="bi-title">— {form === 'tide_moxu' ? '萬潮的聲音，安靜了下來' : `${FORMS[form].name} 被擊敗了，海面恢復了平靜`} —</span>
       </div>
       <span class="bi-skip">點一下繼續</span>
     </div>
@@ -667,7 +671,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
       <div class="hud-top">
         <b class="hud-name">{f.name}</b>{d.mutant && <span class="mutant-tag">✦</span>}
         {d.form === 'godhand' ? <InfTag /> : rarity && <RarityTag r={rarity} />}
-        {boss && <span class="boss-tag">霸主</span>}
+        {boss && <span class="boss-tag">{d.form === 'tide_moxu' ? '統領者' : '霸主'}</span>}
         {!!crewLeft && <span class="crew-left" title="船隊剩下的夥伴">{'●'.repeat(crewLeft)}</span>}
         {d.form !== 'godhand' && <span class="lv">Lv{d.lv}</span>}
       </div>

@@ -157,6 +157,7 @@ export interface RunState {
   dailyRule?: { id: DailyRuleId; elem?: Elem }; // 每日挑戰的今日規則
   eggs?: EggZone[]; // 這一局拿到的潮汐卵（冒險結束時放進棲息灣）
   godHand?: GodHandEvent; // 超特殊事件：神之手（打倒霸主後 0.5%）
+  finale?: 'intro' | 'fight' | 'ending' | 'won' | 'lost'; // 最終大Boss：登場劇情 → 決戰 → 結局（中途關掉 App 也能接著繼續）
   guardianWin?: ZoneId; // 打倒了守護者、還沒選獎勵（存檔後可以接著選）
   returnTo?: { zone: ZoneId; route: RouteNode[][]; station: number; path: number[] }; // 在特殊區域時，原本的航線
   specialLv?: number; // 特殊區域的基準等級（依進入時的位置決定）
@@ -199,9 +200,18 @@ export const STAR_RULES = [
   '營地休息的回復量減半，對手能力再 +10%',
 ];
 export const starOf = (run: RunState) => run.star ?? 0;
-/** 對手的能力加成（潮位 1、5） */
+/** 越後面的海域越難：第二片海域對手能力 +10%，第三片（含最終大Boss）+20% */
+export const zoneBoost = (run: RunState) => (run.zoneNo >= 2 ? 0.2 : run.zoneNo === 1 ? 0.1 : 0);
+/** 最終大Boss：統領者・潮汐默旭（比第三片海域的霸主高 3 級） */
+export const FINAL_BOSS = 'tide_moxu';
+/** 打倒統領者額外獲得的珍珠（再乘上潮位加成） */
+export const FINAL_PEARLS = 300;
+export function makeFinalBoss(run: RunState): Mon {
+  return makeMon(FINAL_BOSS, ZONES.cyber.bossLv + 3 + (starOf(run) >= 4 ? 2 : 0), true, true);
+}
+/** 對手的能力加成（潮位 1、5，以及海域） */
 export function foeMods(run: RunState) {
-  const k = 1 + (starOf(run) >= 1 ? 0.1 : 0) + (starOf(run) >= 5 ? 0.1 : 0);
+  const k = 1 + (starOf(run) >= 1 ? 0.1 : 0) + (starOf(run) >= 5 ? 0.1 : 0) + zoneBoost(run);
   const re = run.dailyRule?.id === 'element' ? run.dailyRule.elem : undefined;
   return { atk: k, def: k, energy: 0, crit: 0, reso: re ? { [re]: 0.3 } : undefined };
 }
@@ -343,7 +353,7 @@ export const totalStation = (run: RunState) => run.zoneNo * ROUTE_LEN + run.stat
 export const nodeOf = (run: RunState): RouteNode => run.route[run.station][run.picked ?? 0];
 export const isBoss = (run: RunState) => run.route[run.station]?.[0].kind === 'boss';
 
-export interface Encounter { mon: Mon; rarity: Rarity; landing?: Landing; team?: Mon[]; crew?: string; godhand?: boolean } // team／crew：對手船隊（多隻、不能收服）
+export interface Encounter { mon: Mon; rarity: Rarity; landing?: Landing; team?: Mon[]; crew?: string; godhand?: boolean; final?: boolean } // team／crew：對手船隊（多隻、不能收服）
 
 // ── 水面下的魚：大小決定稀有度（玩家拋竿前看不到，上鉤才知道） ──
 export type ShadowKind = 'fish' | 'treasure' | 'junk';

@@ -9,7 +9,7 @@ import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/ty
 import { ITEMS, statusLabel, type ItemId } from '../game/battle';
 import { ancestryOf, blockRate, dodgeRate, formOf, maxHp, xpToNext, type Mon } from '../game/creature';
 import { bringBackSlots, releaseValue, achStats, ACHIEVEMENTS, bayCap, bringBack, buyUpgrade, claimable, claimAchievement, loadMeta, saveMeta, titleOf, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
-import { dailyRule, dailyRuleInfo, timeOfDay, TOD_INFO, MAX_STAR, STAR_RULES, todayKey, campHealMul, heldPrice, campSearch, campTrain, buyHeld, equipHeld, refreshCost, refreshShop, shopHeld, canUseOutside, enterSpecial, FINAL_ZONE, ZONE_CHOICES, healParty, loadDex, loadRun, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
+import { dailyRule, dailyRuleInfo, timeOfDay, TOD_INFO, MAX_STAR, STAR_RULES, todayKey, campHealMul, heldPrice, campSearch, campTrain, buyHeld, equipHeld, refreshCost, refreshShop, shopHeld, canUseOutside, enterSpecial, FINAL_ZONE, FINAL_PEARLS, ZONE_CHOICES, healParty, loadDex, loadRun, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
 import { APP_VERSION, CHANGELOG, hasUnreadNews, markNewsRead } from '../game/version';
 import { loadSound, saveSound, sfx, type SoundSettings } from '../audio/engine';
@@ -716,8 +716,9 @@ export function End({ vp, run, win, pearls, onTitle }: { vp: Viewport; run: RunS
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={win ? drawTitle : drawDeep} />}
       panel={
-        <Win class="big-panel end" title={win ? `${zoneOf(run).name}的霸主已被擊敗！` : '航程結束'}>
-          <p>{win ? '恭喜通關！帶著收穫回到港口吧。' : '隊伍全部倒下了。回港口整頓一下，再出海一次吧。'}</p>
+        <Win class="big-panel end" title={run.finale === 'won' ? '統領者・潮汐默旭已被擊敗！' : win ? `${zoneOf(run).name}的霸主已被擊敗！` : '航程結束'}>
+          <p>{run.finale === 'won' ? '你和夥伴們得到了統領者的認可，成為真正的潮汐獵手！' : run.finale === 'lost' ? '三片海域都闖過了，但統領者・潮汐默旭還在最深的海裡等你。下次再來挑戰祂吧！' : win ? '恭喜通關！帶著收穫回到港口吧。' : '隊伍全部倒下了。回港口整頓一下，再出海一次吧。'}</p>
+          {run.finale === 'won' && <p class="small accent">打倒統領者的獎勵：珍珠額外 +{FINAL_PEARLS}{(run.star ?? 0) > 0 ? '（再乘上潮位加成）' : ''}，到港口的「成就」領取稱號「萬潮的繼承者」。</p>}
           {(run.eggs?.length ?? 0) > 0 && <p class="small accent"><Icon name="egg" /> 帶回了 {run.eggs!.length} 顆潮汐卵，已經放進棲息灣的巢（巢滿了的話換成珍珠）。</p>}
           {run.daily && <p class="small accent">每日挑戰（{run.daily}）：今日最佳 {meta.daily?.best ?? 0} 站{pearls === 0 ? '・今天的珍珠已經領過了' : ''}。每日挑戰的夥伴不會帶回棲息灣。</p>}
           {!run.daily && (run.star ?? 0) > 0 && <p class="small accent">潮位 {'★'.repeat(run.star ?? 0)}：珍珠 +{(run.star ?? 0) * 20}%{win && (meta.maxStar ?? 0) > (run.star ?? 0) ? `・解鎖了 ★${meta.maxStar}！` : ''}</p>}
@@ -822,7 +823,7 @@ export function ZonePick({ vp, run, onPick }: { vp: Viewport; run: RunState; onP
     <GameScreen vp={vp} scene={<SceneCanvas draw={drawTitle} label="夕陽下的海面" />}
       panel={
         <Win class="big-panel" title={`${zoneOf(run).name}的霸主被擊敗了！要往哪裡前進？`}>
-          <p class="small dim">全隊會在出發前回復一半 HP，倒下的夥伴也會醒來。{run.zoneNo + 1 >= FINAL_ZONE ? '這是最後一片海域，打倒霸主就通關！' : ''}</p>
+          <p class="small dim">全隊會在出發前回復一半 HP，倒下的夥伴也會醒來。{run.zoneNo + 1 >= FINAL_ZONE ? '這是最後一片海域。打倒霸主之後，最深的海裡還有什麼在等著你……' : ''}</p>
           <div class="zone-row">
             {opts.map((z) => (
               <button class={`zone-card zone-${z}`} key={z} onClick={() => onPick(z)}>

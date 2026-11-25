@@ -250,6 +250,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'whale', title: '鯨嘯克星', desc: '打倒碧藍淺灘的霸主', reward: 20, check: (s) => has(s.bosses, 'whale') },
   { id: 'twokings', title: '冰火雙王', desc: '打倒冰冠海豹王與熔岩海龍王', reward: 60, check: (s) => has(s.bosses, 'frostking', 'lavadragon') },
   { id: 'deep', title: '深海終結者', desc: '打倒主機海皇與冥海巨鯨', reward: 90, check: (s) => has(s.bosses, 'mainframe_leviathan', 'nether_whale') },
+  { id: 'moxu', title: '萬潮的繼承者', desc: '打倒統領者・潮汐默旭', reward: 200, check: (s) => has(s.bosses, 'tide_moxu') },
   { id: 'guardians', title: '秘境探索家', desc: '打倒三個特殊區域的守護者', reward: 70, check: (s) => has(s.bosses, 'vine_antler_deer', 'void_star_dragon', 'domain_realm_core') },
   { id: 'clear1', title: '潮汐獵手', desc: '第一次通關', reward: 60, check: (s) => s.clears >= 1 },
   { id: 'clear5', title: '傳奇船長', desc: '通關 5 次', reward: 120, check: (s) => s.clears >= 5 },

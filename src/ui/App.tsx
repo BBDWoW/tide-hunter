@@ -1,4 +1,5 @@
 import { setTimeOfDay } from '../render/scene';
+import { Finale } from './Finale';
 import { GuardianReward, ZoneCutscene } from './Special';
 import { GodHandScreen, settleGodHand } from './GodHand';
 import { settleEggs } from '../game/eggs';
@@ -11,7 +12,7 @@ const devGH = import.meta.env.DEV && new URLSearchParams(location.search).has('g
 const devCut = import.meta.env.DEV ? new URLSearchParams(location.search).get('cut')?.split('-') ?? null : null;
 import { HandFilter } from './Icon';
 import { useEffect, useState } from 'preact/hooks';
-import { NIGHT_STYLE, timeOfDay, GODHAND_CHANCE, rollGodHand, dailyPartner, MAX_STAR, pearlMul, todayKey, boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollCrew, rollEncounter, saveRun, updateDex, type Encounter, type RunState } from '../game/run';
+import { NIGHT_STYLE, timeOfDay, GODHAND_CHANCE, rollGodHand, dailyPartner, MAX_STAR, pearlMul, todayKey, boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollCrew, rollEncounter, saveRun, updateDex, FINAL_BOSS, FINAL_PEARLS, makeFinalBoss, type Encounter, type RunState } from '../game/run';
 import { AfterBattle, ResumeBoon } from './AfterBattle';
 import { Battle, type BattleResult } from './Battle';
 import { Fishing } from './Fishing';
@@ -80,14 +81,14 @@ type Screen =
   | { k: 'title' } | { k: 'starter' } | { k: 'voyage' } | { k: 'fishing' }
   | { k: 'battle'; enc: Encounter } | { k: 'after'; result: BattleResult }
   | { k: 'end'; win: boolean; pearls: number } | { k: 'dex' } | { k: 'help' } | { k: 'port' }
-  | { k: 'event'; ev: GameEvent } | { k: 'boon' } | { k: 'zonepick' } | { k: 'bay'; hint?: string } | { k: 'gacha'; from: 'bay' | 'port' } | { k: 'guardian' } | { k: 'godhand' };
+  | { k: 'event'; ev: GameEvent } | { k: 'boon' } | { k: 'zonepick' } | { k: 'bay'; hint?: string } | { k: 'gacha'; from: 'bay' | 'port' } | { k: 'guardian' } | { k: 'godhand' } | { k: 'finale' };
 
 export function App() {
   const vp = useViewport();
   const [screen, setScreen] = useState<Screen>({ k: 'title' });
   const [run, setRun] = useState<RunState | null>(null);
   const [n, setN] = useState(0); // 換畫面時強制重新掛載
-  const boss = !!run && isBoss(run);
+  const boss = !!run && (isBoss(run) || !!run.finale);
   const newVersion = useNewVersion();
 
   // 背景音樂：依畫面與所在海域切換
@@ -98,6 +99,7 @@ export function App() {
     setTimeOfDay(inRun ? timeOfDay(run!) : 'day', run ? NIGHT_STYLE[run.zone] : 'cute');
     const ghFight = k === 'battle' && !!(screen as { enc?: Encounter }).enc?.godhand;
     if (k === 'godhand' || ghFight) { setScene(ghFight ? 'godfight' : 'godhand', 'godhand'); return; }
+    if (k === 'finale') { setScene(run?.finale === 'ending' ? 'bay' : 'boss', theme); return; }
     const song: SongId = k === 'battle' ? (boss ? 'boss' : 'battle') : k === 'fishing' ? 'fish' : ['voyage', 'event', 'zonepick', 'after'].includes(k) ? 'voyage' : 'bay';
     setScene(song, theme);
   }, [screen.k, run?.zone, boss, n]);
@@ -107,6 +109,8 @@ export function App() {
   const finishRun = (win: boolean, r: RunState = run!) => {
     const meta = loadMeta();
     let pearls = Math.round(pearlsFor({ station: totalStation(r), battlesWon: r.battlesWon, caught: r.caught, win }) * pearlMul(r.star ?? 0));
+    // 打倒統領者：額外的珍珠
+    if (r.finale === 'won') pearls += Math.round(FINAL_PEARLS * pearlMul(r.star ?? 0));
     if (r.daily) {
       // 每日挑戰：記錄當天最好的成績，珍珠只有當天第一次結算時拿得到
       const d = meta.daily?.day === r.daily ? meta.daily : { day: r.daily, best: 0, win: false, paid: false };
@@ -141,9 +145,17 @@ export function App() {
     saveRun(r);
     go({ k: 'voyage' });
   };
-  /** 打倒主海域霸主之後：選下一片海域，或通關 */
+  /** 打倒主海域霸主之後：選下一片海域；最後一片海域打完，統領者登場 */
   const afterBoss = (r: RunState) => {
-    if (r.zoneNo < FINAL_ZONE) { r.pendingZone = true; saveRun(r); go({ k: 'zonepick' }); } else finishRun(true, r);
+    if (r.zoneNo < FINAL_ZONE) { r.pendingZone = true; saveRun(r); go({ k: 'zonepick' }); return; }
+    // 決戰前：全隊回復一半 HP，倒下的夥伴也會醒來（跟前往下一片海域一樣）
+    healParty(r, 0.5, true);
+    r.finale = 'intro'; saveRun(r); go({ k: 'finale' });
+  };
+  /** 最終決戰：統領者・潮汐默旭 */
+  const finalFight = (r: RunState) => {
+    r.finale = 'fight'; saveRun(r);
+    go({ k: 'battle', enc: { mon: makeFinalBoss(r), rarity: 'SSR', final: true } });
   };
   /** 陪神之手玩：建立神之手的對手 */
   const godHandFight = (r: RunState) => {
@@ -175,7 +187,7 @@ export function App() {
   switch (screen.k) {
     case 'title':
       body = <Title vp={vp} hasSave={!!loadRun()} onNew={onNew} onDaily={() => { const day = todayKey(); startRun(dailyPartner(day), day); }} onBay={() => go({ k: 'bay' })}
-        onContinue={() => { const r = loadRun(); if (!r) return; setRun(r); if (r.godHand) { if (r.godHand.stage === 'fight') r.godHand.stage = 'ask'; go({ k: 'godhand' }); } else if (r.guardianWin) go({ k: 'guardian' }); else if (r.after?.boons) go({ k: 'boon' }); else if (r.after) finishAfter(r); else go(r.pendingZone ? { k: 'zonepick' } : { k: 'voyage' }); }}
+        onContinue={() => { const r = loadRun(); if (!r) return; setRun(r); if (r.godHand) { if (r.godHand.stage === 'fight') r.godHand.stage = 'ask'; go({ k: 'godhand' }); } else if (r.finale === 'intro' || r.finale === 'fight' || r.finale === 'ending') { if (r.finale === 'fight') r.finale = 'intro'; go({ k: 'finale' }); } else if (r.guardianWin) go({ k: 'guardian' }); else if (r.after?.boons) go({ k: 'boon' }); else if (r.after) finishAfter(r); else go(r.pendingZone ? { k: 'zonepick' } : { k: 'voyage' }); }}
         onDex={() => go({ k: 'dex' })} onHelp={() => go({ k: 'help' })} onPort={() => go({ k: 'port' })} />;
       break;
     case 'starter':
@@ -195,8 +207,15 @@ export function App() {
       }} />;
       break;
     case 'battle':
-      body = <Battle vp={vp} run={run!} enc={screen.enc} boss={boss && !screen.enc.godhand} onEnd={(result) => {
+      body = <Battle vp={vp} run={run!} enc={screen.enc} boss={(boss || !!screen.enc.final) && !screen.enc.godhand} onEnd={(result) => {
         if (screen.enc.godhand) { settleGodHand(run!, result.outcome === 'win'); saveRun(run); go({ k: 'godhand' }); return; }
+        if (screen.enc.final) {
+          // 打贏：播結局；打輸：三片海域還是算通關，但統領者會等你下次再來
+          const r = run!;
+          if (result.outcome === 'win') { r.finale = 'ending'; updateDex((d) => { d.bosses = [...new Set([...(d.bosses ?? []), FINAL_BOSS])]; }); saveRun(r); go({ k: 'finale' }); }
+          else { r.finale = 'lost'; finishRun(true, r); }
+          return;
+        }
         if (result.outcome === 'lose') finishRun(false);
         else go({ k: 'after', result });
       }} />;
@@ -230,6 +249,9 @@ export function App() {
       break;
     case 'godhand':
       body = <GodHandScreen vp={vp} run={run!} onFight={() => godHandFight(run!)} onDone={() => afterBoss(run!)} />;
+      break;
+    case 'finale':
+      body = <Finale vp={vp} run={run!} mode={run!.finale === 'ending' ? 'ending' : 'intro'} onDone={() => { const r = run!; if (r.finale === 'ending') { r.finale = 'won'; finishRun(true, r); } else finalFight(r); }} />;
       break;
     case 'guardian':
       body = <GuardianReward vp={vp} run={run!} onDone={() => go({ k: 'voyage' })} />;

@@ -314,6 +314,12 @@ const F: Form[] = [
   { id: 'godhand', name: '神之手', family: 'godhand', stage: 3, rarity: 'SSR', category: '神獸', elems: [], sprite: 'godhand', pal: 'water', secret: true, scale: 0.95,
     base: { hp: 100, atk: 1, def: 200, spd: 60 }, ability: 'none',
     learn: [[1, 'gh_toss'], [1, 'gh_love'], [1, 'gh_fire'], [1, 'gh_stay'], [1, 'gh_pull']], desc: '從天上伸出的一隻白色的手，擁有壓垮世界的力量。但其實，它只是想有人陪。' },
+  // ── 最終大Boss：統領者（不能收服、不會出現在圖鑑和招募）。美術還沒畫好前，先用蒼鱗龍換色放大暫代 ──
+  { id: 'tide_moxu', name: '潮汐・默旭', family: 'tide_moxu', stage: 3, rarity: 'SSR', category: '神獸', elems: ['water', 'dark'], sprite: 'dragon', pal: 'dragon', secret: true, placeholder: true,
+    recolor: { h: -34, s: 1.35, l: -0.12 }, scale: 1.3,
+    // SSR 的能力倍率很高，種族值刻意壓低；實際強度約是第三片海域霸主的 1.4 倍（模擬：5 隻 Lv26、八成 HP 的隊伍勝率約 45%）
+    base: { hp: 77, atk: 70, def: 66, spd: 65 }, ability: 'oceanpower', extra: ['waterbarrier'],
+    learn: [[1, 'whalecry'], [1, 'abyssmaw'], [1, 'seagodbreath'], [1, 'hightide']], desc: '統領萬潮的存在。所有海域的霸主都聽從祂的潮聲，祂在最深的海裡，等待一個配得上「潮汐獵手」之名的人。' },
   // ── 霸主 ──
   { id: 'whale', name: '鯨嘯', family: 'whale', stage: 3, rarity: 'A', category: '巨獸', elems: ['water'], sprite: 'whale', pal: 'whale',
     base: { hp: 110, atk: 74, def: 70, spd: 46 }, ability: 'colossal',
