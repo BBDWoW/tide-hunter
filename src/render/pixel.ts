@@ -1,4 +1,4 @@
-import { spriteArt } from './art';
+import { shinyArt, spriteArt } from './art';
 // 48×48 像素生物繪製器：用幾何圖元畫出色塊，再自動加上明暗與外框。
 
 export const SIZE = 48;
@@ -227,8 +227,8 @@ export function spriteCells(id: string, f = 0): Cell[] {
 }
 
 // 換色：色相旋轉 h 度、飽和度 ×s、亮度 +l（深色外框不變）。環境形態與異變個體使用
-export interface Recolor { h: number; s?: number; l?: number }
-const recolorKey = (r?: Recolor) => (r ? `${r.h},${r.s ?? 1},${r.l ?? 0}` : '');
+export interface Recolor { h: number; s?: number; l?: number; mutant?: boolean } // mutant：有專屬色違圖就改用那張
+const recolorKey = (r?: Recolor) => (r ? `${r.h},${r.s ?? 1},${r.l ?? 0}${r.mutant ? ',m' : ''}` : '');
 function applyRecolor(x: CanvasRenderingContext2D, n: number, r: Recolor) {
   const img = x.getImageData(0, 0, n, n), d = img.data;
   for (let i = 0; i < d.length; i += 4) {
@@ -263,9 +263,11 @@ function baked(id: string, f: number, pal: Palette, tint?: string, rc?: Recolor)
     cv = document.createElement('canvas'); cv.width = n; cv.height = n;
     const x = cv.getContext('2d')!;
     const art = spriteArt(id);
-    if (art) { x.imageSmoothingEnabled = false; x.drawImage(art.img, (f % art.frames) * art.size, 0, art.size, art.size, 0, 0, n, n); }
+    const sh = rc?.mutant ? shinyArt(id) : undefined;
+    const src = sh ?? art;
+    if (src) { x.imageSmoothingEnabled = false; x.drawImage(src.img, (f % src.frames) * src.size, 0, src.size, src.size, 0, 0, n, n); }
     else x.putImageData(bake(spriteCells(id, f), pal, n), 0, 0);
-    if (rc && !tint) applyRecolor(x, n, rc);
+    if (rc && !tint && !sh) applyRecolor(x, n, rc);
     if (tint) { x.globalCompositeOperation = 'source-in'; x.fillStyle = tint; x.fillRect(0, 0, n, n); }
     m.set(key, cv);
   }

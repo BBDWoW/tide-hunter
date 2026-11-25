@@ -57,6 +57,7 @@ export interface Form {
   desc: string;
   scale?: number; // 戰鬥畫面中的放大倍率
   placeholder?: boolean; // 還在用前一階的圖暫代，等新美術
+  regional?: boolean; // 地區形態（在特定海域進化才會變成）
   secret?: boolean; // 不能收集、不會出現在圖鑑和招募（例如神之手）
   no?: number; // 圖鑑編號
   height?: number; // 公尺
@@ -71,7 +72,7 @@ export function recolorOf(formId: string, mutant?: boolean): Recolor | undefined
   if (!mutant) return base;
   let h = 0; for (const c of f.family) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   const shift = 100 + (h % 160); // 100～260 度
-  return { h: (base?.h ?? 0) + shift, s: (base?.s ?? 1) * 1.15, l: base?.l ?? 0 };
+  return { h: (base?.h ?? 0) + shift, s: (base?.s ?? 1) * 1.15, l: base?.l ?? 0, mutant: true };
 }
 
 export const abilitiesOf = (f: Form): AbilityId[] => [f.ability, ...(f.extra ?? [])];
@@ -368,17 +369,17 @@ const F: Form[] = [
   { id: 'nether_whale', name: '冥海巨鯨', family: 'nether_whale', stage: 3, rarity: 'A', category: '巨獸', elems: ['dark', 'water'], sprite: 'nether_whale', pal: 'water',
     base: { hp: 125, atk: 90, def: 80, spd: 48 }, ability: 'colossal', learn: [[1, 'darkbite'], [1, 'soulsip'], [1, 'tidewave'], [1, 'engulf'], [1, 'abyssveil']], desc: '深淵的霸主。全身佈滿傷痕的遠古巨鯨，張開嘴就是一片星空。' },
   // ── 環境形態：在特定區域進化才會出現（沿用原本的圖換色） ──
-  { id: 'ghost_jelly', name: '幽靈水母', family: 'jelly', stage: 2, rarity: 'B', category: '水母', elems: ['water', 'dark'], sprite: 'jelly2', pal: 'jelly', recolor: { h: -70, s: 0.65, l: -0.1 },
+  { id: 'ghost_jelly', name: '幽靈水母', family: 'jelly', stage: 2, rarity: 'B', category: '水母', elems: ['water', 'dark'], sprite: 'ghost_jelly', pal: 'jelly', regional: true,
     base: { hp: 68, atk: 62, def: 60, spd: 64 }, ability: 'stinger', learn: [[10, 'inkshot'], [11, 'energydrain'], [12, 'bonecurse']], desc: '在無稽區進化的漂流水母。半透明的身體會在黑暗中忽隱忽現。' },
-  { id: 'crystal_starrock', name: '晶核星岩', family: 'starsand', stage: 2, rarity: 'B', category: '礦物', elems: ['rock', 'data'], sprite: 'starrock', pal: 'crystal', recolor: { h: -95, s: 1.05, l: 0.02 },
+  { id: 'crystal_starrock', name: '晶核星岩', family: 'starsand', stage: 2, rarity: 'B', category: '礦物', elems: ['rock', 'data'], sprite: 'crystal_starrock', pal: 'crystal', regional: true,
     base: { hp: 62, atk: 74, def: 84, spd: 48 }, ability: 'sturdy', learn: [[10, 'rockslide'], [12, 'scanlock'], [14, 'crash']], desc: '在域核區域進化的星砂仔。晶石裡流動著資料的光。' },
-  { id: 'moss_crab', name: '苔甲蟹', family: 'bubcrab', stage: 3, rarity: 'B', category: '甲殼', elems: ['water', 'grass'], sprite: 'cannoncrab', pal: 'crab', recolor: { h: -100, s: 0.85 },
+  { id: 'moss_crab', name: '苔甲蟹', family: 'bubcrab', stage: 3, rarity: 'B', category: '甲殼', elems: ['water', 'grass'], sprite: 'moss_crab', pal: 'crab', regional: true,
     base: { hp: 84, atk: 82, def: 92, spd: 40 }, ability: 'regen', learn: [[11, 'crabcannon'], [12, 'seedleech'], [14, 'sacredgrove']], desc: '在聖林域進化的泡泡蟹。殼上長滿了青苔與小花。' },
-  { id: 'frost_vortex', name: '冰晶星渦', family: 'tideline', stage: 3, rarity: 'A', category: '抽象', elems: ['water', 'ice'], sprite: 'deepsea_star_vortex', pal: 'water', recolor: { h: -30, s: 0.55, l: 0.12 },
+  { id: 'frost_vortex', name: '冰晶星渦', family: 'tideline', stage: 3, rarity: 'A', category: '抽象', elems: ['water', 'ice'], sprite: 'frost_vortex', pal: 'water', regional: true,
     base: { hp: 90, atk: 88, def: 90, spd: 78 }, ability: 'oceanpower', learn: [[14, 'counterflow'], [14, 'frostcrack'], [15, 'auroraveil'], [16, 'icebeam']], desc: '在冰封峽灣進化的潮汐胞體。星渦凍結成一片片冰晶。' },
-  { id: 'magma_vortex', name: '熔渦星核', family: 'tideline', stage: 3, rarity: 'A', category: '抽象', elems: ['fire', 'dark'], sprite: 'deepsea_star_vortex', pal: 'water', recolor: { h: 125, s: 1.2, l: -0.02 },
+  { id: 'magma_vortex', name: '熔渦星核', family: 'tideline', stage: 3, rarity: 'A', category: '抽象', elems: ['fire', 'dark'], sprite: 'magma_vortex', pal: 'water', regional: true,
     base: { hp: 86, atk: 98, def: 80, spd: 82 }, ability: 'blazing', learn: [[14, 'lavaflow'], [14, 'soulsip'], [15, 'lavafloor'], [16, 'eruption']], desc: '在熔岩裂谷進化的潮汐胞體。星空被熔岩染成了火紅色。' },
-  { id: 'frost_snail', name: '霜岩蝸', family: 'lavasnail', stage: 2, rarity: 'N', category: '礦物', elems: ['ice', 'rock'], sprite: 'lavasnail2', pal: 'magma', recolor: { h: 175, s: 0.6, l: 0.1 },
+  { id: 'frost_snail', name: '霜岩蝸', family: 'lavasnail', stage: 2, rarity: 'N', category: '礦物', elems: ['ice', 'rock'], sprite: 'frost_snail', pal: 'magma', regional: true,
     base: { hp: 74, atk: 66, def: 94, spd: 36 }, ability: 'sturdy', learn: [[15, 'rockslide'], [16, 'reefspikes'], [17, 'icebeam']], desc: '在冰封峽灣進化的火山蝸。殼上的火山結冰了，噴出的是雪。' },
 ];
 
@@ -390,7 +391,7 @@ for (const e of EVO2) {
   (p.evolve ??= []).push({ to: e.id, level: e.level });
   F.push({
     id: e.id, name: e.name, family: p.family, stage: e.stage, rarity: p.rarity, category: p.category, elems: e.elems ?? p.elems,
-    sprite: p.sprite, pal: p.pal, recolor: e.look, scale: e.scale * (p.scale ?? 1), placeholder: true,
+    sprite: e.id, pal: p.pal, scale: p.scale, // 正式美術已完成（舊的暫代：沿用前一階的圖＋換色放大）
     base: { hp: up(p.base.hp), atk: up(p.base.atk), def: up(p.base.def), spd: up(p.base.spd) }, ability: p.ability, extra: p.extra,
     learn: e.learn, desc: e.desc,
   });

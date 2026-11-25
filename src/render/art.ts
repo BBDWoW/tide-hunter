@@ -3,9 +3,12 @@
 // - 場景：src/art/scenes/<名稱>.png（名稱見 美術包/README）
 const spriteUrls = import.meta.glob('../art/sprites/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const sceneUrls = import.meta.glob('../art/scenes/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+// 色違：src/art/shiny/<角色代號>.png（專屬的色違圖，沒有的話就用程式換色）
+const shinyUrls = import.meta.glob('../art/shiny/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 
 export interface SpriteArt { img: HTMLImageElement; size: number; frames: number }
 const sprites = new Map<string, SpriteArt>();
+const shinies = new Map<string, SpriteArt>();
 const scenes = new Map<string, HTMLImageElement>();
 
 const nameOf = (path: string) => path.split('/').pop()!.replace(/\.png$/i, '');
@@ -17,7 +20,7 @@ const load = (url: string) => new Promise<HTMLImageElement | null>((res) => {
 });
 
 // 載入進度（給啟動畫面的進度條）
-const total = Object.keys(spriteUrls).length + Object.keys(sceneUrls).length;
+const total = Object.keys(spriteUrls).length + Object.keys(sceneUrls).length + Object.keys(shinyUrls).length;
 let loaded = 0;
 const tick = () => { loaded++; (window as unknown as { __splash?: (p: number) => void }).__splash?.(loaded / Math.max(1, total)); };
 
@@ -29,6 +32,12 @@ export const artReady: Promise<void> = Promise.all([
     const size = img.height;
     sprites.set(nameOf(p), { img, size, frames: Math.max(1, Math.round(img.width / size)) });
   }),
+  ...Object.entries(shinyUrls).map(async ([p, url]) => {
+    const img = await load(url);
+    tick();
+    if (!img) return;
+    shinies.set(nameOf(p), { img, size: img.height, frames: Math.max(1, Math.round(img.width / img.height)) });
+  }),
   ...Object.entries(sceneUrls).map(async ([p, url]) => {
     const img = await load(url);
     tick();
@@ -37,5 +46,6 @@ export const artReady: Promise<void> = Promise.all([
 ]).then(() => undefined);
 
 export const spriteArt = (id: string) => sprites.get(id);
+export const shinyArt = (id: string) => shinies.get(id);
 export const sceneArt = (name: string) => scenes.get(name);
 export const artCount = () => ({ sprites: sprites.size, scenes: scenes.size });

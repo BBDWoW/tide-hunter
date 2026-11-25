@@ -139,7 +139,7 @@ export const ZONE_BOSSES = new Set(['whale', 'frostking', 'lavadragon', 'mainfra
 /** 可以抽到的生物：每一族的最初型態（不含霸主、環境形態） */
 export function gachaPool(r: Rarity): string[] {
   const targets = new Set(Object.values(FORMS).flatMap((f) => (f.evolve ?? []).map((e) => e.to)));
-  return Object.values(FORMS).filter((f) => !f.secret && !ZONE_BOSSES.has(f.id) && !targets.has(f.id) && !f.recolor && f.rarity === r).map((f) => f.id);
+  return Object.values(FORMS).filter((f) => !f.secret && !ZONE_BOSSES.has(f.id) && !targets.has(f.id) && !f.regional && f.rarity === r).map((f) => f.id);
 }
 export interface PullResult { rod: Tier; path: Tier[]; tier: Tier; form: string | null; mutant: boolean; bayId?: string }
 export function rollPull(rnd: () => number = Math.random): PullResult {
@@ -257,7 +257,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'ssr', title: '傳說的邂逅', desc: '收服任何一隻傳說級（SSR）', reward: 50, check: (s) => s.caught.some((id) => FORMS[id]?.rarity === 'SSR') },
   { id: 'mutant', title: '異色收藏家', desc: '收服一隻 ✦ 異變個體', reward: 40, check: (s) => s.mutants >= 1 },
   { id: 'guard', title: '守護之心', desc: '讓初始夥伴進化成守護型', reward: 30, check: (s) => s.evolved.some((id) => ['water3b', 'fire3b', 'grass3b'].includes(id)) },
-  { id: 'env', title: '環境之子', desc: '讓夥伴進化成地區形態', reward: 30, check: (s) => s.evolved.some((id) => !!FORMS[id]?.recolor && !FORMS[id]?.placeholder) },
+  { id: 'env', title: '環境之子', desc: '讓夥伴進化成地區形態', reward: 30, check: (s) => s.evolved.some((id) => !!FORMS[id]?.regional) },
   { id: 'baylove', title: '棲息灣大家庭', desc: '棲息灣住了 10 隻夥伴', reward: 30, check: (s) => s.bay >= 10 },
   { id: 'godhand', title: '神之手認可者', desc: '陪神之手玩滿 20 回合', reward: 2000, secret: true, check: (s) => !!s.godhand },
   { id: 'runs10', title: '老練的水手', desc: '出海 10 次', reward: 30, check: (s) => s.runs >= 10 },
