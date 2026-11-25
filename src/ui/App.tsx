@@ -99,7 +99,9 @@ export function App() {
     setTimeOfDay(inRun ? timeOfDay(run!) : 'day', run ? NIGHT_STYLE[run.zone] : 'cute');
     const ghFight = k === 'battle' && !!(screen as { enc?: Encounter }).enc?.godhand;
     if (k === 'godhand' || ghFight) { setScene(ghFight ? 'godfight' : 'godhand', 'godhand'); return; }
-    if (k === 'finale') { setScene(run?.finale === 'ending' ? 'bay' : 'boss', theme); return; }
+    if (k === 'finale') { setScene(run?.finale === 'ending' ? 'bay' : 'final', run?.finale === 'ending' ? theme : 'final'); return; }
+    // 最終決戰：專屬的決戰曲
+    if (k === 'battle' && (screen as { enc?: Encounter }).enc?.final) { setScene('final', 'final'); return; }
     const song: SongId = k === 'battle' ? (boss ? 'boss' : 'battle') : k === 'fishing' ? 'fish' : ['voyage', 'event', 'zonepick', 'after'].includes(k) ? 'voyage' : 'bay';
     setScene(song, theme);
   }, [screen.k, run?.zone, boss, n]);
@@ -155,6 +157,7 @@ export function App() {
   /** 最終決戰：統領者・潮汐默旭 */
   const finalFight = (r: RunState) => {
     r.finale = 'fight'; saveRun(r);
+    updateDex((d) => { d.legend = { wins: 0, ...d.legend, met: true }; });
     go({ k: 'battle', enc: { mon: makeFinalBoss(r), rarity: 'SSR', final: true } });
   };
   /** 陪神之手玩：建立神之手的對手 */
@@ -212,7 +215,7 @@ export function App() {
         if (screen.enc.final) {
           // 打贏：播結局；打輸：三片海域還是算通關，但統領者會等你下次再來
           const r = run!;
-          if (result.outcome === 'win') { r.finale = 'ending'; updateDex((d) => { d.bosses = [...new Set([...(d.bosses ?? []), FINAL_BOSS])]; }); saveRun(r); go({ k: 'finale' }); }
+          if (result.outcome === 'win') { r.finale = 'ending'; updateDex((d) => { d.bosses = [...new Set([...(d.bosses ?? []), FINAL_BOSS])]; const l = d.legend ?? { met: true, wins: 0 }; d.legend = { ...l, met: true, wins: l.wins + 1, first: l.first ?? todayKey() }; }); saveRun(r); go({ k: 'finale' }); }
           else { r.finale = 'lost'; finishRun(true, r); }
           return;
         }

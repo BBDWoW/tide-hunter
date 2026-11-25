@@ -102,6 +102,15 @@ const S: Skill[] = [
   { id: 'abyssmaw', name: '深淵巨口', elem: 'dark', power: 90, cost: 3, acc: 90, desc: '吞噬一切的大口。', anim: 'hit' },
   // 專屬
   { id: 'azuretide', name: '蒼龍潮嘯', elem: 'water', power: 110, cost: 3, acc: 95, desc: '傳說之龍的潮嘯，回復造成傷害的 30%。', fx: { drain: 0.3 }, anim: 'beam' },
+  // ── 補強飛、草、冰屬性的技能 ──
+  { id: 'featherveil', name: '羽翼護壁', elem: 'fly', power: 0, cost: 1, acc: 100, desc: '張開羽翼擋在身前，產生最大 HP 25% 的護盾。', fx: { shield: 0.25 }, anim: 'buff' },
+  { id: 'aircutter', name: '風刃連斬', elem: 'fly', power: 30, cost: 1, acc: 95, desc: '甩出一串風刃，連續攻擊 2–3 次。', fx: { multi: [2, 3] }, anim: 'splash' },
+  { id: 'skyfall', name: '流星墜', elem: 'fly', power: 115, cost: 3, acc: 90, desc: '從雲層上方全速墜落，自己也會受到傷害的 1/4。', fx: { recoil: 0.25 }, anim: 'hit' },
+  { id: 'thornarmor', name: '荊棘鎧', elem: 'grass', power: 0, cost: 1, acc: 100, desc: '先制。全身長出尖刺，本回合受到攻擊時，把 50% 的傷害反彈回去。', fx: { priority: 2, counter: 0.5 }, anim: 'buff' },
+  { id: 'drainvine', name: '吸藤', elem: 'grass', power: 70, cost: 2, acc: 100, desc: '藤蔓纏住對手吸取養分，回復造成傷害的 30%。', fx: { drain: 0.3 }, anim: 'beam' },
+  { id: 'petalstorm', name: '花瓣風暴', elem: 'grass', power: 100, cost: 3, acc: 95, desc: '捲起漫天花瓣的暴風，20% 使對手致盲。', fx: { status: { id: 'blind', chance: 0.2 } }, anim: 'splash' },
+  { id: 'icewall', name: '冰牆', elem: 'ice', power: 0, cost: 1, acc: 100, desc: '在身前立起一道冰牆，產生最大 HP 30% 的護盾。', fx: { shield: 0.3 }, anim: 'buff' },
+  { id: 'blizzard', name: '暴風雪', elem: 'ice', power: 105, cost: 3, acc: 85, desc: '颳起遮天蔽日的暴風雪，20% 使對手冰凍。', fx: { status: { id: 'freeze', chance: 0.2 } }, anim: 'splash' },
   // ── 統領者・潮汐默旭的專屬技能（只有祂會用） ──
   { id: 'moxu_choir', name: '萬潮鳴鐘', elem: 'water', power: 70, cost: 1, acc: 95, desc: '冠冕敲響三重潮鐘，低頻潮環直推目標。30% 使對手麻痺。', fx: { status: { id: 'para', chance: 0.3 } }, anim: 'beam' },
   { id: 'moxu_palace', name: '深宮潮葬', elem: 'dark', power: 80, cost: 2, acc: 95, desc: '深淵在敵人腳下張開，五座水晶碑向內合攏。50% 降低對手防禦。', fx: { stat: { key: 'def', delta: -1, self: false, chance: 0.5 } }, anim: 'hit' },

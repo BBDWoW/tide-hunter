@@ -2,7 +2,7 @@
 // 音高用 MIDI 編號（60 = 中央 C），拍點從 0 開始（4/4 拍，一小節 4 拍）。
 
 export type Note = [beat: number, dur: number, midi: number];
-export type SongId = 'bay' | 'voyage' | 'fish' | 'battle' | 'boss' | 'godhand' | 'godfight';
+export type SongId = 'bay' | 'voyage' | 'fish' | 'battle' | 'boss' | 'godhand' | 'godfight' | 'final';
 
 export interface Song {
   bpm: number;
@@ -113,6 +113,31 @@ export const SONGS: Record<SongId, Song> = {
     strum: [[0, 'd', 1], [1, 'd', 0.7], [2, 'd', 0.9], [3, 'd', 0.7]],
     bass: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5], kick: [0, 1, 2, 3], snare: [1, 3],
   },
+  // 最終決戰：統領者・潮汐默旭。前半 D 小調的壓迫感，後半轉成「破曉」般明亮的旋律
+  final: {
+    bpm: 150, swing: 0, lead: 0.16, chord: 0.06,
+    bars: ['Dm', 'Bb', 'C', 'A', 'Dm', 'Gm', 'A', 'A', 'F', 'C', 'Dm', 'Bb', 'Gm', 'A', 'Dm', 'A'],
+    melody: [
+      [[0, 1, 74], [1, 0.5, 72], [1.5, 0.5, 74], [2, 1, 77], [3, 1, 76]],
+      [[0, 1.5, 74], [1.5, 0.5, 72], [2, 2, 70]],
+      [[0, 1, 72], [1, 1, 76], [2, 1, 79], [3, 1, 76]],
+      [[0, 2, 73], [2, 1, 76], [3, 1, 81]],
+      [[0, 1, 81], [1, 0.5, 79], [1.5, 0.5, 77], [2, 1, 76], [3, 1, 74]],
+      [[0, 1.5, 79], [1.5, 0.5, 77], [2, 2, 74]],
+      [[0, 1, 73], [1, 1, 76], [2, 1, 79], [3, 1, 76]],
+      [[0, 4, 73]],
+      [[0, 2, 77], [2, 1, 81], [3, 1, 84]],
+      [[0, 1.5, 79], [1.5, 0.5, 81], [2, 2, 84]],
+      [[0, 1, 86], [1, 1, 84], [2, 1, 81], [3, 1, 77]],
+      [[0, 2, 82], [2, 2, 77]],
+      [[0, 1, 79], [1, 1, 82], [2, 1, 86], [3, 1, 82]],
+      [[0, 2, 85], [2, 2, 81]],
+      [[0, 1, 86], [1, 1, 81], [2, 1, 77], [3, 1, 74]],
+      [[0, 2, 76], [2, 2, 73]],
+    ],
+    strum: [[0, 'd', 1], [0.5, 'u', 0.5], [1, 'd', 0.8], [2, 'd', 0.95], [2.5, 'u', 0.5], [3, 'd', 0.8], [3.5, 'u', 0.6]],
+    bass: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5], kick: [0, 1, 2, 2.5, 3], snare: [1, 3], shaker: true,
+  },
   // 神之手登場：音樂盒般的分解和弦，慢、空靈、有一點寂寞
   godhand: {
     bpm: 66, swing: 0, lead: 0.13, chord: 0.06,
@@ -166,4 +191,6 @@ export const FLAVORS: Record<string, Flavor> = {
   cyber: { lead: 'saw', surf: { base: 0.1, peak: 0.45, cutoff: 650, hiss: 0.2, period: [6, 9] }, reverb: 0.3 },
   godhand: { lead: 'bell', surf: { base: 0.06, peak: 0.25, cutoff: 900, hiss: 0.1, period: [9, 13] }, reverb: 0.6, detune: 0 },
   abyss: { lead: 'soft', surf: { base: 0.3, peak: 0.75, cutoff: 160, hiss: 0, period: [10, 14] }, reverb: 0.5, detune: -5 },
+  // 最終決戰：明亮的鐘聲旋律、深沉的海浪聲、比較長的殘響
+  final: { lead: 'bell', surf: { base: 0.25, peak: 0.85, cutoff: 260, hiss: 0.1, period: [7, 10] }, reverb: 0.42 },
 };

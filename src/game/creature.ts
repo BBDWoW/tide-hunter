@@ -89,8 +89,10 @@ export function ancestryOf(formId: string): Form[] {
 
 export function makeMon(formId: string, lv: number, boss = false, wild = false, rnd?: () => number): Mon {
   const f = FORMS[formId];
-  const known: string[] = [];
-  for (const anc of ancestryOf(formId)) for (const [l, sk] of anc.learn) if (l <= lv && !known.includes(sk)) known.push(sk);
+  // 依學會的等級排序（同等級維持原本順序），最後幾招就是最近學會的
+  const learned: [number, string][] = [];
+  for (const anc of ancestryOf(formId)) for (const [l, sk] of anc.learn) if (l <= lv && !learned.some((x) => x[1] === sk)) learned.push([l, sk]);
+  const known = learned.map((x, i) => [x[0], i, x[1]] as const).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map((x) => x[2]);
   const basic = pickBasic(formId, known);
   // 第 1 格是普攻，其他 3 格放最近學會的技能（沒學到的就空著）
   // 霸主例外：用設計好的 4 招招式組

@@ -584,7 +584,8 @@ export function loadRun(): RunState | null {
   } catch { return null; }
 }
 
-export interface Dex { seen: string[]; caught: string[]; bestStation: number; clears: number; bosses?: string[]; evolved?: string[]; mutants?: number }
+/** legend：圖鑑的「傳說」紀錄（統領者・潮汐默旭）：遇過了沒、打倒幾次、第一次打倒的日期 */
+export interface Dex { seen: string[]; caught: string[]; bestStation: number; clears: number; bosses?: string[]; evolved?: string[]; mutants?: number; legend?: { met: boolean; wins: number; first?: string } }
 export function loadDex(): Dex {
   try {
     const d = JSON.parse(localStorage.getItem(DEX_KEY) || 'null');

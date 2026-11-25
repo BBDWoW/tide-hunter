@@ -552,8 +552,38 @@ function ItemList({ run, onChange }: { run: RunState; onChange: () => void }) {
 }
 
 // ── 圖鑑 ──
+/** 圖鑑的「傳說」頁：統領者・潮汐默旭（打倒之後才看得到完整資料） */
+function LegendPage({ won, legend }: { won: boolean; legend?: { met: boolean; wins: number; first?: string } }) {
+  const f = FORMS.tide_moxu;
+  if (!won) return (
+    <div class="legend-page locked">
+      <Sprite form="tide_moxu" size={144} silhouette still />
+      <b class="big-name">？？？</b>
+      <p class="small">最深的海裡，有一個統領萬潮的存在。打倒祂，這一頁才會揭曉。</p>
+    </div>
+  );
+  return (
+    <div class="legend-page">
+      <span class="legend-eyebrow">傳說紀錄</span>
+      <Sprite form="tide_moxu" size={144} />
+      <div class="row-gap"><b class="big-name">{f.name}</b><span class="rar rar-ur" aria-label="稀有度：UR">UR</span><span class="boss-tag">統領者</span></div>
+      <span class="dim small">— 統領萬潮之人 —</span>
+      <div class="row-gap"><Elems list={f.elems} /><span class="dim small">{f.category}</span></div>
+      <p class="small">{f.desc}</p>
+      <p class="small">打倒祂之後，祂化成無數光點，回到了淺灘、冰原、裂谷、資料海與深淵。每一片海的潮聲裡，都還聽得見祂。</p>
+      <div class="legend-stats">
+        <span>打倒次數</span><b class="num">{legend?.wins ?? 0} 次</b>
+        <span>第一次打倒</span><b class="num">{legend?.first ?? '—'}</b>
+        <span>專屬技能</span><b>萬潮鳴鐘・深宮潮葬・日輪裁潮</b>
+        <span>大絕招</span><b>五海歸一・默海破曉</b>
+      </div>
+    </div>
+  );
+}
+
 export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
   const dex = loadDex();
+  const legend = dex.legend, legendWon = (legend?.wins ?? 0) > 0;
   const all = Object.values(FORMS).filter((f) => !f.secret).sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity));
   const [sel, setSel] = useState<string | null>(() => all.find((x) => dex.seen.includes(x.id))?.id ?? null);
   const f = sel ? FORMS[sel] : null;
@@ -581,6 +611,12 @@ export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
           </div>
           <div class="dex-split">
             <div class="dex-list">
+              {legend?.met && (
+                <button class={`dex-cell legend ${legendWon ? 'caught' : ''} ${sel === 'tide_moxu' ? 'on' : ''}`} onClick={() => setSel('tide_moxu')} aria-label={legendWon ? '傳說：潮汐・默旭' : '傳說：還沒打倒'}>
+                  <Sprite form="tide_moxu" size={48} silhouette={!legendWon} still />
+                  <span class="small">{legendWon ? '★ 傳說' : '？？？'}</span>
+                </button>
+              )}
               {all.map((x) => {
                 const seen = dex.seen.includes(x.id), caught = dex.caught.includes(x.id);
                 return (
@@ -592,7 +628,7 @@ export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
               })}
             </div>
             <div class="dex-side">
-              {f ? <>
+              {sel === 'tide_moxu' ? <LegendPage won={legendWon} legend={legend} /> : f ? <>
                 <Sprite form={f.id} size={144} />
                 <div class="row-gap">{f.no && <span class="num dim">No.{String(f.no).padStart(4, '0')}</span>}<b class="big-name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={f.id} /></div>
                 <div class="row-gap"><Elems list={f.elems} /><span class="dim small">{f.category}</span>{dex.caught.includes(f.id) ? <span class="small accent">已收服</span> : <span class="small dim">只見過</span>}</div>

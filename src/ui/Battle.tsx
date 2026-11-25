@@ -8,7 +8,7 @@ import { FORMS } from '../data/creatures';
 import { FIELDS, SKILLS, type FieldId, type StatusId } from '../data/skills';
 import { effectiveness, ELEM, RARITY, type Elem } from '../data/types';
 import {
-  active, aiChoose, aiForcedSwitch, canAfford, canRod, createBattle, finalSlots, MOXU_ULT, startFinal, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, resolveTurn, restorePulled, statusLabel, volOf,
+  active, aiChoose, aiForcedSwitch, canAfford, canRod, createBattle, finalSlots, MOXU_ULT, planAlly, startFinal, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, resolveTurn, restorePulled, statusLabel, volOf,
   type Action, type BattleState, type BEvent, type ItemId, type SideId,
 } from '../game/battle';
 import { blockRate, dodgeRate, formOf, maxHp, statsOf, type Mon } from '../game/creature';
@@ -136,6 +136,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const [peek, setPeek] = useState(-1); // 正在看說明的技能（滑鼠移過去／觸控點一下）
   const [armed, setArmed] = useState(-1); // 觸控：已經點過一下、等第二下確認的選項
   const [info, setInfo] = useState<SideId | null>(null); // 查看雙方資料
+  const [infoIdx, setInfoIdx] = useState<number | undefined>(undefined); // 1 對 2 時看的是對手的哪一隻
+  const [allyIntent, setAllyIntent] = useState<Intent | null>(null);
   const net = useRef<{ wob: number; glow: number } | null>(null);
   const [intent, setIntent] = useState<Intent | null>(null);
   const [intro, setIntro] = useState<null | 'dark' | 'card' | 'out'>(null); // 霸主登場畫面
@@ -155,6 +157,12 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       ? { key, act, icon: sk.power > 0 ? 'attack' : sk.fx?.heal ? 'heal' : sk.fx?.status || (sk.fx?.stat && !sk.fx.stat.self) ? 'hinder' : 'buff', name: sk.name, elem: sk.elem, atk: sk.power > 0 }
       : { key, act, icon: 'attack', name: '掙扎', elem: null, atk: true };
     intentRef.current = it; setIntent(it);
+    // 被召喚的霸主也預告下一步
+    const ap = planAlly(bs), ai = bs.final?.ally;
+    if (ap && ai != null) {
+      const am = bs.sides[1].team[ai], ask = ap.type === 'skill' ? (ap.slot < 0 ? null : SKILLS[am.skills[ap.slot]]) : null;
+      setAllyIntent(ask ? { key: `${key}-ally`, act: ap, icon: ask.power > 0 ? 'attack' : ask.fx?.heal ? 'heal' : ask.fx?.status || (ask.fx?.stat && !ask.fx.stat.self) ? 'hinder' : 'buff', name: ask.name, elem: ask.elem, atk: ask.power > 0 } : { key: `${key}-ally`, act: ap, icon: 'attack', name: '掙扎', elem: null, atk: true });
+    } else setAllyIntent(null);
   };
 
   const mkView = (side: SideId, form: string): MonView => {
@@ -624,6 +632,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const me = active(bs, 0), foe = active(bs, 1), [dp, de] = disp.current;
   const duo = !!bs.final && finalSlots(bs).length > 1; // 1 對 2：可以選攻擊目標
   const pickTarget = (i: number) => { sfx('select'); setTarget(i); };
+  const openInfo = (side: SideId, idx?: number) => { setInfoIdx(idx); setInfo(side); };
   const finalNote = bs.final ? `第 ${bs.final.phase}/2 條血・大絕招${bs.final.ultIn <= 0 ? '：下回合！' : ` ${bs.final.ultIn} 回合後`}` : undefined;
   const meAffordAny = me.skills.some((_, i) => canAfford(bs, 0, i));
   const loveLock = !!bs.godhand && bs.godhand.loveTurn === bs.turn; // 無法忽視的愛：只能攻擊
@@ -642,9 +651,9 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         {bossDown && <BossDown form={enc.mon.form} zone={final ? '萬潮的統領者' : zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
         {intro && <BossIntro phase={intro} form={enc.mon.form} lv={enc.mon.lv} zone={final ? '萬潮的統領者' : zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
         {!intro && <>
-        <HudBox onOpen={() => (duo ? pickTarget(0) : setInfo(1))} sel={duo && target === 0} note={finalNote} side={1} d={de} rarity={crew ? undefined : FORMS[de.form].rarity} boss={boss} intent={mode === 'main' || mode === 'skills' ? intent : null} warn={!!intent?.atk && effectiveness(intent.elem, formOf(active(bs, 0)).elems) >= 2} crewLeft={crew ? bs.sides[1].team.filter((m) => m.hp > 0).length : 0} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
-        {allySlot.current != null && disp.current[2] && anim.current.fade[2] > 0 && <HudBox cls="hud-ally" onOpen={() => duo && pickTarget(allySlot.current!)} sel={duo && target === allySlot.current} side={1} d={disp.current[2]} rarity={FORMS[disp.current[2].form].rarity} boss />}
-        {anim.current.fade[0] > 0 && <HudBox onOpen={() => setInfo(0)} side={0} d={dp} charged={volOf(bs, 0).charged} locked={volOf(bs, 0).lockOn} turns={active(bs, 0).statusTurns} />}
+        <HudBox onOpen={() => (duo && target !== 0 ? pickTarget(0) : openInfo(1, 0))} sel={duo && target === 0} note={finalNote} side={1} d={de} rarity={crew ? undefined : FORMS[de.form].rarity} boss={boss} intent={mode === 'main' || mode === 'skills' ? intent : null} warn={!!intent?.atk && effectiveness(intent.elem, formOf(active(bs, 0)).elems) >= 2} crewLeft={crew ? bs.sides[1].team.filter((m) => m.hp > 0).length : 0} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
+        {allySlot.current != null && disp.current[2] && anim.current.fade[2] > 0 && <HudBox cls="hud-ally" onOpen={() => (duo && target !== allySlot.current ? pickTarget(allySlot.current!) : openInfo(1, allySlot.current!))} sel={duo && target === allySlot.current} side={1} d={disp.current[2]} rarity={FORMS[disp.current[2].form].rarity} boss intent={mode === 'main' || mode === 'skills' ? allyIntent : null} warn={!!allyIntent?.atk && effectiveness(allyIntent.elem, formOf(active(bs, 0)).elems) >= 2} />}
+        {anim.current.fade[0] > 0 && <HudBox onOpen={() => openInfo(0)} side={0} d={dp} charged={volOf(bs, 0).charged} locked={volOf(bs, 0).lockOn} turns={active(bs, 0).statusTurns} />}
         </>}
         {popups.map((p) => {
           const c = posOf(p.side, (disp.current[p.side] ?? disp.current[1]).form);
@@ -660,11 +669,11 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         {mode === 'reel' && !vp.portrait && reel}
         {toast && <div class="item-toast" key={toast.id}><Sprite form={toast.form} size={48} /><span class="grow"><b><Icon name="heal" /> {toast.text}</b><Bar value={toast.hp} max={toast.max} /><span class="num small">HP {toast.from} → {toast.hp}/{toast.max}</span></span></div>}
         {mode === 'main' && !boss && <Tip id="battle">直接點技能出招（◆ 是能量消耗）。對手 HP 條下面的「下一步」是牠這回合要做的事。把對手打虛弱再按「捕捉」，比較容易收服。點 HP 框可以看詳細資料。</Tip>}
-        {mode === 'main' && final && <Tip id="final">統領者有兩條血，每 5 回合會放一次大絕招「五海歸一・默海破曉」（資料框會倒數），打中後全隊每隻夥伴都會各中一種異常，記得準備珍珠精華！打掉第一條血後，祂會召喚一隻霸主變成 1 對 2：用「攻擊目標」選要打哪一隻，「漁夫的釣竿」可以橫掃全場並降低對手能力。</Tip>}
+        {mode === 'main' && final && <Tip id="final">統領者有兩條血，每 5 回合會放一次大絕招「五海歸一・默海破曉」（資料框會倒數），打中後全隊每隻夥伴都會各中一種異常，記得準備珍珠精華！打掉第一條血後，祂會召喚一隻霸主變成 1 對 2：用「攻擊目標」或點對手的資料框選要打哪一隻（再點一次可以看詳細資料），「漁夫的釣竿」可以橫掃全場並降低對手能力。</Tip>}
         {mode === 'main' && boss && !final && <Tip id="boss">霸主的 HP 掉到一半時會狂暴：攻擊提高，但防禦會露出破綻。霸主不能捕捉，也不能逃跑。</Tip>}
       </>}
       onPanelClose={info !== null ? () => setInfo(null) : mode === 'switch' || mode === 'itemTarget' ? () => setMode(mode === 'itemTarget' ? 'items' : 'main') : undefined}
-      panel={info !== null ? <InfoPanel bs={bs} side={info} boss={boss} onClose={() => setInfo(null)} /> : picking && (
+      panel={info !== null ? <InfoPanel bs={bs} side={info} idx={infoIdx} boss={boss} onClose={() => setInfo(null)} /> : picking && (
         <Win class="big-panel" title={mode === 'force' ? '要派誰上場？' : mode === 'itemTarget' ? `對誰使用 ${ITEMS[itemPick!].name}？` : '換人'} onClose={mode !== 'force' ? () => setMode(mode === 'itemTarget' ? 'items' : 'main') : undefined} closeLabel="返回">
           <div class="pick-grid">
             {run.party.map((m, i) => {
@@ -840,8 +849,8 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
 
 // 戰鬥中查看資料：自己看得到技能，對手只看得到狀態與被動特性
 const STAGE_LABEL = { atk: '攻擊', def: '防禦', spd: '速度' } as const;
-function InfoPanel({ bs, side, boss, onClose }: { bs: BattleState; side: SideId; boss: boolean; onClose: () => void }) {
-  const m = active(bs, side), f = formOf(m), v = volOf(bs, side), mx = maxHp(m), st = statsOf(m);
+function InfoPanel({ bs, side, idx, boss, onClose }: { bs: BattleState; side: SideId; idx?: number; boss: boolean; onClose: () => void }) {
+  const m = idx != null ? bs.sides[side].team[idx] : active(bs, side), f = formOf(m), v = bs.sides[side].vol[m.uid], mx = maxHp(m), st = statsOf(m);
   const stages = (Object.keys(STAGE_LABEL) as (keyof typeof STAGE_LABEL)[]).filter((k) => v.stages[k]);
   const mine = side === 0;
   return (

@@ -58,7 +58,7 @@ export interface BattleState {
   final?: FinalState; // 最終決戰：統領者・潮汐默旭
 }
 /** 最終決戰：兩條血、第二條血時召喚霸主變成 1 對 2、每 4 回合放一次大絕招、玩家可以用漁夫的釣竿 */
-export interface FinalState { phase: 1 | 2; ally: number | null; ultIn: number; rodCd: number; rodUses: number; summoned?: string }
+export interface FinalState { phase: 1 | 2; ally: number | null; ultIn: number; rodCd: number; rodUses: number; summoned?: string; allyPlan?: Action }
 export interface GodHandState { survive: number; rewinds: number; loveTurn: number; passion: string[]; pulled: Record<string, string[]>; saved: Record<string, string[]> }
 export const isGodHand = (m: Mon) => m.form === 'godhand';
 
@@ -934,7 +934,13 @@ function resolveFinal(s: BattleState, actions: [Action, Action]): BEvent[] {
   S1.active = 0;
   type Act = { side: SideId; idx: number; a: Action };
   const acts: Act[] = [{ side: 0, idx: 0, a: actions[0] }, { side: 1, idx: 0, a: actions[1] }];
-  if (F.ally != null && S1.team[F.ally].hp > 0) { const ai = F.ally; acts.push({ side: 1, idx: ai, a: withSlot(s, ai, () => aiChoose(s, 1)) }); }
+  if (F.ally != null && S1.team[F.ally].hp > 0) {
+    // 被召喚的霸主：照畫面上預告的行動（能量不夠的話重新決定）
+    const ai = F.ally, plan = F.allyPlan;
+    const ok = plan && (plan.type !== 'skill' || withSlot(s, ai, () => canAfford(s, 1, plan.slot)));
+    acts.push({ side: 1, idx: ai, a: ok ? plan : withSlot(s, ai, () => aiChoose(s, 1)) });
+  }
+  F.allyPlan = undefined;
   const prio = (x: Act): number => {
     const a = x.a;
     if (a.type === 'switch' || a.type === 'item' || a.type === 'run' || a.type === 'rod') return 10;
@@ -1011,4 +1017,13 @@ function ultStatuses(s: BattleState, ev: BEvent[]) {
     }
   });
   S0.active = act;
+}
+
+/** 先決定好被召喚的霸主這回合要做什麼（畫面上的「下一步」預告會用到） */
+export function planAlly(s: BattleState): Action | null {
+  const F = s.final;
+  if (!F || F.ally == null || !(s.sides[1].team[F.ally]?.hp > 0)) return null;
+  const ai = F.ally;
+  F.allyPlan ??= withSlot(s, ai, () => aiChoose(s, 1));
+  return F.allyPlan;
 }
