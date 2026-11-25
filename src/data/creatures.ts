@@ -406,12 +406,13 @@ export const FORMS: Record<string, Form> = Object.fromEntries(F.map((f) => [f.id
 export const STARTERS = ['water1', 'fire1', 'grass1'];
 
 // 淺灘出現的野生生物（以家族的第一個形態表示）
-export const ICE_POOL = ['snow_crystal_spirit', 'iceshrimp', 'jelly1', 'zaploach', 'starsand', 'lavasnail', 'frost_wing_core', 'ice_ink_beast', 'snowgull', 'icegolem', 'tide_cell', 'pressure_shell', 'walrus', 'drowned_bell', 'frost_crystal_fawn', 'aurorawhale', 'thunderfang', 'chubby1'];
-export const LAVA_POOL = ['lava_bubble', 'fire_rock_bug', 'lavasnail', 'starsand', 'bubcrab', 'magma_core_rock', 'magmaeel', 'bonecrab', 'obsidiancrab', 'bonebream', 'tide_cell', 'cinderbone', 'thunder_wyrmling', 'ember_chick', 'magmacore', 'dragon', 'chubby1'];
-export const FOREST_POOL = ['sprout_orb', 'grass1', 'bubcrab', 'zaploach', 'mushroom_sprite', 'coral', 'vine_trace_spirit', 'gull1', 'tide_cell', 'neonray', 'thunder_wyrmling', 'angler', 'frost_crystal_fawn', 'ember_chick'];
-export const VOID_POOL = ['shadow_soul_flame', 'jelly1', 'lanternlarva', 'abyss_wisp', 'rune_wraith', 'vine_trace_spirit', 'mushroom_sprite', 'bonebream', 'ghost_squid', 'phantom_cub', 'cinderbone', 'chaos_zygote', 'abyss_eye'];
-export const CORE_POOL = ['cubelet', 'zaploach', 'starsand', 'pixfish', 'orbit_construct', 'routercrab', 'cablesnake', 'polyhedral_sentinel', 'cube_coreling', 'neonray', 'domain_coreling', 'cipher_whale', 'chaos_zygote', 'zero_dragon'];
-export const CYBER_POOL = ['pixfish', 'zaploach', 'cubelet', 'jelly1', 'cablesnake', 'routercrab', 'dronegull', 'orbit_construct', 'neonray', 'virus_jelly', 'polyhedral_sentinel', 'cube_coreling', 'cipher_whale', 'angler', 'zero_dragon', 'thunderfang'];
-export const ABYSS_POOL = ['lanternlarva', 'abyss_wisp', 'jelly1', 'shadow_soul_flame', 'bonecrab', 'gulper', 'ice_ink_beast', 'pressure_shell', 'ghost_squid', 'bonebream', 'tide_cell', 'drowned_bell', 'angler', 'cinderbone', 'abyss_eye', 'dragon'];
-export const ZONE1_POOL = ['bubcrab', 'starsand', 'zaploach', 'jelly1', 'gull1', 'coral', 'gulper', 'bonebream', 'tide_cell', 'angler', 'thunder_wyrmling', 'dragon', 'thunderfang', 'chubby1'];
+// 每個角色只屬於一個區域（不跨區共用）；還不夠的稀有度等新角色補上
+export const ICE_POOL = ['iceshrimp', 'snow_crystal_spirit', 'snowgull', 'frost_wing_core', 'ice_ink_beast', 'icegolem', 'walrus', 'aurorawhale', 'frost_crystal_fawn'];
+export const LAVA_POOL = ['lava_bubble', 'fire_rock_bug', 'lavasnail', 'magmaeel', 'magma_core_rock', 'obsidiancrab', 'cinderbone', 'magmacore', 'ember_chick'];
+export const FOREST_POOL = ['sprout_orb', 'grass1', 'mushroom_sprite', 'coral'];
+export const VOID_POOL = ['shadow_soul_flame', 'rune_wraith', 'vine_trace_spirit', 'bonebream', 'phantom_cub', 'chaos_zygote'];
+export const CORE_POOL = ['cubelet', 'orbit_construct', 'polyhedral_sentinel', 'cube_coreling', 'domain_coreling'];
+export const CYBER_POOL = ['pixfish', 'zaploach', 'cablesnake', 'routercrab', 'dronegull', 'neonray', 'virus_jelly', 'cipher_whale', 'zero_dragon', 'thunderfang'];
+export const ABYSS_POOL = ['lanternlarva', 'abyss_wisp', 'bonecrab', 'gulper', 'pressure_shell', 'ghost_squid', 'drowned_bell', 'angler', 'abyss_eye'];
+export const ZONE1_POOL = ['bubcrab', 'starsand', 'jelly1', 'gull1', 'tide_cell', 'thunder_wyrmling', 'dragon', 'chubby1'];
 export const ZONE1_BOSS = 'whale';

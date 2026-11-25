@@ -435,7 +435,8 @@ export function rollEncounter(run: RunState, q: number, shadow: Shadow): Encount
   let formId = weighted(run.rng, pool.map((id) => [id, bias[id] ?? 1] as [string, number]));
   const elite = nodeOf(run).kind === 'elite' ? 2 : 0;
   const lv = firstStop(run) ? 3 : Math.max(2, Math.round((zoneOf(run).special ? (run.specialLv ?? 10) : zoneOf(run).lvBase) + run.station * 0.8 + int(run.rng, 0, 2)) - ({ N: 0, B: 0, A: 1, S: 2, SSR: 2 } as const)[rarity] + elite + todLv(run));
-  const ev = FORMS[formId].evolve?.find((e) => lv >= e.level);
+  // 等級夠高的野生個體直接是進化後的樣子（區域限定的進化只在那個區域）
+  const ev = FORMS[formId].evolve?.find((e) => lv >= e.level && (!e.zone || e.zone === run.zone));
   if (ev) formId = ev.to;
   const mon = makeMon(formId, lv, false, true, () => next(run.rng));
   if (next(run.rng) < MUTANT_CHANCE * (1 + boon(run, 'lucky') * 0.5) * (timeOfDay(run) === 'night' ? 2 : 1) * (run.dailyRule?.id === 'mutant' ? 5 : 1)) makeMutant(mon);
