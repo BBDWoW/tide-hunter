@@ -8,6 +8,8 @@ const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) /
 
 export function playEvolution(canvas: HTMLCanvasElement, from: string, to: string, onDone: () => void, onPhase?: (p: 'start' | 'reveal') => void, mutant?: boolean) {
   const ctx = canvas.getContext('2d')!;
+  // 畫布是 EVO_W 的 2 倍解析度，進化後的高解析角色才不會糊掉
+  ctx.setTransform(canvas.width / EVO_W, 0, 0, canvas.width / EVO_W, 0, 0); ctx.imageSmoothingEnabled = false;
   const ff = FORMS[from], ft = FORMS[to];
   const oa = off(ff.sprite), ob = off(ft.sprite);
   const A = spritePixels(ff.sprite, PAL[ff.pal]), B = spritePixels(ft.sprite, PAL[ft.pal]);

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { ABILITIES, abilitiesOf, FORMS, recolorOf } from '../data/creatures';
 import { ELEM, RARITY, STAGE_NAME, type Elem, type Rarity } from '../data/types';
-import { animFrame, drawSprite, PAL, spriteSize } from '../render/pixel';
+import { animFrame, drawSprite, PAL, spriteRes, spriteSize } from '../render/pixel';
 import { SKILLS } from '../data/skills';
 import { GUARD_THRESHOLD, IV_LABELS, ivStars as ivStarsOf, styleRatio, type Mon } from '../game/creature';
 
@@ -19,14 +19,15 @@ export function Sprite({ form, size = 96, flip = false, silhouette = false, stil
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = ref.current!, ctx = c.getContext('2d')!, f = FORMS[form];
-    const n = spriteSize(f?.sprite ?? '');
-    c.width = n; c.height = n;
+    // 畫布用圖檔的原始解析度，高解析版的細節才不會被縮掉
+    const n = spriteSize(f?.sprite ?? ''), res = spriteRes(f?.sprite ?? ''), k = res / n;
+    c.width = res; c.height = res;
     let last = -1;
     const draw = (t: number) => {
       const fr = f ? animFrame(f.sprite, t) : 0;
       if (fr === last) return; last = fr;
-      ctx.clearRect(0, 0, n, n);
-      if (f) drawSprite(ctx, f.sprite, PAL[f.pal], 0, 0, { f: fr, flip, tint: silhouette ? '#1d2a55' : undefined, recolor: recolorOf(form, mutant) });
+      ctx.clearRect(0, 0, res, res);
+      if (f) drawSprite(ctx, f.sprite, PAL[f.pal], 0, 0, { f: fr, flip, scale: k, tint: silhouette ? '#1d2a55' : undefined, recolor: recolorOf(form, mutant) });
     };
     draw(clock);
     if (still || silhouette) return;

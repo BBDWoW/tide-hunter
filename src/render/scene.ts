@@ -402,9 +402,9 @@ function foamRing(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: num
   }
 }
 
-export interface MonView { form: string; x: number; y: number; flip: boolean; flash: number; shake: number; lunge: number; alpha: number; scale: number; tint?: string; aura?: string; mutant?: boolean; enter?: number; low?: boolean }
+export interface MonView { form: string; x: number; y: number; flip: boolean; flash: number; shake: number; lunge: number; alpha: number; scale: number; tint?: string; aura?: string; mutant?: boolean; enter?: number; low?: boolean; ox?: number; oy?: number }
 /** 戰鬥畫面的額外演出：場地、畫面震動、全畫面閃光 */
-export interface BattleFx { field?: string | null; quake?: number; flash?: number; flashColor?: string }
+export interface BattleFx { field?: string | null; quake?: number; flash?: number; flashColor?: string; fxLayer?: (ctx: CanvasRenderingContext2D, which: 'back' | 'front', rects: ({ x: number; y: number; w: number } | null)[]) => void }
 export interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; g?: number }
 export interface Beam { x0: number; y0: number; x1: number; y1: number; life: number; color: string }
 
@@ -436,6 +436,19 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
   if (q > 0) ctx.translate(Math.round((Math.random() - 0.5) * q * 2), Math.round((Math.random() - 0.5) * q * 2));
   drawBattleBg(ctx, t, theme);
   if (bfx.field) drawFieldBack(ctx, t, bfx.field);
+  // 先算出每隻角色這一格實際畫在哪裡，技能特效用同一個矩形定位
+  const pos = mons.map((m, i) => {
+    if (!m || m.alpha <= 0) return null;
+    const sx = m.x + m.lunge * (m.flip ? -1 : 1) + (m.shake ? Math.round(Math.sin(t * 60) * 2) : 0) + (m.ox ?? 0);
+    // 待機：呼吸般上下浮動，偶爾小跳一下；HP 很低時動作變慢、會發抖
+    const ph = (t + i * 1.7) % (m.low ? 5 : 3.4);
+    const hop = !m.low && ph < 0.32 ? -Math.round(Math.sin((ph / 0.32) * Math.PI) * 2) : 0;
+    const shiver = m.low && ph < 0.4 ? Math.round(Math.sin(t * 50)) : 0;
+    const sy = m.y + Math.round(Math.sin(t * (m.low ? 1.4 : 2.4) + i) * 1.2) + hop + (m.oy ?? 0);
+    return { sx, sy, sxx: sx + shiver, rect: { x: Math.round(sx + shiver), y: Math.round(sy), w: spriteSize(FORMS[m.form].sprite) * m.scale } };
+  });
+  const rects = pos.map((p) => p?.rect ?? null);
+  bfx.fxLayer?.(ctx, 'back', rects);
   for (const [i, m] of mons.entries()) {
     if (!m || m.alpha <= 0) continue;
     const base = i === 0 ? BATTLE.player : BATTLE.enemy;
@@ -446,13 +459,7 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
     if (!m || m.alpha <= 0) continue;
     const f = FORMS[m.form];
     const fr = animFrame(f.sprite, t, i);
-    const sx = m.x + m.lunge * (m.flip ? -1 : 1) + (m.shake ? Math.round(Math.sin(t * 60) * 2) : 0);
-    // 待機：呼吸般上下浮動，偶爾小跳一下；HP 很低時動作變慢、會發抖
-    const ph = (t + i * 1.7) % (m.low ? 5 : 3.4);
-    const hop = !m.low && ph < 0.32 ? -Math.round(Math.sin((ph / 0.32) * Math.PI) * 2) : 0;
-    const shiver = m.low && ph < 0.4 ? Math.round(Math.sin(t * 50)) : 0;
-    const sy = m.y + Math.round(Math.sin(t * (m.low ? 1.4 : 2.4) + i) * 1.2) + hop;
-    const sxx = sx + shiver;
+    const { sx, sy, sxx } = pos[i]!;
     // 登場：前半段是白色剪影
     const white = (m.flash > 0 && Math.floor(m.flash * 20) % 2 === 0) || (m.enter !== undefined && m.enter < 0.55);
     const rc = recolorOf(m.form, m.mutant);
@@ -466,6 +473,7 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
     }
     drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(sxx), Math.round(sy), { f: fr, flip: m.flip, alpha: m.alpha, scale: m.scale, tint: white ? '#ffffff' : m.tint, recolor: rc });
   }
+  bfx.fxLayer?.(ctx, 'front', rects);
   for (const b of beams) {
     ctx.globalAlpha = Math.min(1, b.life * 4);
     for (let o = -1; o <= 1; o++) pxLine(ctx, b.x0, b.y0 + o, b.x1, b.y1 + o, o ? b.color : '#ffffff');

@@ -6,7 +6,11 @@ const sceneUrls = import.meta.glob('../art/scenes/*.png', { eager: true, query: 
 // 色違：src/art/shiny/<角色代號>.png（專屬的色違圖，沒有的話就用程式換色）
 const shinyUrls = import.meta.glob('../art/shiny/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 
-export interface SpriteArt { img: HTMLImageElement; size: number; frames: number }
+import MANIFEST from '../art/sprite_manifest.json';
+// size：圖檔裡每一格的邊長（高解析版是 2 倍）；logical：在遊戲世界裡的大小（48 或 64）
+export interface SpriteArt { img: HTMLImageElement; size: number; frames: number; logical: number }
+const M = MANIFEST as unknown as Record<string, { logical: number; frame: number; sockets: Record<string, [number, number]> }>;
+export const spriteSockets = (id: string) => M[id]?.sockets;
 const sprites = new Map<string, SpriteArt>();
 const shinies = new Map<string, SpriteArt>();
 const scenes = new Map<string, HTMLImageElement>();
@@ -30,13 +34,15 @@ export const artReady: Promise<void> = Promise.all([
     tick();
     if (!img) return;
     const size = img.height;
-    sprites.set(nameOf(p), { img, size, frames: Math.max(1, Math.round(img.width / size)) });
+    const id = nameOf(p);
+    sprites.set(id, { img, size, frames: Math.max(1, Math.round(img.width / size)), logical: M[id]?.logical ?? size });
   }),
   ...Object.entries(shinyUrls).map(async ([p, url]) => {
     const img = await load(url);
     tick();
     if (!img) return;
-    shinies.set(nameOf(p), { img, size: img.height, frames: Math.max(1, Math.round(img.width / img.height)) });
+    const id = nameOf(p);
+    shinies.set(id, { img, size: img.height, frames: Math.max(1, Math.round(img.width / img.height)), logical: M[id]?.logical ?? img.height });
   }),
   ...Object.entries(sceneUrls).map(async ([p, url]) => {
     const img = await load(url);

@@ -201,7 +201,10 @@ export function scaledPainter(s: Painter, k: number): Painter {
 const SIZES: Record<string, number> = {};
 // size：畫布邊長（一般 48，傳說級 64）
 export function registerSprites(defs: Record<string, SpriteDef>, size = SIZE) { Object.assign(DEFS, defs); for (const k of Object.keys(defs)) SIZES[k] = size; }
-export const spriteSize = (id: string) => spriteArt(id)?.size ?? SIZES[id] ?? SIZE;
+/** 角色在遊戲世界裡的大小（48 或 64） */
+export const spriteSize = (id: string) => spriteArt(id)?.logical ?? SIZES[id] ?? SIZE;
+/** 圖檔的實際解析度（高解析版是世界大小的 2 倍） */
+export const spriteRes = (id: string) => spriteArt(id)?.size ?? spriteSize(id);
 /** 動畫格數：美術圖有幾格就用幾格（2 格或 6 格），程式畫的固定 2 格 */
 export const spriteFrames = (id: string) => spriteArt(id)?.frames ?? 2;
 /** 依時間取得要畫第幾格：6 格動畫每格 0.3 秒（水母、星砂仔 0.36 秒），2 格每格約 0.33 秒 */
@@ -259,14 +262,14 @@ function baked(id: string, f: number, pal: Palette, tint?: string, rc?: Recolor)
   const key = `${id}:${f}:${tint ?? ''}:${recolorKey(rc)}`;
   let cv = m.get(key);
   if (!cv) {
-    const n = spriteSize(id);
+    const n = spriteRes(id); // 用原始解析度烤圖，畫到畫面上時才換算成世界大小
     cv = document.createElement('canvas'); cv.width = n; cv.height = n;
     const x = cv.getContext('2d')!;
     const art = spriteArt(id);
     const sh = rc?.mutant ? shinyArt(id) : undefined;
     const src = sh ?? art;
     if (src) { x.imageSmoothingEnabled = false; x.drawImage(src.img, (f % src.frames) * src.size, 0, src.size, src.size, 0, 0, n, n); }
-    else x.putImageData(bake(spriteCells(id, f), pal, n), 0, 0);
+    else x.putImageData(bake(spriteCells(id, f), pal, n), 0, 0); // 程式畫的角色：解析度＝世界大小
     if (rc && !tint && !sh) applyRecolor(x, n, rc);
     if (tint) { x.globalCompositeOperation = 'source-in'; x.fillStyle = tint; x.fillRect(0, 0, n, n); }
     m.set(key, cv);
@@ -280,7 +283,7 @@ export function drawSprite(
 ) {
   const { f = 0, flip = false, alpha = 1, scale = 1, tint, recolor } = opt;
   const cv = baked(id, f, pal, tint, recolor);
-  const w = Math.round(cv.width * scale);
+  const w = Math.round(spriteSize(id) * scale);
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.globalAlpha *= alpha;
@@ -291,7 +294,9 @@ export function drawSprite(
 
 export function spritePixels(id: string, pal: Palette) {
   const n = spriteSize(id);
-  const d = baked(id, 0, pal).getContext('2d')!.getImageData(0, 0, n, n).data;
+  const lo = document.createElement('canvas'); lo.width = n; lo.height = n;
+  const lx = lo.getContext('2d')!; lx.imageSmoothingEnabled = false; lx.drawImage(baked(id, 0, pal), 0, 0, n, n);
+  const d = lx.getImageData(0, 0, n, n).data;
   const arr: { x: number; y: number; c: string }[] = [];
   for (let i = 0; i < n * n; i++) {
     if (d[i * 4 + 3] < 128) continue;
@@ -307,24 +312,24 @@ export function drawSpriteMini(ctx: CanvasRenderingContext2D, id: string, pal: P
   const key = `${id}:${f}:${recolorKey(recolor)}`;
   let cv = miniCache.get(key);
   if (!cv) {
-    const big = baked(id, f, pal, undefined, recolor), n = big.width, h = Math.ceil(n / 2);
+    const big = baked(id, f, pal, undefined, recolor), n = big.width, h = Math.ceil(spriteSize(id) / 2), k = Math.max(1, Math.round(n / h));
     const src = big.getContext('2d')!.getImageData(0, 0, n, n).data;
     cv = document.createElement('canvas'); cv.width = h; cv.height = h;
     const c2 = cv.getContext('2d')!, out = c2.createImageData(h, h);
     for (let by = 0; by < h; by++) for (let bx = 0; bx < h; bx++) {
       const cnt = new Map<number, number>(); let opaque = 0, dark = -1;
-      for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
-        const sx = bx * 2 + dx, sy = by * 2 + dy; if (sx >= n || sy >= n) continue;
+      for (let dy = 0; dy < k; dy++) for (let dx = 0; dx < k; dx++) {
+        const sx = bx * k + dx, sy = by * k + dy; if (sx >= n || sy >= n) continue;
         const i = (sy * n + sx) * 4; if (src[i + 3] < 128) continue;
         opaque++;
         const v = (src[i] << 16) | (src[i + 1] << 8) | src[i + 2];
         cnt.set(v, (cnt.get(v) ?? 0) + 1);
         if (src[i] + src[i + 1] + src[i + 2] < 150) dark = v; // 外框色
       }
-      if (opaque < 2) continue;
+      if (opaque < (k * k) / 2) continue;
       // 邊緣的格子優先保留外框色，裡面取最多的顏色
       let best = -1, bc = 0; for (const [v, k] of cnt) if (k > bc) { best = v; bc = k; }
-      if (opaque < 4 && dark >= 0) best = dark;
+      if (opaque < k * k && dark >= 0) best = dark;
       const o = (by * h + bx) * 4;
       out.data[o] = best >> 16; out.data[o + 1] = (best >> 8) & 255; out.data[o + 2] = best & 255; out.data[o + 3] = 255;
     }

@@ -257,7 +257,7 @@ function EvolveScene({ mon, to, onDone }: { mon: Mon; to: string; onDone: (learn
   }, [phase]);
   return (
     <div class="evo-box">
-      <canvas ref={ref} width={EVO_W} height={EVO_W} class="evo-canvas" />
+      <canvas ref={ref} width={EVO_W * 2} height={EVO_W * 2} class="evo-canvas" />
       <p class="evo-name">{label}</p>
       {phase === 'ask' && <>
         <p>咦？{formOf(mon).name} 的樣子……開始發光了！</p>

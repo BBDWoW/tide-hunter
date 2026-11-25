@@ -16,6 +16,8 @@ import { makeRng, next } from '../game/rng';
 import { catchChance, rollShakes } from '../game/capture';
 import { foeMods, battleMods, boon, LANDING_BONUS, zoneOf } from '../game/run';
 import type { Encounter, RunState } from '../game/run';
+import { spriteSize } from '../render/pixel';
+import { drawFx, FX_FRAMES, FX_MS, fxOffset, fxSkill, hasFx, loadFx } from '../render/vfx';
 import { auraColor, burst, drawBattle, drawNet, H, monSlot, W, type Beam, type MonView, type Particle } from '../render/scene';
 import { Tip, AbilityLines, Bar, ElemChip, Elems, Energy, IvStars, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
@@ -32,6 +34,8 @@ interface Disp { form: string; lv: number; hp: number; max: number; energy: numb
 interface Popup { id: number; side: SideId; text: string; cls: string; label?: string; dx: number }
 
 const SPEED_KEY = 'tidehunter.speed';
+/** 場地類特效鋪滿的範圍（場景座標，避開下方操作列） */
+const FX_ARENA = { x: 20, y: 2, w: 216, h: 117 };
 const DASH = 0.5; // 近戰衝刺的時間（秒）
 // 觸控裝置（沒有滑鼠移過去）：第一下看說明，再點一次才使用
 const TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(hover: none)').matches;
@@ -114,6 +118,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     mons: [mkView(0, disp.current[0].form), mkView(1, disp.current[1].form)] as MonView[],
     lungeT: [0, 0], dashT: [0, 0], shakeT: [0, 0], fade: [1, 1] as number[], enter: [0, 0] as number[],
     parts: [] as Particle[], beams: [] as Beam[],
+    fx: [] as { code: string; side: SideId; e: number }[], // 播放中的技能特效（e = 已播放幾格）
     quake: 0, flash: 0, flashColor: '#ffffff',
   });
   // 開發用：網址加 ?field=storm 可以直接看場地特效
@@ -156,13 +161,38 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       v.enter = a.enter[side] < 1 ? a.enter[side] : undefined;
       const dd = disp.current[side]; v.low = dd.hp > 0 && dd.hp / dd.max < 0.25;
     }
+    // 技能特效：往前播，並套用素材裡施術者／目標的抖動
+    const spd = hurry.current ? 4 : fastRef.current ? 2 : 1;
+    for (const f of a.fx) f.e += (dt * 1000 * spd) / FX_MS;
+    a.fx = a.fx.filter((f) => f.e < FX_FRAMES);
+    for (const side of [0, 1] as SideId[]) { a.mons[side].ox = 0; a.mons[side].oy = 0; }
+    for (const f of a.fx) {
+      const fr = Math.floor(f.e), foe: SideId = f.side === 0 ? 1 : 0;
+      for (const [sd, who] of [[f.side, 'caster'], [foe, 'target']] as const) {
+        const v = a.mons[sd], [ox, oy] = fxOffset(f.code, fr, who, v.flip);
+        v.ox = (v.ox ?? 0) + ox; v.oy = (v.oy ?? 0) + oy;
+      }
+    }
+    const fxLayer = (c: CanvasRenderingContext2D, which: 'back' | 'front', rects: ({ x: number; y: number; w: number } | null)[]) => {
+      for (const f of a.fx) {
+        const foe: SideId = f.side === 0 ? 1 : 0, r0 = rects[f.side], r1 = rects[foe];
+        if (!r0 || !r1) continue;
+        const actor = (sd: SideId, r: { x: number; y: number; w: number }) => { const sp = FORMS[a.mons[sd].form].sprite; return { rect: r, sprite: sp, facesLeft: a.mons[sd].flip, logical: spriteSize(sp) }; };
+        const A = actor(f.side, r0), B = actor(foe, r1), fr = Math.floor(f.e);
+        if (which === 'back') drawFx(c, f.code, 'back', fr, A, B, FX_ARENA);
+        else { drawFx(c, f.code, 'front', fr, A, B, FX_ARENA); drawFx(c, f.code, 'particles', fr, A, B, FX_ARENA); }
+      }
+    };
     // 震動、閃光慢慢消退
     const q = a.quake, fl = a.flash;
     a.quake = Math.max(0, a.quake - dt * 14); a.flash = Math.max(0, a.flash - dt * 2.2);
-    drawBattle(ctx, t, dt, a.mons, a.parts, a.beams, zoneOf(run).theme, { field: fieldRef.current, quake: q, flash: fl, flashColor: a.flashColor });
+    drawBattle(ctx, t, dt, a.mons, a.parts, a.beams, zoneOf(run).theme, { field: fieldRef.current, quake: q, flash: fl, flashColor: a.flashColor, fxLayer });
     if (a.mons[1].form === 'godhand' && a.fade[1] > 0) { const c = monSlot(1, 'godhand'); drawGodHand(ctx, t, c.cx, a.mons[1].y ?? c.y, c.scale, 0, false); }
     if (net.current) { const c = monSlot(1, a.mons[1].form); const n = net.current; n.glow = Math.max(0, n.glow - dt); drawNet(ctx, c.cx, c.cy + 6, n.wob, n.glow); }
   };
+
+  // 先把雙方隊伍會用到的技能特效圖載進來
+  useEffect(() => { for (const sd of bs.sides) for (const m of sd.team) for (const k of m.skills) loadFx(k); }, []);
 
   // 開場
   useEffect(() => {
@@ -214,6 +244,14 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         const foe: SideId = e.side === 0 ? 1 : 0, c = center(foe), me = center(e.side);
         const kind = sk.anim ?? 'hit';
         sfx(kind === 'buff' ? 'buff' : kind === 'heal' ? 'item' : `skill:${sk.elem ?? 'none'}`);
+        if (hasFx(e.skill)) {
+          // 有專屬特效的招式：播特效，角色只做衝刺／前傾的動作
+          loadFx(e.skill); a.fx.push({ code: e.skill, side: e.side, e: 0 });
+          const st = fxSkill(e.skill).style;
+          if (st === 'dash' || (kind === 'hit' && (sk as { power?: number }).power && !RANGED_HIT.has(e.skill) && st !== 'self')) { a.dashT[e.side] = DASH; await wait(DASH * 900); break; }
+          if (st !== 'self' && st !== 'field') a.lungeT[e.side] = 0.25;
+          await wait(450); break;
+        }
         if (kind === 'buff' || kind === 'heal') { burst(a.parts, me.x, me.y, kind, sk.elem); }
         else if (kind === 'hit' && (sk as { power?: number }).power && !RANGED_HIT.has(e.skill)) {
           // 近戰招式：衝過去打

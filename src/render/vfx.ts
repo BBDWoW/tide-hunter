@@ -1,0 +1,87 @@
+// 技能特效：每招三張圖集（back 畫在角色後面，front／particles 畫在角色前面），單格 192×104、4×3 共 12 格、每格 100ms。
+// 位置每一格都從角色目前的繪製矩形重新計算（會跟著衝刺、浮動、鏡像一起動）。
+import SKILL_FX from '../art/vfx_skills.json';
+import { spriteSockets } from './art';
+
+export interface FxSkill { style: string; socket: string; co: [number, number][]; to: [number, number][] }
+const FX = SKILL_FX as unknown as Record<string, FxSkill>;
+export const FX_FRAMES = 12, FX_MS = 100;
+const FW = 192, FH = 104;
+type Layer = 'back' | 'front' | 'particles';
+const LAYERS: Layer[] = ['back', 'front', 'particles'];
+
+const URLS = import.meta.glob('../art/vfx/*/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+const imgs = new Map<string, Partial<Record<Layer, HTMLImageElement>>>();
+
+export const hasFx = (code: string) => !!FX[code];
+export const fxSkill = (code: string) => FX[code];
+/** 先把招式的圖集載進來（用到時才載） */
+export function loadFx(code: string) {
+  if (!FX[code] || imgs.has(code)) return;
+  const set: Partial<Record<Layer, HTMLImageElement>> = {};
+  imgs.set(code, set);
+  for (const l of LAYERS) {
+    const url = URLS[`../art/vfx/${code}/${l}.png`];
+    if (!url) continue;
+    const im = new Image(); im.onload = () => { set[l] = im; }; im.src = url;
+  }
+}
+
+export interface Rect { x: number; y: number; w: number }
+export interface Actor { rect: Rect; sprite: string; facesLeft: boolean; logical: number }
+interface Pt { x: number; y: number }
+
+const sock = (a: Actor, name: string): [number, number] => spriteSockets(a.sprite)?.[name] ?? spriteSockets(a.sprite)?.body ?? [0.5, 0.6];
+export function actorPoint(a: Actor, uv: [number, number]): Pt {
+  const r = a.rect;
+  return { x: Math.round(r.x + r.w * (a.facesLeft ? 1 - uv[0] : uv[0])), y: Math.round(r.y + r.w * uv[1]) };
+}
+
+/** 這一格施術者／目標要偏移多少（素材裡的施法抖動），面向左時左右顛倒 */
+export function fxOffset(code: string, frame: number, who: 'caster' | 'target', facesLeft: boolean): [number, number] {
+  const s = FX[code]; if (!s) return [0, 0];
+  const o = (who === 'caster' ? s.co : s.to)[Math.max(0, Math.min(FX_FRAMES - 1, frame))] ?? [0, 0];
+  return [facesLeft ? -o[0] : o[0], o[1]];
+}
+
+const RETURNING = new Set(['soulsip', 'bloodtide', 'engulf', 'energydrain', 'seedleech', 'seagodbreath', 'azuretide']);
+
+/** 畫一層特效（照包內附的定位程式改寫） */
+export function drawFx(ctx: CanvasRenderingContext2D, code: string, layer: Layer, frame: number, caster: Actor, target: Actor, arena: { x: number; y: number; w: number; h: number }) {
+  const s = FX[code], image = imgs.get(code)?.[layer];
+  if (!s || !image || frame < 0 || frame >= FX_FRAMES) return;
+  const source = actorPoint(caster, sock(caster, s.socket)), body = actorPoint(caster, sock(caster, 'body')), hit = actorPoint(target, sock(target, 'body'));
+  const scale = caster.rect.w / caster.logical;
+  const sx = (frame % 4) * FW, sy = Math.floor(frame / 4) * FH;
+  const face = hit.x >= source.x ? 1 : -1, style = s.style;
+  ctx.save(); ctx.imageSmoothingEnabled = false;
+  const at = (p: Pt, x: number, y: number, mirror = face) => {
+    ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y)); ctx.scale(mirror * scale, scale);
+    ctx.drawImage(image, sx, sy, FW, FH, -x, -y, FW, FH); ctx.restore();
+  };
+  // 沿著兩點之間一欄一欄拉伸（光束、衝擊波之類）
+  const path = (a: Pt, b: Pt, start = 69, end = 145, baseY = 55) => {
+    const span = b.x - a.x, sign = span < 0 ? -1 : 1, dist = Math.abs(span);
+    const left = Math.floor(Math.min(a.x, b.x) - 80 * scale), right = Math.ceil(Math.max(a.x, b.x) + 80 * scale);
+    for (let x = left; x <= right; x++) {
+      const along = (x - a.x) * sign;
+      const u = along < 0 ? start + along / scale : along > dist ? end + (along - dist) / scale : start + ((end - start) * along) / Math.max(1, dist);
+      if (u < 0 || u >= FW) continue;
+      const t = Math.max(0, Math.min(1, (u - start) / (end - start)));
+      const y = Math.round(a.y + (b.y - a.y) * t - baseY * scale);
+      ctx.drawImage(image, sx + Math.floor(u), sy, 1, FH, x, y, 1, Math.round(FH * scale));
+    }
+  };
+  const center = { x: (body.x + hit.x) / 2, y: (body.y + hit.y) / 2 };
+  if (frame <= 3) at(source, 69, 55);
+  else if (style === 'field' && code !== 'reefspikes') ctx.drawImage(image, sx, sy, FW, FH, Math.round(arena.x), Math.round(arena.y), Math.round(arena.w), Math.round(arena.h));
+  else if (code === 'reefspikes') at(hit, 145, 64);
+  else if (style === 'self') at(body, 43, 58);
+  else if (code === 'gh_stay') at(center, 97, 54);
+  else if (code === 'gh_pull' || (layer === 'particles' && RETURNING.has(code) && frame >= 7) || ['coreburst', 'selfdestruct'].includes(code)) path(body, hit, 43, 145);
+  else if (['microquake', 'bigquake', 'frostcrack'].includes(code)) path(body, hit, 69, 145, 64);
+  else if (['jaw', 'cut', 'status', 'hand', 'burst'].includes(style) || (style === 'bolt' && code === 'thunder')) at(hit, 145, 55);
+  else if (layer === 'particles' && frame >= 6) at(hit, 145, 55);
+  else path(source, hit);
+  ctx.restore();
+}
