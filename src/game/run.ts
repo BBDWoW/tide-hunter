@@ -102,7 +102,7 @@ export const ZONES: Record<ZoneId, ZoneInfo> = {
       wreck: { name: '古木殘骸', desc: '倒下的巨木泡在水裡，裡面住著小生物。' },
       deep: { name: '聖泉', desc: '森林中央的泉水，深不見底。' },
     },
-    bias: { shallow: { sprout_orb: 3 }, reef: { mushroom_sprite: 3 }, wreck: { mushroom_sprite: 2, coral: 2 }, deep: { vine_antler_deer: 2, frost_crystal_fawn: 1 } },
+    bias: { shallow: { sprout_orb: 3 }, reef: { mushroom_sprite: 3 }, wreck: { mushroom_sprite: 2, coral: 2 }, deep: { frost_crystal_fawn: 2 } },
   },
   void: {
     name: '無稽區', desc: '一切都說不通的地方。影子會自己走動，符文浮在半空中。守護者是虛無星龍。', theme: 'void', special: true,

@@ -279,7 +279,7 @@ const F: Form[] = [
     learn: [[1, 'darkbite'], [1, 'vinebind'], [11, 'sporecloud'], [13, 'venomstrike'], [15, 'soulsip'], [15, 'drainvine']], desc: '只剩下藤蔓痕跡的影子生物，摸不到也抓不住。' },
   { id: 'phantom_cub', name: '虛影幼獸', family: 'voidline', stage: 1, rarity: 'S', category: '巨獸', elems: ['dark'], sprite: 'phantom_cub', pal: 'water',
     base: { hp: 60, atk: 70, def: 56, spd: 74 }, ability: 'firststrike',
-    learn: [[1, 'darkbite'], [8, 'shadowsneak'], [10, 'bonecurse']], evolve: [{ to: 'void_star_dragon', level: 14 }], desc: '半透明的小獸，眨眼間就會從視線裡消失。' },
+    learn: [[1, 'darkbite'], [8, 'shadowsneak'], [10, 'bonecurse'], [15, 'opportunist'], [19, 'bloodtide']], desc: '半透明的小獸，眨眼間就會從視線裡消失。' },
   { id: 'void_star_dragon', name: '虛無星龍', family: 'voidline', stage: 3, rarity: 'S', category: '龍', elems: ['dark', 'fly'], sprite: 'void_star_dragon', pal: 'water',
     base: { hp: 90, atk: 106, def: 78, spd: 96 }, ability: 'lure', extra: ['dragonpresence'],
     learn: [[14, 'gust'], [14, 'abyssmaw'], [14, 'seafog'], [15, 'opportunist'], [16, 'datastorm']], desc: '無稽區的主宰，鱗片上倒映著不存在的星空。' },
@@ -294,7 +294,7 @@ const F: Form[] = [
     learn: [[1, 'bitshot'], [1, 'pebble'], [11, 'reefspikes'], [12, 'firewall'], [15, 'rockslide'], [17, 'selfdestruct']], desc: '由多面體組成的守衛，會擋在域核的入口不讓人通過。' },
   { id: 'domain_coreling', name: '域核幼體', family: 'domaincore', stage: 1, rarity: 'S', category: '抽象', elems: ['data'], sprite: 'domain_coreling', pal: 'water',
     base: { hp: 58, atk: 66, def: 62, spd: 70 }, ability: 'static',
-    learn: [[1, 'bitshot'], [1, 'glitchwave'], [6, 'focus'], [10, 'scanlock'], [12, 'datastorm']], evolve: [{ to: 'domain_realm_core', level: 14 }], desc: '剛剛誕生的域核，發出閃爍的光芒。' },
+    learn: [[1, 'bitshot'], [1, 'glitchwave'], [6, 'focus'], [10, 'scanlock'], [12, 'datastorm'], [17, 'reboot']], desc: '剛剛誕生的域核，發出閃爍的光芒。' },
   { id: 'domain_realm_core', name: '域界核心', family: 'domaincore', stage: 3, rarity: 'S', category: '抽象', elems: ['data'], sprite: 'domain_realm_core', pal: 'water',
     base: { hp: 92, atk: 100, def: 90, spd: 86 }, ability: 'waterbarrier',
     learn: [[14, 'datagrid'], [14, 'datastorm'], [15, 'crash'], [16, 'firewall'], [17, 'focus']], desc: '支撐整個域核區域的核心，環繞著它的光帶就是區域的邊界。' },
@@ -408,7 +408,7 @@ export const STARTERS = ['water1', 'fire1', 'grass1'];
 // 淺灘出現的野生生物（以家族的第一個形態表示）
 export const ICE_POOL = ['snow_crystal_spirit', 'frost_wing_core', 'ice_ink_beast', 'frost_crystal_fawn', 'iceshrimp', 'snowgull', 'icegolem', 'walrus', 'aurorawhale', 'jelly1', 'zaploach', 'starsand', 'thunderfang', 'chubby1'];
 export const LAVA_POOL = ['lava_bubble', 'fire_rock_bug', 'magma_core_rock', 'ember_chick', 'lavasnail', 'magmaeel', 'obsidiancrab', 'cinderbone', 'magmacore', 'bonebream', 'starsand', 'bubcrab', 'dragon', 'chubby1'];
-export const FOREST_POOL = ['sprout_orb', 'mushroom_sprite', 'vine_antler_deer', 'coral', 'grass1', 'frost_crystal_fawn'];
+export const FOREST_POOL = ['sprout_orb', 'mushroom_sprite', 'coral', 'grass1', 'frost_crystal_fawn'];
 export const VOID_POOL = ['shadow_soul_flame', 'rune_wraith', 'vine_trace_spirit', 'phantom_cub', 'bonebream', 'cinderbone', 'chaos_zygote'];
 export const CORE_POOL = ['cubelet', 'orbit_construct', 'polyhedral_sentinel', 'domain_coreling', 'cube_coreling', 'chaos_zygote', 'zaploach'];
 export const CYBER_POOL = ['pixfish', 'cablesnake', 'routercrab', 'neonray', 'dronegull', 'virus_jelly', 'cipher_whale', 'zero_dragon', 'orbit_construct', 'polyhedral_sentinel', 'cube_coreling', 'zaploach'];
