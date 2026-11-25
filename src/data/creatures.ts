@@ -2,6 +2,7 @@
 import type { Elem, Rarity, Stage } from './types';
 import type { PalName } from '../render/pixel';
 import { EVO2 } from './evolutions2';
+import { NEW44, NEW44_POOLS } from './new44';
 
 export interface Stats { hp: number; atk: number; def: number; spd: number }
 
@@ -402,17 +403,19 @@ for (const e of EVO2) {
     learn: e.learn, desc: e.desc,
   });
 }
+// 第三波：44 條區域專屬的新進化線
+for (const f of NEW44) if (!F.some((x) => x.id === f.id)) F.push(f);
 export const FORMS: Record<string, Form> = Object.fromEntries(F.map((f) => [f.id, f]));
 export const STARTERS = ['water1', 'fire1', 'grass1'];
 
 // 淺灘出現的野生生物（以家族的第一個形態表示）
 // 每個角色只屬於一個區域（不跨區共用）；還不夠的稀有度等新角色補上
-export const ICE_POOL = ['iceshrimp', 'snow_crystal_spirit', 'snowgull', 'frost_wing_core', 'ice_ink_beast', 'icegolem', 'walrus', 'aurorawhale', 'frost_crystal_fawn'];
-export const LAVA_POOL = ['lava_bubble', 'fire_rock_bug', 'lavasnail', 'magmaeel', 'magma_core_rock', 'obsidiancrab', 'cinderbone', 'magmacore', 'ember_chick'];
-export const FOREST_POOL = ['sprout_orb', 'grass1', 'mushroom_sprite', 'coral'];
-export const VOID_POOL = ['shadow_soul_flame', 'rune_wraith', 'vine_trace_spirit', 'bonebream', 'phantom_cub', 'chaos_zygote'];
-export const CORE_POOL = ['cubelet', 'orbit_construct', 'polyhedral_sentinel', 'cube_coreling', 'domain_coreling'];
-export const CYBER_POOL = ['pixfish', 'zaploach', 'cablesnake', 'routercrab', 'dronegull', 'neonray', 'virus_jelly', 'cipher_whale', 'zero_dragon', 'thunderfang'];
-export const ABYSS_POOL = ['lanternlarva', 'abyss_wisp', 'bonecrab', 'gulper', 'pressure_shell', 'ghost_squid', 'drowned_bell', 'angler', 'abyss_eye'];
-export const ZONE1_POOL = ['bubcrab', 'starsand', 'jelly1', 'gull1', 'tide_cell', 'thunder_wyrmling', 'dragon', 'chubby1'];
+export const ICE_POOL = ['iceshrimp', 'snow_crystal_spirit', 'snowgull', 'frost_wing_core', 'ice_ink_beast', 'icegolem', 'walrus', 'aurorawhale', 'frost_crystal_fawn', ...NEW44_POOLS.ice];
+export const LAVA_POOL = ['lava_bubble', 'fire_rock_bug', 'lavasnail', 'magmaeel', 'magma_core_rock', 'obsidiancrab', 'cinderbone', 'magmacore', 'ember_chick', ...NEW44_POOLS.lava];
+export const FOREST_POOL = ['sprout_orb', 'grass1', 'mushroom_sprite', 'coral', ...NEW44_POOLS.forest];
+export const VOID_POOL = ['shadow_soul_flame', 'rune_wraith', 'vine_trace_spirit', 'bonebream', 'phantom_cub', 'chaos_zygote', ...NEW44_POOLS.void];
+export const CORE_POOL = ['cubelet', 'orbit_construct', 'polyhedral_sentinel', 'cube_coreling', 'domain_coreling', ...NEW44_POOLS.core];
+export const CYBER_POOL = ['pixfish', 'zaploach', 'cablesnake', 'routercrab', 'dronegull', 'neonray', 'virus_jelly', 'cipher_whale', 'zero_dragon', 'thunderfang', ...NEW44_POOLS.cyber];
+export const ABYSS_POOL = ['lanternlarva', 'abyss_wisp', 'bonecrab', 'gulper', 'pressure_shell', 'ghost_squid', 'drowned_bell', 'angler', 'abyss_eye', ...NEW44_POOLS.abyss];
+export const ZONE1_POOL = ['bubcrab', 'starsand', 'jelly1', 'gull1', 'tide_cell', 'thunder_wyrmling', 'dragon', 'chubby1', ...NEW44_POOLS.shallows];
 export const ZONE1_BOSS = 'whale';

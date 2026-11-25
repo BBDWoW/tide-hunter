@@ -410,7 +410,7 @@ export interface Beam { x0: number; y0: number; x1: number; y1: number; life: nu
 
 /** 角色站的位置。pos：最終決戰 1 對 2 時，統領者退到後面（back）、被召喚的霸主站在前面（ally） */
 export function monSlot(side: 0 | 1, form: string, pos?: 'back' | 'ally') {
-  const f = FORMS[form], king = !!spriteIdle(f?.sprite ?? '');
+  const f = FORMS[form], king = spriteSize(f?.sprite ?? '') > 64; // 霸主專屬版（世界大小 96）
   // 霸主專屬版（96 大小）當你的夥伴時再縮小一點，頭頂才不會被對手的資料框蓋住
   const sc = (f?.scale ?? 1) * (king && side === 0 ? 0.88 : 1), b0 = side === 0 ? BATTLE.player : pos ? BATTLE[pos] : BATTLE.enemy;
   const size = spriteSize(f?.sprite ?? '') * sc;
