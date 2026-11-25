@@ -74,7 +74,7 @@ export function eggMove(form: string, rnd: () => number = Math.random): string |
   const line = new Set<string>();
   for (const f of Object.values(FORMS)) if (ancestryOf(f.id)[0].id === ancestryOf(form)[0].id) for (const [, sk] of f.learn) line.add(sk);
   const elems = FORMS[form].elems as Elem[];
-  const ok = (sk: { id: string }) => !line.has(sk.id) && !sk.id.startsWith('gh_');
+  const ok = (sk: { id: string }) => !line.has(sk.id) && !sk.id.startsWith('gh_') && !sk.id.startsWith('moxu_');
   const all = Object.values(SKILLS).filter(ok);
   // 先找同屬性的強力攻擊技；找不到就放寬條件，保證一定有一招遺傳技
   let cands = all.filter((s) => s.power >= 55 && s.cost <= 2 && s.elem && elems.includes(s.elem));

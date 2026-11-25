@@ -17,8 +17,8 @@ import { catchChance, rollShakes } from '../game/capture';
 import { foeMods, battleMods, boon, LANDING_BONUS, zoneOf } from '../game/run';
 import type { Encounter, RunState } from '../game/run';
 import { spriteSize } from '../render/pixel';
-import { drawFx, FX_FRAMES, FX_MS, fxOffset, fxSkill, hasFx, loadFx } from '../render/vfx';
-import { auraColor, burst, drawBattle, drawNet, fisherCanvas, H, monSlot, W, type Beam, type MonView, type Particle } from '../render/scene';
+import { drawFx, FX_MS, fxFrames, fxOffset, fxSkill, hasFx, loadFx } from '../render/vfx';
+import { auraColor, burst, drawBattle, drawNet, fisherCanvas, H, monSlot, view, W, type Beam, type MonView, type Particle } from '../render/scene';
 import { Tip, AbilityLines, Bar, ElemChip, Elems, Energy, IvStars, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
@@ -37,7 +37,7 @@ const SPEED_KEY = 'tidehunter.speed';
 /** 場地類特效鋪滿的範圍（場景座標，避開下方操作列） */
 const FX_ARENA = { x: 20, y: 2, w: 216, h: 117 };
 const DASH = 0.5; // 近戰衝刺的時間（秒）
-const ROD_T = 1.7, ULT_T = 1.9; // 漁夫的釣竿、大絕招動畫的長度（秒）
+const ROD_T = 1.7; // 漁夫的釣竿動畫的長度（秒）
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 /** 漁夫的釣竿：漁夫從左下跳出來 → 甩竿，魚線帶著魚鉤橫掃過每一隻對手 → 落回去 */
 function drawRod(c: CanvasRenderingContext2D, t: number, foes: ({ cx: number; cy: number } | null)[]) {
@@ -66,29 +66,6 @@ function drawRod(c: CanvasRenderingContext2D, t: number, foes: ({ cx: number; cy
     // 掃過對手時閃一下
     for (const f of foes) if (f && Math.abs(f.cx - hookX) < 14) { c.fillStyle = 'rgba(255,255,255,0.7)'; c.beginPath(); c.arc(f.cx, f.cy, 14, 0, 7); c.fill(); }
   }
-}
-/** 大絕招「萬潮歸一」：天色變暗 → 五片海域顏色的巨浪從右邊捲過整個畫面 → 白光 */
-const ULT_COLORS = ['#7fe3ff', '#d8f4ff', '#ff8a3a', '#5ff1ff', '#9a7aff'];
-function drawUlt(c: CanvasRenderingContext2D, t: number, time: number) {
-  const dark = clamp01(t / 0.4) * (1 - clamp01((t - 1.5) / 0.4));
-  c.fillStyle = `rgba(4,8,28,${0.55 * dark})`; c.fillRect(-200, 0, 656, 144);
-  const p = clamp01((t - 0.45) / 0.95);
-  if (p > 0 && p < 1) {
-    const front = 300 - p * 520; // 浪頭的位置（往左跑）
-    ULT_COLORS.forEach((col, k) => {
-      c.fillStyle = col; c.globalAlpha = 0.85 - k * 0.08;
-      for (let x = Math.floor(front); x < 460; x += 3) {
-        const top = 20 + k * 14 + Math.sin(x * 0.06 + time * 6 + k) * 6 + Math.max(0, 40 - (x - front) * 0.8);
-        c.fillRect(x, Math.round(top), 3, 144);
-      }
-    });
-    c.globalAlpha = 1;
-    // 浪頭的白色泡沫
-    c.fillStyle = '#ffffff';
-    for (let i = 0; i < 40; i++) c.fillRect(Math.round(front + Math.sin(i * 7.3) * 10), Math.round(20 + i * 3 + Math.sin(time * 9 + i) * 2), 3, 2);
-  }
-  const flash = clamp01((t - 1.35) / 0.15) * (1 - clamp01((t - 1.5) / 0.4));
-  if (flash > 0) { c.fillStyle = `rgba(255,255,255,${flash * 0.8})`; c.fillRect(-200, 0, 656, 144); }
 }
 // 觸控裝置（沒有滑鼠移過去）：第一下看說明，再點一次才使用
 const TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(hover: none)').matches;
@@ -190,7 +167,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     dashTo: [1, 0, 0] as number[], // 衝刺的目標（畫面上的第幾隻）
     parts: [] as Particle[], beams: [] as Beam[],
     fx: [] as { code: string; from: number; to: number; e: number; big?: boolean }[], // 播放中的技能特效（e = 已播放幾格；big：統領者的招式放大）
-    rod: -1, ult: -1, // 漁夫的釣竿、大絕招的動畫進度（秒，-1 = 沒有在播）
+    rod: -1, // 漁夫的釣竿動畫進度（秒，-1 = 沒有在播）
     quake: 0, flash: 0, flashColor: '#ffffff',
   });
   // 開發用：網址加 ?field=storm 可以直接看場地特效
@@ -237,7 +214,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     // 技能特效：往前播，並套用素材裡施術者／目標的抖動
     const spd = hurry.current ? 4 : fastRef.current ? 2 : 1;
     for (const f of a.fx) f.e += (dt * 1000 * spd) / FX_MS;
-    a.fx = a.fx.filter((f) => f.e < FX_FRAMES);
+    a.fx = a.fx.filter((f) => f.e < fxFrames(f.code));
     for (const v of a.mons) { v.ox = 0; v.oy = 0; }
     for (const f of a.fx) {
       const fr = Math.floor(f.e);
@@ -254,8 +231,10 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         // 統領者的招式：特效放大成 1.8 倍
         const actor = (sd: number, r: { x: number; y: number; w: number }, big?: boolean) => { const sp = FORMS[a.mons[sd].form].sprite; return { rect: r, sprite: sp, facesLeft: a.mons[sd].flip, logical: spriteSize(sp) / (big ? 1.8 : 1) }; };
         const A = actor(f.from, r0, f.big), B = actor(f.to, r1), fr = Math.floor(f.e);
-        if (which === 'back') drawFx(c, f.code, 'back', fr, A, B, FX_ARENA);
-        else { drawFx(c, f.code, 'front', fr, A, B, FX_ARENA); drawFx(c, f.code, 'particles', fr, A, B, FX_ARENA); }
+        // 統領者的日蝕特效：舞台背景鋪滿整個畫面（含左右延伸），維持比例、往下對齊
+        const ar = f.code.startsWith('moxu_') ? (() => { const b = view.bleed, w = W + b * 2, k = Math.max(w / 192, H / 104), aw = 192 * k, ah = 104 * k; return { x: -b - (aw - w) / 2, y: (H - ah) * 0.65, w: aw, h: ah }; })() : FX_ARENA;
+        if (which === 'back') drawFx(c, f.code, 'back', fr, A, B, ar);
+        else { drawFx(c, f.code, 'front', fr, A, B, ar); drawFx(c, f.code, 'particles', fr, A, B, ar); }
       }
     };
     // 震動、閃光慢慢消退
@@ -270,11 +249,10 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       if (m) { const p = posOf(tv, m.form), y = Math.round(p.y - 6 + Math.sin(t * 6) * 2); ctx.fillStyle = '#ffcf4a'; ctx.fillRect(p.cx - 3, y, 7, 2); ctx.fillRect(p.cx - 2, y + 2, 5, 1); ctx.fillRect(p.cx - 1, y + 3, 3, 1); ctx.fillRect(p.cx, y + 4, 1, 1); }
     }
     if (a.rod >= 0) { a.rod += dt * (hurry.current ? 3 : fastRef.current ? 1.5 : 1); drawRod(ctx, a.rod, a.mons.map((m, i) => (i === 0 || !m || a.fade[i] <= 0 ? null : posOf(i, m.form)))); if (a.rod > ROD_T) a.rod = -1; }
-    if (a.ult >= 0) { a.ult += dt * (hurry.current ? 3 : fastRef.current ? 1.5 : 1); drawUlt(ctx, a.ult, t); if (a.ult > ULT_T) a.ult = -1; }
   };
 
   // 先把雙方隊伍會用到的技能特效圖載進來
-  useEffect(() => { for (const sd of bs.sides) for (const m of sd.team) for (const k of m.skills) loadFx(k); }, []);
+  useEffect(() => { for (const sd of bs.sides) for (const m of sd.team) for (const k of m.skills) loadFx(k); if (final) loadFx('moxu_daybreak'); }, []);
 
   // 開場
   useEffect(() => {
@@ -326,7 +304,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         // 施術者、目標在畫面上是第幾隻（1 對 2 時看 slot）
         const from = vi(e), to = e.side === 0 ? (e.slot != null && e.slot === allySlot.current ? 2 : 1) : 0;
         const moxu = from !== 0 && a.mons[from]?.form === 'tide_moxu';
-        if (e.skill === 'moxu_ult') { await playUlt(); break; }
+        if (e.skill === 'moxu_daybreak') { await playUlt(from, to); break; }
         const sk = SKILLS[e.skill] ?? { anim: 'hit', elem: null };
         const c = center(to), me = center(from);
         const kind = sk.anim ?? 'hit';
@@ -336,7 +314,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         if (moxu) { jolt(3.5, 0.45, '#7fd8ff'); sfx('enrage'); for (let k = 0; k < 3; k++) burst(a.parts, me.x + (Math.random() - 0.5) * 40, me.y + (Math.random() - 0.5) * 30, 'buff', 'water'); await wait(260); }
         if (hasFx(e.skill)) {
           // 有專屬特效的招式：播特效，角色只做衝刺／前傾的動作
-          loadFx(e.skill); a.fx.push({ code: e.skill, from, to, e: 0, big: moxu });
+          loadFx(e.skill); a.fx.push({ code: e.skill, from, to, e: 0, big: moxu && !e.skill.startsWith('moxu_') });
           if (moxu) setTimeout(() => jolt(4, 0.3, '#ffffff'), 420);
           const st = fxSkill(e.skill).style;
           if (st === 'dash' || (kind === 'hit' && (sk as { power?: number }).power && !RANGED_HIT.has(e.skill) && st !== 'self')) { a.dashT[from] = DASH; await wait(DASH * 900); break; }
@@ -504,16 +482,18 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     while (Date.now() < end && !introSkip.current) await new Promise((r) => setTimeout(r, 40));
     setCut(null); await new Promise((r) => setTimeout(r, 200));
   }
-  /** 大絕招「萬潮歸一」：天空變暗、五色的潮水從右邊捲過整個畫面 */
-  async function playUlt() {
-    const a = anim.current;
-    say('潮汐・默旭 使出了大絕招——「萬潮歸一」！');
-    a.mons[1].aura = auraColor('tide_moxu', true);
-    sfx('enrage'); a.ult = 0; jolt(3, 0.5, '#0a1430');
-    setTimeout(() => { sfx('skill:water'); jolt(8, 0.8, '#bdf2ff'); }, 700);
-    setTimeout(() => { sfx('crit'); jolt(6, 0.6, '#ffffff'); }, 1100);
-    await new Promise((r) => setTimeout(r, (ULT_T * 1000) / (hurry.current ? 3 : fastRef.current ? 1.5 : 1) - 300));
+  /** 大絕招「五海歸一・默海破曉」：24 格的專屬特效，第 17 格（索引 16）是命中的瞬間 */
+  async function playUlt(from: number, to: number) {
+    const a = anim.current, spd = hurry.current ? 4 : fastRef.current ? 2 : 1, at = (fr: number) => (fr * FX_MS) / spd;
+    say('潮汐・默旭 使出了大絕招——「五海歸一・默海破曉」！');
+    a.mons[from].aura = auraColor('tide_moxu', true);
+    sfx('enrage'); jolt(3, 0.5, '#0a1430');
+    loadFx('moxu_daybreak'); a.fx.push({ code: 'moxu_daybreak', from, to, e: 0 });
+    setTimeout(() => sfx('skill:water'), at(8));
+    setTimeout(() => { sfx('crit'); jolt(8, 0.8, '#fff3c0'); }, at(16));
+    await new Promise((r) => setTimeout(r, at(17)));
   }
+
 
   async function play(evs: BEvent[]) { for (const e of evs) await apply(e); }
 
@@ -680,7 +660,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         {mode === 'reel' && !vp.portrait && reel}
         {toast && <div class="item-toast" key={toast.id}><Sprite form={toast.form} size={48} /><span class="grow"><b><Icon name="heal" /> {toast.text}</b><Bar value={toast.hp} max={toast.max} /><span class="num small">HP {toast.from} → {toast.hp}/{toast.max}</span></span></div>}
         {mode === 'main' && !boss && <Tip id="battle">直接點技能出招（◆ 是能量消耗）。對手 HP 條下面的「下一步」是牠這回合要做的事。把對手打虛弱再按「捕捉」，比較容易收服。點 HP 框可以看詳細資料。</Tip>}
-        {mode === 'main' && final && <Tip id="final">統領者有兩條血，每 4 回合會放一次大絕招「萬潮歸一」（資料框會倒數）。打掉第一條血後，祂會召喚一隻霸主變成 1 對 2：用「攻擊目標」選要打哪一隻，「漁夫的釣竿」可以橫掃全場並降低對手能力。</Tip>}
+        {mode === 'main' && final && <Tip id="final">統領者有兩條血，每 4 回合會放一次大絕招「五海歸一・默海破曉」（資料框會倒數）。打掉第一條血後，祂會召喚一隻霸主變成 1 對 2：用「攻擊目標」選要打哪一隻，「漁夫的釣竿」可以橫掃全場並降低對手能力。</Tip>}
         {mode === 'main' && boss && !final && <Tip id="boss">霸主的 HP 掉到一半時會狂暴：攻擊提高，但防禦會露出破綻。霸主不能捕捉，也不能逃跑。</Tip>}
       </>}
       onPanelClose={info !== null ? () => setInfo(null) : mode === 'switch' || mode === 'itemTarget' ? () => setMode(mode === 'itemTarget' ? 'items' : 'main') : undefined}

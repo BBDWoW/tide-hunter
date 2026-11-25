@@ -8,6 +8,8 @@ import { animFrame, drawSprite, PAL, spriteSize } from '../render/pixel';
 import { drawSea, drawTitle, type ThemeId } from '../render/scene';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
+import arrivalUrl from '../art/story/arrival.png';
+import recognitionUrl from '../art/story/recognition.png';
 
 type Ctx = CanvasRenderingContext2D;
 const W = 256, H = 144;
@@ -47,15 +49,17 @@ function waterWall(c: Ctx, t: number, p: number) {
   }
 }
 
-interface Page { art: (c: Ctx, t: number, run: RunState) => void; lines: string[]; speaker?: string; sound?: string }
+/** img：這一頁要疊上的劇情動畫（美術畫的 APNG，播一次） */
+interface Page { art: (c: Ctx, t: number, run: RunState) => void; lines: string[]; speaker?: string; sound?: string; img?: 'arrival' | 'recognition' }
+const STORY: Record<'arrival' | 'recognition', string> = { arrival: arrivalUrl, recognition: recognitionUrl };
 
 const INTRO: Page[] = [
   { sound: 'debuff', lines: ['霸主倒下的瞬間，海面突然靜止了。', '浪聲、風聲、海鳥的叫聲——全部消失。'],
     art: (c, t, run) => { drawSea(c, t * 0.05, zoneOf(run).theme as ThemeId); veil(c, '#050814', 0.35 + 0.2 * clamp(t / 2)); } },
   { sound: 'enrage', lines: ['海水開始往上倒流。', '一道看不見頂的水牆，在船的四周升了起來。'],
     art: (c, t, run) => { drawSea(c, t * 0.2, zoneOf(run).theme as ThemeId); veil(c, '#050814', 0.5); waterWall(c, t, t / 2.2); motes(c, t, 24, '#bdf2ff'); } },
-  { sound: 'reveal', speaker: '？？？', lines: ['「……你們走得比我想的還遠。」', '水牆的中央，有什麼巨大的東西睜開了眼睛。'],
-    art: (c, t) => { c.fillStyle = '#06142e'; c.fillRect(-200, 0, W + 400, H); waterWall(c, t, 1); moxu(c, t, W / 2, 92, 1.5, ease(t / 1.6), 1 - ease((t - 1.2) / 1.5) * 0.15); motes(c, t, 30, '#7fd8ff'); } },
+  { sound: 'reveal', speaker: '？？？', img: 'arrival', lines: ['「……你們走得比我想的還遠。」', '水牆的中央，有什麼巨大的東西睜開了眼睛。'],
+    art: (c, t) => { c.fillStyle = '#06142e'; c.fillRect(-200, 0, W + 400, H); waterWall(c, t, 1); motes(c, t, 30, '#7fd8ff'); } },
   { sound: 'fanfare', speaker: '潮汐・默旭', lines: ['「我是統領萬潮之人——潮汐・默旭。」', '「每一片海的霸主，都是聽著我的潮聲長大的。讓我看看，你們配不配得上『潮汐獵手』這個名字。」'],
     art: (c, t) => { c.fillStyle = '#06142e'; c.fillRect(-200, 0, W + 400, H); waterWall(c, t, 1); moxu(c, t, W / 2, 92, 1.5, 1, Math.max(0, 0.85 - t * 0.9)); motes(c, t, 40, '#ffe7a0'); veil(c, '#ffffff', Math.max(0, 0.7 - t * 1.4)); } },
   { sound: 'heal', speaker: '潮汐・默旭', lines: ['「來吧。用你們全部的力量。」', '（夥伴們重新振作起來：全隊回復一半 HP，倒下的夥伴也醒了。）'],
@@ -70,7 +74,7 @@ const ENDING: Page[] = [
     art: (c, t) => { drawSea(c, t * 0.3, 'abyss'); veil(c, '#0a1b3a', 0.35); moxu(c, t, W / 2, 92, 1.4, 0.75); motes(c, t, 30, '#ffe7a0'); } },
   { speaker: '潮汐・默旭', lines: ['「潮汐從來不屬於任何人。我只是替大海看守它，等一個能和大海並肩的人。」', '「從今天起，這片海就交給你們了——潮汐獵手。」'],
     art: (c, t) => { drawSea(c, t * 0.3, 'day'); veil(c, '#0a1b3a', 0.25); moxu(c, t, W / 2, 92, 1.4, 0.6 - clamp(t / 6) * 0.3); motes(c, t, 40, '#ffe7a0'); } },
-  { sound: 'heal', lines: ['默旭的身體化成無數光點，飛向了每一片海域——', '淺灘、冰原、裂谷、資料海，還有最深的深淵。'],
+  { sound: 'heal', img: 'recognition', lines: ['默旭的身體化成無數光點，飛向了每一片海域——', '淺灘、冰原、裂谷、資料海，還有最深的深淵。'],
     art: (c, t) => {
       drawSea(c, t * 0.3, 'day'); veil(c, '#0a1b3a', 0.2);
       ZONE_ORBS.forEach((col, k) => {
@@ -107,6 +111,7 @@ export function Finale({ vp, run, mode, onDone }: { vp: Viewport; run: RunState;
   const lines = mode === 'ending' && last ? [`潮汐獵手與 ${names} 的航程，在這裡寫下了結局。`, '但大海永遠還有下一道潮——隨時歡迎你再出海。'] : page.lines;
   return (
     <GameScreen vp={vp} outsideClose={false} dockTall
+      overlay={page.img && <img key={`${mode}-${i}`} class="finale-img" src={STORY[page.img]} alt="" aria-hidden="true" />}
       scene={<SceneCanvas draw={(c, t) => { if (start.current < 0) start.current = t; page.art(c, t - start.current, run); }} label={mode === 'intro' ? '統領者登場' : '結局'} />}
       dock={
         <Win class={`finale ${mode}`} title={mode === 'ending' && last ? '終章' : page.speaker ?? (mode === 'intro' ? '最終決戰' : '尾聲')}>

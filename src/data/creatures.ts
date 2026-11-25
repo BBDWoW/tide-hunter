@@ -314,13 +314,12 @@ const F: Form[] = [
   { id: 'godhand', name: '神之手', family: 'godhand', stage: 3, rarity: 'SSR', category: '神獸', elems: [], sprite: 'godhand', pal: 'water', secret: true, scale: 0.95,
     base: { hp: 100, atk: 1, def: 200, spd: 60 }, ability: 'none',
     learn: [[1, 'gh_toss'], [1, 'gh_love'], [1, 'gh_fire'], [1, 'gh_stay'], [1, 'gh_pull']], desc: '從天上伸出的一隻白色的手，擁有壓垮世界的力量。但其實，它只是想有人陪。' },
-  // ── 最終大Boss：統領者（不能收服、不會出現在圖鑑和招募）。美術還沒畫好前，先用蒼鱗龍換色放大暫代 ──
-  { id: 'tide_moxu', name: '潮汐・默旭', family: 'tide_moxu', stage: 3, rarity: 'SSR', category: '神獸', elems: ['water', 'dark'], sprite: 'dragon', pal: 'dragon', secret: true, placeholder: true,
-    recolor: { h: -34, s: 1.35, l: -0.12 }, scale: 1.3,
+  // ── 最終大Boss：統領者（不能收服、不會出現在圖鑑和招募）。美術：日蝕戰裝 ──
+  { id: 'tide_moxu', name: '潮汐・默旭', family: 'tide_moxu', stage: 3, rarity: 'SSR', category: '神獸', elems: ['water', 'dark'], sprite: 'tide_moxu', pal: 'dragon', secret: true, scale: 1.25,
     // 兩條血＋第二條血召喚霸主（1 對 2）＋大絕招，所以攻擊刻意壓低；每條血是 HP 的 70%（FINAL_TUNE）
-    // 模擬：5 隻 Lv26、八成 HP、會用漁夫的釣竿的隊伍，勝率約 44%（4 隻 30%、6 隻 53%）
-    base: { hp: 77, atk: 40, def: 66, spd: 65 }, ability: 'oceanpower', extra: ['waterbarrier'],
-    learn: [[1, 'whalecry'], [1, 'abyssmaw'], [1, 'seagodbreath'], [1, 'hightide']], desc: '統領萬潮的存在。所有海域的霸主都聽從祂的潮聲，祂在最深的海裡，等待一個配得上「潮汐獵手」之名的人。' },
+    // 模擬：5 隻 Lv26、八成 HP、會用漁夫的釣竿的隊伍，勝率約 40%（6 隻約 47%）
+    base: { hp: 77, atk: 35, def: 66, spd: 65 }, ability: 'oceanpower', extra: ['waterbarrier'],
+    learn: [[1, 'seagodbreath'], [1, 'moxu_choir'], [1, 'moxu_palace'], [1, 'moxu_lens']], desc: '統領萬潮的存在。所有海域的霸主都聽從祂的潮聲，祂在最深的海裡，等待一個配得上「潮汐獵手」之名的人。' },
   // ── 霸主 ──
   { id: 'whale', name: '鯨嘯', family: 'whale', stage: 3, rarity: 'A', category: '巨獸', elems: ['water'], sprite: 'whale', pal: 'whale',
     base: { hp: 110, atk: 74, def: 70, spd: 46 }, ability: 'colossal',

@@ -3,7 +3,8 @@
 import SKILL_FX from '../art/vfx_skills.json';
 import { spriteSockets } from './art';
 
-export interface FxSkill { style: string; socket: string; co: [number, number][]; to: [number, number][] }
+/** fc：這招有幾格（預設 12）；r = 'eclipse'：統領者的日蝕特效，用另一套定位方式（back 是整片舞台背景） */
+export interface FxSkill { style: string; socket: string; co: [number, number][]; to: [number, number][]; fc?: number; r?: 'eclipse' }
 const FX = SKILL_FX as unknown as Record<string, FxSkill>;
 export const FX_FRAMES = 12, FX_MS = 100;
 const FW = 192, FH = 104;
@@ -14,6 +15,8 @@ const URLS = import.meta.glob('../art/vfx/*/*.png', { eager: true, query: '?url'
 const imgs = new Map<string, Partial<Record<Layer, HTMLImageElement>>>();
 
 export const hasFx = (code: string) => !!FX[code];
+/** 這招的特效有幾格 */
+export const fxFrames = (code: string) => FX[code]?.fc ?? FX_FRAMES;
 export const fxSkill = (code: string) => FX[code];
 /** 先把招式的圖集載進來（用到時才載） */
 export function loadFx(code: string) {
@@ -40,7 +43,7 @@ export function actorPoint(a: Actor, uv: [number, number]): Pt {
 /** 這一格施術者／目標要偏移多少（素材裡的施法抖動），面向左時左右顛倒 */
 export function fxOffset(code: string, frame: number, who: 'caster' | 'target', facesLeft: boolean): [number, number] {
   const s = FX[code]; if (!s) return [0, 0];
-  const o = (who === 'caster' ? s.co : s.to)[Math.max(0, Math.min(FX_FRAMES - 1, frame))] ?? [0, 0];
+  const o = (who === 'caster' ? s.co : s.to)[Math.max(0, Math.min(fxFrames(code) - 1, frame))] ?? [0, 0];
   return [facesLeft ? -o[0] : o[0], o[1]];
 }
 
@@ -49,7 +52,8 @@ const RETURNING = new Set(['soulsip', 'bloodtide', 'engulf', 'energydrain', 'see
 /** 畫一層特效（照包內附的定位程式改寫） */
 export function drawFx(ctx: CanvasRenderingContext2D, code: string, layer: Layer, frame: number, caster: Actor, target: Actor, arena: { x: number; y: number; w: number; h: number }) {
   const s = FX[code], image = imgs.get(code)?.[layer];
-  if (!s || !image || frame < 0 || frame >= FX_FRAMES) return;
+  if (!s || !image || frame < 0 || frame >= fxFrames(code)) return;
+  if (s.r === 'eclipse') { drawEclipse(ctx, image, s, layer, frame, caster, target, arena); return; }
   const source = actorPoint(caster, sock(caster, s.socket)), body = actorPoint(caster, sock(caster, 'body')), hit = actorPoint(target, sock(target, 'body'));
   const scale = caster.rect.w / caster.logical;
   const sx = (frame % 4) * FW, sy = Math.floor(frame / 4) * FH;
@@ -83,5 +87,35 @@ export function drawFx(ctx: CanvasRenderingContext2D, code: string, layer: Layer
   else if (['jaw', 'cut', 'status', 'hand', 'burst'].includes(style) || (style === 'bolt' && code === 'thunder')) at(hit, 145, 55);
   else if (layer === 'particles' && frame >= 6) at(hit, 145, 55);
   else path(source, hit);
+  ctx.restore();
+}
+
+/**
+ * 統領者的日蝕特效（照美術附的 eclipse-vfx.mjs 改寫）：
+ * back 是整片舞台背景（鋪滿 arena，開頭結尾那一格淡入淡出）；front 從施術者的 socket 沿著兩點拉到命中點；particles 畫在命中點。
+ */
+function drawEclipse(ctx: CanvasRenderingContext2D, image: HTMLImageElement, s: FxSkill, layer: Layer, t: number, caster: Actor, target: Actor, arena: { x: number; y: number; w: number; h: number }) {
+  const n = s.fc ?? FX_FRAMES, sx = (t % 4) * FW, sy = Math.floor(t / 4) * FH;
+  const source = actorPoint(caster, sock(caster, s.socket)), hit = actorPoint(target, sock(target, 'body'));
+  const scale = caster.rect.w / caster.logical;
+  ctx.save(); ctx.imageSmoothingEnabled = false;
+  if (layer === 'back') {
+    // 舞台背景：第 1 格和倒數第 2 格半透明，切換不會太突然
+    ctx.globalAlpha = t <= 1 || t >= n - 2 ? 0.55 : 1;
+    ctx.drawImage(image, sx, sy, FW, FH, Math.round(arena.x), Math.round(arena.y), Math.round(arena.w), Math.round(arena.h));
+  } else if (layer === 'particles') {
+    ctx.translate(Math.round(hit.x), Math.round(hit.y)); ctx.scale(scale * (hit.x >= source.x ? 1 : -1), scale);
+    ctx.drawImage(image, sx, sy, FW, FH, -145, -55, FW, FH);
+  } else {
+    const dir = hit.x >= source.x ? 1 : -1, dist = Math.abs(hit.x - source.x);
+    for (let dst = Math.floor(Math.min(source.x, hit.x) - 60 * scale); dst <= Math.ceil(Math.max(source.x, hit.x) + 60 * scale); dst++) {
+      const pos = (dst - source.x) * dir;
+      const src = pos < 0 ? 55 + pos / scale : pos > dist ? 145 + (pos - dist) / scale : 55 + (90 * pos) / Math.max(1, dist);
+      if (src < 0 || src >= FW) continue;
+      const u = Math.min(1, Math.max(0, (src - 55) / 90));
+      const y = Math.round(source.y + (hit.y - source.y) * u - 55 * scale);
+      ctx.drawImage(image, sx + Math.floor(src), sy, 1, FH, dst, y, 1, Math.round(FH * scale));
+    }
+  }
   ctx.restore();
 }

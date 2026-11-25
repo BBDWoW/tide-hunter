@@ -108,7 +108,7 @@ type BEventBase =
   | { t: 'end'; winner: SideId };
 
 /** 統領者的大絕招（不在技能表裡，每 4 回合自動施放） */
-export const MOXU_ULT: Skill = { id: 'moxu_ult', name: '萬潮歸一', elem: 'water', power: 80, cost: 0, acc: 100, desc: '把五片海域的潮水全部召喚過來，一口氣砸下去。', anim: 'beam' };
+export const MOXU_ULT: Skill = { id: 'moxu_daybreak', name: '五海歸一・默海破曉', elem: 'water', power: 80, cost: 0, acc: 100, desc: '把五片海域的潮水全部召喚過來，一口氣砸下去。', anim: 'beam' };
 export const ULT_EVERY = 4, ROD_CD = 3, ROD_DMG = 0.1, ROD_WEAKEN = 0.9;
 /** 平衡用：每條血是原本 HP 的幾倍、召喚的霸主比統領者低幾級 */
 export const FINAL_TUNE = { barHp: 0.7, summonDrop: 3 };
@@ -983,7 +983,7 @@ function resolveFinal(s: BattleState, actions: [Action, Action]): BEvent[] {
   }
   if (!s.over) {
     F.ultIn = usedUlt ? ULT_EVERY - 1 : F.ultIn - 1;
-    if (F.ultIn === 0) { ev.push({ t: 'ultwarn' }); ev.push({ t: 'msg', text: '海水開始往統領者身邊倒捲……下一回合是大絕招「萬潮歸一」！' }); }
+    if (F.ultIn === 0) { ev.push({ t: 'ultwarn' }); ev.push({ t: 'msg', text: '海水開始往統領者身邊倒捲……下一回合是大絕招「五海歸一・默海破曉」！' }); }
     if (F.rodCd > 0) F.rodCd--;
   }
   s.turn++;
