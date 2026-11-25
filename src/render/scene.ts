@@ -651,7 +651,7 @@ function fishShadow(ctx: CanvasRenderingContext2D, x: number, y: number, size: 1
 }
 function spotDecor(ctx: CanvasRenderingContext2D, spot: string, t: number) {
   if (spot === 'none') return;
-  if (spot === 'deep') { ctx.fillStyle = 'rgba(4,16,48,0.28)'; ctx.fillRect(0, 47, W, H - 47); }
+  if (spot === 'deep') { ctx.fillStyle = 'rgba(4,16,48,0.28)'; ctx.fillRect(-view.bleed, 47, W + view.bleed * 2, H - 47); }
   if (spot === 'reef') {
     for (const [x, w] of [[150, 14], [232, 18]] as const) { ctx.fillStyle = '#6c5f50'; ctx.fillRect(x, 58, w, 4); ctx.fillStyle = '#8cc474'; ctx.fillRect(x + 2, 57, w - 4, 2); ctx.fillStyle = '#ff6b8a'; ctx.fillRect(x + 4, 55, 2, 2); ctx.fillStyle = '#ffb05a'; ctx.fillRect(x + w - 6, 55, 2, 2); }
   }
@@ -661,7 +661,7 @@ function spotDecor(ctx: CanvasRenderingContext2D, spot: string, t: number) {
     ctx.fillStyle = '#c8b898'; ctx.fillRect(x + 3 + sway, 32, 8, 6);
     ctx.fillStyle = '#3a2418'; ctx.fillRect(x - 14, 60, 30, 3);
   }
-  if (spot === 'shallow') { ctx.fillStyle = 'rgba(246,226,168,0.55)'; ctx.fillRect(170, 128, 86, 16); ctx.fillRect(180, 124, 60, 4); }
+  if (spot === 'shallow') { ctx.fillStyle = 'rgba(246,226,168,0.55)'; ctx.fillRect(170, 128, 86 + view.bleed, 16); ctx.fillRect(180, 124, 60 + view.bleed, 4); } // 沙洲延伸到右側的延伸區，不會被切一刀
 }
 
 export function drawFishing(ctx: CanvasRenderingContext2D, t: number, _dt: number, v: FishView) {
