@@ -108,8 +108,8 @@ type BEventBase =
   | { t: 'end'; winner: SideId };
 
 /** 統領者的大絕招（不在技能表裡，每 4 回合自動施放） */
-export const MOXU_ULT: Skill = { id: 'moxu_daybreak', name: '五海歸一・默海破曉', elem: 'water', power: 80, cost: 0, acc: 100, desc: '把五片海域的潮水全部召喚過來，一口氣砸下去。', anim: 'beam' };
-export const ULT_EVERY = 4, ROD_CD = 3, ROD_DMG = 0.1, ROD_WEAKEN = 0.9;
+export const MOXU_ULT: Skill = { id: 'moxu_daybreak', name: '五海歸一・默海破曉', elem: 'water', power: 55, cost: 0, acc: 100, desc: '把五片海域的潮水全部召喚過來，一口氣砸下去。打中後，你隊伍裡每一隻夥伴都會各中一種不同的異常狀態。', anim: 'beam' };
+export const ULT_EVERY = 5, ROD_CD = 3, ROD_DMG = 0.1, ROD_WEAKEN = 0.9;
 /** 平衡用：每條血是原本 HP 的幾倍、召喚的霸主比統領者低幾級 */
 export const FINAL_TUNE = { barHp: 0.7, summonDrop: 3 };
 /** 第二條血時會被召喚出來的霸主 */
@@ -968,7 +968,7 @@ function resolveFinal(s: BattleState, actions: [Action, Action]): BEvent[] {
       if (x.a.type === 'skill' && active(s, 0).hp <= 0) continue;
       const a = x.a;
       withSlot(s, x.idx, () => { doAction(s, 1, a, ev); tagSlot(ev, from, x.idx); });
-      if (x.idx === 0 && a.type === 'skill' && a.slot === -2) usedUlt = true;
+      if (x.idx === 0 && a.type === 'skill' && a.slot === -2) { usedUlt = true; if (!s.over) ultStatuses(s, ev); }
     }
     tagSlot(ev, from, 0);
     checkFaints(s, ev);
@@ -988,4 +988,27 @@ function resolveFinal(s: BattleState, actions: [Action, Action]): BEvent[] {
   }
   s.turn++;
   return ev;
+}
+
+/** 大絕招的附加效果：玩家隊伍裡每一隻還站著、沒有異常的夥伴，各中一種不同的異常（遇到免疫就換下一種） */
+const ALL_STATUS: StatusId[] = ['burn', 'para', 'poison', 'freeze', 'glitch', 'sleep', 'blind', 'bleed'];
+function ultStatuses(s: BattleState, ev: BEvent[]) {
+  const S0 = s.sides[0], act = S0.active;
+  const pool = [...ALL_STATUS];
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(next(s.rng) * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  ev.push({ t: 'msg', text: '五片海域的潮水滲進了整支隊伍……每一隻夥伴都陷入了不同的異常！' });
+  S0.team.forEach((m, idx) => {
+    if (m.hp <= 0 || m.status) return;
+    S0.active = idx;
+    for (const st of [...pool]) {
+      const from = ev.length;
+      if (!applyStatus(s, 0, st, ev)) { ev.splice(from); continue; } // 免疫：換下一種，不顯示擋下的訊息
+      pool.splice(pool.indexOf(st), 1);
+      if (st === 'sleep') volOf(s, 0).sleepTurns = 2;
+      // 沒有上場的夥伴：只留文字，不要改到場上那隻的狀態顯示
+      if (idx !== act) for (let i = ev.length - 1; i >= from; i--) if (ev[i].t === 'status') ev.splice(i, 1);
+      break;
+    }
+  });
+  S0.active = act;
 }

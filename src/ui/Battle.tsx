@@ -660,7 +660,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         {mode === 'reel' && !vp.portrait && reel}
         {toast && <div class="item-toast" key={toast.id}><Sprite form={toast.form} size={48} /><span class="grow"><b><Icon name="heal" /> {toast.text}</b><Bar value={toast.hp} max={toast.max} /><span class="num small">HP {toast.from} → {toast.hp}/{toast.max}</span></span></div>}
         {mode === 'main' && !boss && <Tip id="battle">直接點技能出招（◆ 是能量消耗）。對手 HP 條下面的「下一步」是牠這回合要做的事。把對手打虛弱再按「捕捉」，比較容易收服。點 HP 框可以看詳細資料。</Tip>}
-        {mode === 'main' && final && <Tip id="final">統領者有兩條血，每 4 回合會放一次大絕招「五海歸一・默海破曉」（資料框會倒數）。打掉第一條血後，祂會召喚一隻霸主變成 1 對 2：用「攻擊目標」選要打哪一隻，「漁夫的釣竿」可以橫掃全場並降低對手能力。</Tip>}
+        {mode === 'main' && final && <Tip id="final">統領者有兩條血，每 5 回合會放一次大絕招「五海歸一・默海破曉」（資料框會倒數），打中後全隊每隻夥伴都會各中一種異常，記得準備珍珠精華！打掉第一條血後，祂會召喚一隻霸主變成 1 對 2：用「攻擊目標」選要打哪一隻，「漁夫的釣竿」可以橫掃全場並降低對手能力。</Tip>}
         {mode === 'main' && boss && !final && <Tip id="boss">霸主的 HP 掉到一半時會狂暴：攻擊提高，但防禦會露出破綻。霸主不能捕捉，也不能逃跑。</Tip>}
       </>}
       onPanelClose={info !== null ? () => setInfo(null) : mode === 'switch' || mode === 'itemTarget' ? () => setMode(mode === 'itemTarget' ? 'items' : 'main') : undefined}
