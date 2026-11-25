@@ -692,12 +692,13 @@ function endOfTurn(s: BattleState, ev: BEvent[]) {
       const amt = Math.min(mx - m.hp, Math.max(1, Math.floor(mx / (fe.includes('grass') ? 8 : 16))));
       m.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: m.hp });
     }
-    if (s.domain === 'forest' && side === 0 && m.hp < mx && s.turn < VORTEX_TURN) {
-      const amt = Math.min(mx - m.hp, Math.max(1, Math.floor(mx / (fe.includes('grass') ? 10 : 16))));
+    if (s.domain === 'forest' && m.hp < mx && s.turn < VORTEX_TURN) { // 領域效果：敵我雙方都有
+      // 敵人也會回復，但量比較少（霸主、守護者 HP 很多，回復太多會打不完）
+      const amt = Math.min(mx - m.hp, Math.max(1, Math.floor(mx / (side === 1 ? 24 : fe.includes('grass') ? 10 : 16))));
       m.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: m.hp });
     }
     v.turnsIn++;
-    v.energy = Math.min(MAX_ENERGY, v.energy + 1 + (s.domain === 'core' && side === 0 ? 1 : 0) + (bn(s, side, 'L_tideking') ? 1 : 0) + (hasAb(f, 'tidegod') || hasAb(f, 'dragonpresence') ? 1 : 0));
+    v.energy = Math.min(MAX_ENERGY, v.energy + 1 + (s.domain === 'core' && (side === 0 || s.turn % 2 === 0) ? 1 : 0) + (bn(s, side, 'L_tideking') ? 1 : 0) + (hasAb(f, 'tidegod') || hasAb(f, 'dragonpresence') ? 1 : 0));
     ev.push({ t: 'energy', side, value: v.energy });
   }
   if (s.over) return;

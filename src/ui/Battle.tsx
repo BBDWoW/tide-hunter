@@ -653,7 +653,7 @@ function BossIntro({ phase, form, lv, zone, onSkip }: { phase: 'dark' | 'card' |
           <span class="bi-zone">{zone}</span>
           <b class="bi-name">{f.name}</b>
           <span class="bi-title">— {BOSS_TITLE[form] ?? '這片海域的支配者'} —</span>
-          <span class="bi-meta"><Elems list={f.elems} /><span class="lv">Lv{lv}</span></span>
+          <span class="bi-meta">{form === 'tide_moxu' && <URTag />}<Elems list={f.elems} /><span class="lv">Lv{lv}</span></span>
         </div>
       )}
       <span class="bi-skip">點一下跳過</span>
@@ -663,6 +663,10 @@ function BossIntro({ phase, form, lv, zone, onSkip }: { phase: 'dark' | 'card' |
 
 /** 神之手的稀有度：發光的無限符號 */
 const InfTag = () => <span class="rar rar-inf" title="無法衡量" aria-label="稀有度：無限">∞</span>;
+/** 統領者的稀有度：閃著彩虹光的 UR */
+const URTag = () => <span class="rar rar-ur" title="超越傳說" aria-label="稀有度：UR">UR</span>;
+/** 依角色顯示稀有度標籤（神之手 ∞、統領者 UR） */
+const RarTag = ({ form, r }: { form: string; r?: keyof typeof RARITY }) => (form === 'godhand' ? <InfTag /> : form === 'tide_moxu' ? <URTag /> : r ? <RarityTag r={r} /> : null);
 
 function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent, crewLeft, warn }: { side: SideId; d: Disp; rarity?: keyof typeof RARITY; boss?: boolean; charged?: boolean; locked?: boolean; turns?: number; onOpen?: () => void; intent?: Intent | null; crewLeft?: number; warn?: boolean }) {
   const f = FORMS[d.form];
@@ -670,7 +674,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
     <div class={`hud hud-${side} clickable`} onClick={onOpen} role="button" aria-label={`查看 ${f.name} 的資料`}>
       <div class="hud-top">
         <b class="hud-name">{f.name}</b>{d.mutant && <span class="mutant-tag">✦</span>}
-        {d.form === 'godhand' ? <InfTag /> : rarity && <RarityTag r={rarity} />}
+        <RarTag form={d.form} r={rarity} />
         {boss && <span class="boss-tag">{d.form === 'tide_moxu' ? '統領者' : '霸主'}</span>}
         {!!crewLeft && <span class="crew-left" title="船隊剩下的夥伴">{'●'.repeat(crewLeft)}</span>}
         {d.form !== 'godhand' && <span class="lv">Lv{d.lv}</span>}
@@ -698,7 +702,7 @@ function InfoPanel({ bs, side, boss, onClose }: { bs: BattleState; side: SideId;
       <div class="pick">
         <Sprite form={m.form} size={96} mutant={m.mutant} />
         <span class="grow">
-          <span class="row-gap"><b class="big-name">{m.mutant ? '✦ ' : ''}{f.name}</b>{m.form === 'godhand' ? <InfTag /> : <RarityTag r={f.rarity} />}{m.form !== 'godhand' && <><StageTag form={m.form} /><span class="num">Lv{m.lv}</span></>}</span>
+          <span class="row-gap"><b class="big-name">{m.mutant ? '✦ ' : ''}{f.name}</b>{m.form === 'godhand' || m.form === 'tide_moxu' ? <RarTag form={m.form} /> : <RarityTag r={f.rarity} />}{m.form !== 'godhand' && <><StageTag form={m.form} /><span class="num">Lv{m.lv}</span></>}</span>
           <span class="row-gap"><Elems list={f.elems} /><span class="small dim">{f.category}</span>{mine && <IvStars iv={m.iv} />}</span>
           <Bar value={m.hp} max={mx} />
           <span class="row-gap">{mine && <span class="small">{Math.max(0, m.hp)}/{mx}</span>}<Energy value={v.energy} max={MAX_ENERGY} /></span>

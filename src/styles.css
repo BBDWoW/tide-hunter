@@ -849,3 +849,13 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 .dock .win.finale .finale-nav > .small { margin: 0; text-align: right; order: 9; }
 .portrait .dock .win.finale { display: flex; }
 .portrait .dock .win.finale .finale-nav { flex-direction: row; }
+/* 統領者的稀有度：閃彩 UR（彩虹漸層流動＋閃光） */
+.rar.rar-ur { font-weight: 800; font-size: 1em; line-height: 1.05; padding: 0 0.45em; color: #fff; letter-spacing: 0.04em; border: 1px solid #fff;
+  background: linear-gradient(110deg, #ff4d6d, #ffb84a, #fff36a, #5ff18a, #4ec3ff, #8a6aff, #ff5ad8, #ff4d6d); background-size: 300% 100%;
+  text-shadow: 0 0 2px #000, 0 0 4px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 calc(var(--u) * 1.5) #fff, 0 0 calc(var(--u) * 4) rgba(255, 180, 255, 0.8);
+  animation: ur-flow 2.4s linear infinite, ur-glow 1.6s ease-in-out infinite; }
+@keyframes ur-flow { to { background-position: 300% 0; } }
+@keyframes ur-glow { 50% { box-shadow: 0 0 calc(var(--u) * 2.5) #fff, 0 0 calc(var(--u) * 7) rgba(160, 220, 255, 0.95); filter: brightness(1.2); } }
+.reduce-fx .rar.rar-ur { animation: none; }
+@media (prefers-reduced-motion: reduce) { .rar.rar-ur { animation: none; } }

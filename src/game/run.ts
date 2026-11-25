@@ -200,8 +200,8 @@ export const STAR_RULES = [
   '營地休息的回復量減半，對手能力再 +10%',
 ];
 export const starOf = (run: RunState) => run.star ?? 0;
-/** 越後面的海域越難：第二片海域對手能力 +10%，第三片（含最終大Boss）+20% */
-export const zoneBoost = (run: RunState) => (run.zoneNo >= 2 ? 0.2 : run.zoneNo === 1 ? 0.1 : 0);
+/** 越後面的海域越難：第二片海域對手能力 +10%，第三片（含最終大Boss）+20%；神秘區域再額外 +10% */
+export const zoneBoost = (run: RunState) => (run.zoneNo >= 2 ? 0.2 : run.zoneNo === 1 ? 0.1 : 0) + (ZONES[run.zone]?.special ? 0.1 : 0);
 /** 最終大Boss：統領者・潮汐默旭（比第三片海域的霸主高 3 級） */
 export const FINAL_BOSS = 'tide_moxu';
 /** 打倒統領者額外獲得的珍珠（再乘上潮位加成） */

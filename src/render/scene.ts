@@ -463,6 +463,8 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
     // 登場：前半段是白色剪影
     const white = (m.flash > 0 && Math.floor(m.flash * 20) % 2 === 0) || (m.enter !== undefined && m.enter < 0.55);
     const rc = recolorOf(m.form, m.mutant);
+    // 統領者：光環一直變換顏色（閃彩）
+    if (m.form === 'tide_moxu' && m.aura) m.aura = `hsl(${Math.round((t * 80) % 360)}, 90%, 68%)`;
     if (m.aura) {
       // 光環：脈動的發光外框＋上升的能量粒子
       const n = spriteSize(f.sprite) * m.scale, pulse = 0.6 + 0.3 * Math.sin(t * 4 + i);
