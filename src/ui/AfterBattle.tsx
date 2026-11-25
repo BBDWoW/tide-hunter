@@ -10,6 +10,7 @@ import { eggZoneOf, FINAL_ZONE, saveRun, applyBoon, giveHeld, boon, isBoss, mark
 import { BOON_STYLE, BOON_TIER, BOONS } from '../data/boons';
 import { HELD } from '../data/held';
 import { EVO_W, playEvolution } from '../render/evo';
+import { ensureSprite } from '../render/art';
 import type { BattleResult } from './Battle';
 import { AbilityLines, Bar, Elems, IvStars, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
@@ -293,11 +294,17 @@ function EvolveScene({ mon, to, onDone }: { mon: Mon; to: string; onDone: (learn
   const learned = useRef<string[]>([]);
   useEffect(() => {
     if (phase !== 'play') return;
-    sfx('buff'); setTimeout(() => sfx('reveal'), 3000);
-    return playEvolution(ref.current!, from, to, () => {
-      learned.current = evolve(mon, to);
-      setPhase('done');
-    }, (p) => { if (p === 'reveal') setLabel(FORMS[to].name); }, mon.mutant);
+    // 進化前後的圖可能還在背景下載：先等兩張都好了再開始演出
+    let stop: (() => void) | undefined, live = true;
+    Promise.all([ensureSprite(FORMS[from].sprite, mon.mutant), ensureSprite(FORMS[to].sprite, mon.mutant)]).then(() => {
+      if (!live) return;
+      sfx('buff'); setTimeout(() => sfx('reveal'), 3000);
+      stop = playEvolution(ref.current!, from, to, () => {
+        learned.current = evolve(mon, to);
+        setPhase('done');
+      }, (p) => { if (p === 'reveal') setLabel(FORMS[to].name); }, mon.mutant);
+    });
+    return () => { live = false; stop?.(); };
   }, [phase]);
   return (
     <div class="evo-box">

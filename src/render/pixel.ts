@@ -1,4 +1,4 @@
-import { shinyArt, spriteArt, spriteIdle, spriteTexel } from './art';
+import { hasShinyArt, hasSpriteArt, shinyArt, spriteArt, spriteIdle, spriteLogical, spriteTexel } from './art';
 // 48×48 像素生物繪製器：用幾何圖元畫出色塊，再自動加上明暗與外框。
 
 export const SIZE = 48;
@@ -202,7 +202,7 @@ const SIZES: Record<string, number> = {};
 // size：畫布邊長（一般 48，傳說級 64）
 export function registerSprites(defs: Record<string, SpriteDef>, size = SIZE) { Object.assign(DEFS, defs); for (const k of Object.keys(defs)) SIZES[k] = size; }
 /** 角色在遊戲世界裡的大小（48 或 64） */
-export const spriteSize = (id: string) => spriteArt(id)?.logical ?? SIZES[id] ?? SIZE;
+export const spriteSize = (id: string) => spriteLogical(id) ?? spriteArt(id)?.logical ?? SIZES[id] ?? SIZE;
 /** 圖檔的實際解析度（高解析版是世界大小的 2 倍） */
 export const spriteRes = (id: string) => spriteArt(id)?.size ?? spriteSize(id);
 /** 動畫格數：美術圖有幾格就用幾格（2 格或 6 格），程式畫的固定 2 格 */
@@ -269,10 +269,12 @@ function baked(id: string, f: number, pal: Palette, tint?: string, rc?: Recolor)
     const sh = rc?.mutant ? shinyArt(id) : undefined;
     const src = sh ?? art;
     if (src) { x.imageSmoothingEnabled = false; x.drawImage(src.img, (f % src.frames) * src.size, 0, src.size, src.size, 0, 0, n, n); }
+    else if (hasSpriteArt(id)) return cv; // 圖還在下載：先畫空白、不放進快取，下載好就會出現
     else x.putImageData(bake(spriteCells(id, f), pal, n), 0, 0); // 程式畫的角色：解析度＝世界大小
     if (rc && !tint && !sh) applyRecolor(x, n, rc);
     if (tint) { x.globalCompositeOperation = 'source-in'; x.fillStyle = tint; x.fillRect(0, 0, n, n); }
-    m.set(key, cv);
+    // 色違圖還在背景下載：先用換色暫代，不放進快取，下載好之後就會換成正式的色違
+    if (!(rc?.mutant && !sh && hasShinyArt(id))) m.set(key, cv);
   }
   return cv;
 }
@@ -340,7 +342,7 @@ export function drawSpriteMini(ctx: CanvasRenderingContext2D, id: string, pal: P
       out.data[o] = best >> 16; out.data[o + 1] = (best >> 8) & 255; out.data[o + 2] = best & 255; out.data[o + 3] = 255;
     }
     c2.putImageData(out, 0, 0);
-    miniCache.set(key, cv);
+    if (spriteArt(id) && !(recolor?.mutant && !shinyArt(id) && hasShinyArt(id))) miniCache.set(key, cv);
   }
   ctx.save(); ctx.imageSmoothingEnabled = false;
   if (flip) { ctx.translate(Math.round(x) + cv.width, Math.round(y)); ctx.scale(-1, 1); ctx.drawImage(cv, 0, 0); }

@@ -5,6 +5,7 @@ import { createPortal } from 'preact/compat';
 import { ABILITIES, abilitiesOf, FORMS, recolorOf } from '../data/creatures';
 import { ELEM, RARITY, STAGE_NAME, type Elem, type Rarity } from '../data/types';
 import { animFrame, drawSprite, PAL, spriteRes, spriteSize } from '../render/pixel';
+import { ensureSprite, spriteLoaded } from '../render/art';
 import { SKILLS } from '../data/skills';
 import { GUARD_THRESHOLD, IV_LABELS, ivStars as ivStarsOf, styleRatio, type Mon } from '../game/creature';
 
@@ -18,6 +19,10 @@ if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
 
 export function Sprite({ form, size = 96, flip = false, silhouette = false, still = false, mutant = false }: { form: string; size?: number; flip?: boolean; silhouette?: boolean; still?: boolean; mutant?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  // 圖還在背景下載：下載好之後重畫一次
+  const sp = FORMS[form]?.sprite ?? '';
+  const [, bump] = useState(0), ready = spriteLoaded(sp, mutant);
+  useEffect(() => { if (ready) return; let live = true; ensureSprite(sp, mutant).then(() => { if (live) bump((x) => x + 1); }); return () => { live = false; }; }, [sp, mutant, ready]);
   useEffect(() => {
     const c = ref.current!, ctx = c.getContext('2d')!, f = FORMS[form];
     // 畫布用圖檔的原始解析度，高解析版的細節才不會被縮掉
@@ -34,7 +39,7 @@ export function Sprite({ form, size = 96, flip = false, silhouette = false, stil
     if (still || silhouette) return;
     subs.add(draw);
     return () => { subs.delete(draw); };
-  }, [form, flip, silhouette, still, mutant]);
+  }, [form, flip, silhouette, still, mutant, ready]);
   return <canvas ref={ref} width={48} height={48} class="sprite" style={{ width: `calc(var(--u, 4px) * ${size / 4})`, height: `calc(var(--u, 4px) * ${size / 4})` }} />;
 }
 

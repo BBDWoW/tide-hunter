@@ -1,5 +1,6 @@
 import { setTimeOfDay } from '../render/scene';
 import { Finale } from './Finale';
+import { ensureSprite } from '../render/art';
 import { GuardianReward, ZoneCutscene } from './Special';
 import { GodHandScreen, settleGodHand } from './GodHand';
 import { settleEggs } from '../game/eggs';
@@ -206,7 +207,9 @@ export function App() {
         const cut = LANDING_BONUS[landing].hpCut * (boss ? 0.5 : 1);
         if (cut > 0) enc.mon.hp = Math.max(1, Math.round(enc.mon.hp * (1 - cut)));
         enc.landing = landing;
-        markSeen(enc.mon.form); go({ k: 'battle', enc });
+        markSeen(enc.mon.form);
+        // 對手的圖可能還在背景下載：最多等 1.5 秒再進戰鬥，免得一開場看不到牠
+        Promise.race([ensureSprite(FORMS[enc.mon.form].sprite, enc.mon.mutant), new Promise((r) => setTimeout(r, 1500))]).then(() => go({ k: 'battle', enc }));
       }} />;
       break;
     case 'battle':

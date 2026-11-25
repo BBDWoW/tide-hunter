@@ -859,6 +859,7 @@ function nodeIcon(ctx: CanvasRenderingContext2D, k: NodeKind, x: number, y: numb
   if (k === 'crew') { ctx.fillRect(x - 1, y - 12, 1, 5); ctx.fillStyle = '#ffffff'; ctx.fillRect(x, y - 12, 3, 2); ctx.fillStyle = '#141a33'; ctx.fillRect(x - 4, y - 7, 9, 1); ctx.fillRect(x - 3, y - 6, 7, 1); }
   if (k === 'boss') { ctx.fillRect(x - 3, y - 11, 7, 4); ctx.fillStyle = '#e8304a'; ctx.fillRect(x - 2, y - 10, 2, 2); ctx.fillRect(x + 1, y - 10, 2, 2); ctx.fillStyle = '#ffffff'; ctx.fillRect(x - 2, y - 7, 1, 2); ctx.fillRect(x, y - 7, 1, 2); ctx.fillRect(x + 2, y - 7, 1, 2); }
 }
+let fogCache: { key: string; cv: HTMLCanvasElement } | null = null;
 function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number, theme = 'day') {
   const dark = theme === 'lava' || theme === 'void' || theme === 'core' || theme === 'cyber' || theme === 'abyss';
   const FOG: Record<string, [string, string]> = { cyber: ['#1a1040', '#120a30'], abyss: ['#080c1a', '#04060e'], lava: ['#3a2622', '#2a1a18'], void: ['#1e1030', '#140a22'], core: ['#0a2a40', '#061c30'], forest: ['#e0f0e0', '#c4dcc4'] };
@@ -866,17 +867,28 @@ function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number, theme = '
   // 黃昏、夜晚時霧也跟著變暗
   const dim = (c: RGB): RGB => view.tod === 'night' ? [Math.round(c[0] * 0.38 + 10), Math.round(c[1] * 0.4 + 12), Math.round(c[2] * 0.5 + 30)] : view.tod === 'dusk' ? [Math.round(c[0] * 0.92), Math.round(c[1] * 0.78), Math.round(c[2] * 0.8)] : c;
   const fog = dim(hex(f1)), fog2 = dim(hex(f2));
-  for (let y = 0; y < H; y++) {
-    const wave = Math.sin(y * 0.18 + t * 0.6) * 3 + Math.sin(y * 0.05 - t * 0.3) * 4;
-    const x0 = Math.round(fx + wave);
-    for (let x = Math.max(0, x0 - 10); x < W + view.bleed; x++) {
-      const d = x - x0;
-      if (d < 0 && BAYER[y & 3][x & 3] > (d + 10) * 1.6) continue;
-      const n = Math.sin(x * 0.07 + t * 0.35) * Math.sin(y * 0.09 - t * 0.2) + Math.sin((x - y) * 0.035 + t * 0.25) * 0.6;
-      const c = n > 0.55 + (BAYER[y & 3][x & 3] / 16) * 0.3 ? fog2 : fog;
-      ctx.fillStyle = css(c, d < 0 ? 0.8 : 1); ctx.fillRect(x, y, 1, 1);
+  // 效能：以前每格畫面逐像素 fillRect（3～4 萬次），手機會掉到 10 FPS。
+  // 改成算進一張 ImageData，一秒只重算 12 次，其餘時間直接貼上同一張圖
+  const fw = W + view.bleed, step = Math.floor(t * 12), key = `${step}|${Math.round(fx)}|${theme}|${view.tod}|${fw}`;
+  if (!fogCache || fogCache.key !== key) {
+    const tt = step / 12;
+    const cv = fogCache?.cv.width === fw ? fogCache.cv : Object.assign(document.createElement('canvas'), { width: fw, height: H });
+    const x2 = cv.getContext('2d')!, img = x2.createImageData(fw, H), px = img.data;
+    for (let y = 0; y < H; y++) {
+      const wave = Math.sin(y * 0.18 + tt * 0.6) * 3 + Math.sin(y * 0.05 - tt * 0.3) * 4;
+      const x0 = Math.round(fx + wave);
+      for (let x = Math.max(0, x0 - 10); x < fw; x++) {
+        const d = x - x0;
+        if (d < 0 && BAYER[y & 3][x & 3] > (d + 10) * 1.6) continue;
+        const n = Math.sin(x * 0.07 + tt * 0.35) * Math.sin(y * 0.09 - tt * 0.2) + Math.sin((x - y) * 0.035 + tt * 0.25) * 0.6;
+        const c = n > 0.55 + (BAYER[y & 3][x & 3] / 16) * 0.3 ? fog2 : fog, i = (y * fw + x) * 4;
+        px[i] = c[0]; px[i + 1] = c[1]; px[i + 2] = c[2]; px[i + 3] = d < 0 ? 204 : 255;
+      }
     }
+    x2.putImageData(img, 0, 0);
+    fogCache = { key, cv };
   }
+  ctx.drawImage(fogCache.cv, 0, 0);
   // 霧上的雲團
   for (let k = 0; k < 6; k++) {
     const cx = fx + 14 + ((k * 37 + t * 3) % Math.max(20, W + view.bleed - fx)), cy = 14 + k * 22;
