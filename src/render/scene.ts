@@ -345,7 +345,7 @@ function seaBase(ctx: CanvasRenderingContext2D, t: number, id: ThemeId = 'day') 
 }
 
 // ── 戰鬥地形 ──
-export const BATTLE = { player: { x: 66, y: 100 }, enemy: { x: 190, y: 66 }, back: { x: 206, y: 62 }, ally: { x: 136, y: 74 } };
+export const BATTLE = { player: { x: 66, y: 100 }, enemy: { x: 190, y: 66 }, back: { x: 210, y: 74 }, ally: { x: 128, y: 90 } };
 
 const PLAT: Record<string, { rim: [string, string]; top: [string, string]; side: [string, string]; mid: [string, string]; deco: string[]; grass: string | null; rtop: [string, string]; rtop2: [string, string]; rbot: [string, string]; rmid: [string, string] }> = {
   day: { rim: ['#8fd8e8', '#bfeff6'], top: ['#fff4d0', '#f6e2a8'], side: ['#b8915a', '#c9a468'], mid: ['#e0c080', '#ecd394'], deco: ['#fffaf0', '#ff9a8a'], grass: '#5fae5a', rtop: ['#7ab86a', '#5fa25a'], rtop2: ['#a6d48a', '#8cc474'], rbot: ['#5a6878', '#6a7888'], rmid: ['#a8b0b8', '#8c96a2'] },
@@ -410,10 +410,12 @@ export interface Beam { x0: number; y0: number; x1: number; y1: number; life: nu
 
 /** 角色站的位置。pos：最終決戰 1 對 2 時，統領者退到後面（back）、被召喚的霸主站在前面（ally） */
 export function monSlot(side: 0 | 1, form: string, pos?: 'back' | 'ally') {
-  const f = FORMS[form], sc = f?.scale ?? 1, b0 = side === 0 ? BATTLE.player : pos ? BATTLE[pos] : BATTLE.enemy;
+  const f = FORMS[form], king = !!spriteIdle(f?.sprite ?? '');
+  // 霸主專屬版（96 大小）當你的夥伴時再縮小一點，頭頂才不會被對手的資料框蓋住
+  const sc = (f?.scale ?? 1) * (king && side === 0 ? 0.88 : 1), b0 = side === 0 ? BATTLE.player : pos ? BATTLE[pos] : BATTLE.enemy;
   const size = spriteSize(f?.sprite ?? '') * sc;
   // 霸主專屬版（96 大小）比較高：站的位置往下移一點，頭頂才不會超出畫面
-  const base = side === 1 && !pos && spriteIdle(f?.sprite ?? '') ? { x: b0.x, y: b0.y + 6 } : b0;
+  const base = side === 1 && !pos && king ? { x: b0.x, y: b0.y + 6 } : b0;
   return { x: base.x - size / 2, y: base.y - size + 3, scale: sc, cx: base.x, cy: base.y - size / 2 + 2, bx: base.x, by: base.y };
 }
 
