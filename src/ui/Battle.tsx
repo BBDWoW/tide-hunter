@@ -674,6 +674,11 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const hs = (mode === 'main' || mode === 'skills') && peek >= 0 ? SKILLS[me.skills[peek]] : null;
   const hi = mode === 'items' ? (Object.keys(ITEMS) as ItemId[])[hover] : null;
 
+  const portraitEnemies = vp.portrait && allySlot.current != null && anim.current.fade[2] > 0;
+  const enemyCards = (<>
+        <HudBox onOpen={() => (duo && target !== 0 ? pickTarget(0) : openInfo(1, 0))} sel={duo && target === 0} note={finalNote} side={1} d={de} rarity={crew ? undefined : FORMS[de.form].rarity} boss={boss} intent={mode === 'main' || mode === 'skills' ? intent : null} warn={!!intent?.atk && effectiveness(intent.elem, formOf(active(bs, 0)).elems) >= 2} crewLeft={crew ? bs.sides[1].team.filter((m) => m.hp > 0).length : 0} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
+        {allySlot.current != null && disp.current[2] && anim.current.fade[2] > 0 && <HudBox cls="hud-ally" onOpen={() => (duo && target !== allySlot.current ? pickTarget(allySlot.current!) : openInfo(1, allySlot.current!))} sel={duo && target === allySlot.current} side={1} d={disp.current[2]} rarity={FORMS[disp.current[2].form].rarity} boss intent={mode === 'main' || mode === 'skills' ? allyIntent : null} warn={!!allyIntent?.atk && effectiveness(allyIntent.elem, formOf(active(bs, 0)).elems) >= 2} />}
+  </>);
   return (
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={draw} label="戰鬥畫面" />}
@@ -681,8 +686,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         {bossDown && <BossDown form={enc.mon.form} zone={final ? '萬潮的統領者' : zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
         {intro && <BossIntro phase={intro} form={enc.mon.form} lv={enc.mon.lv} zone={final ? '萬潮的統領者' : zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
         {!intro && <>
-        <HudBox onOpen={() => (duo && target !== 0 ? pickTarget(0) : openInfo(1, 0))} sel={duo && target === 0} note={finalNote} side={1} d={de} rarity={crew ? undefined : FORMS[de.form].rarity} boss={boss} intent={mode === 'main' || mode === 'skills' ? intent : null} warn={!!intent?.atk && effectiveness(intent.elem, formOf(active(bs, 0)).elems) >= 2} crewLeft={crew ? bs.sides[1].team.filter((m) => m.hp > 0).length : 0} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
-        {allySlot.current != null && disp.current[2] && anim.current.fade[2] > 0 && <HudBox cls="hud-ally" onOpen={() => (duo && target !== allySlot.current ? pickTarget(allySlot.current!) : openInfo(1, allySlot.current!))} sel={duo && target === allySlot.current} side={1} d={disp.current[2]} rarity={FORMS[disp.current[2].form].rarity} boss intent={mode === 'main' || mode === 'skills' ? allyIntent : null} warn={!!allyIntent?.atk && effectiveness(allyIntent.elem, formOf(active(bs, 0)).elems) >= 2} />}
+          {!portraitEnemies && enemyCards}
         {anim.current.fade[0] > 0 && <HudBox onOpen={() => openInfo(0)} side={0} d={dp} charged={volOf(bs, 0).charged} locked={volOf(bs, 0).lockOn} turns={active(bs, 0).statusTurns} />}
         </>}
         {popups.map((p) => {
@@ -694,8 +698,10 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         {cut && <div class={`final-cut ${cut.tone ?? ''}`} onClick={() => { introSkip.current = true; }} role="button" aria-label="跳過劇情"><i class="bi-bar top" /><i class="bi-bar bottom" /><div class="fc-card"><b class="fc-title">{cut.title}</b>{cut.lines.map((l, i) => <p key={i} style={{ animationDelay: `${0.3 + i * 0.9}s` }}>{l}</p>)}</div><span class="bi-skip">點一下跳過</span></div>}
         {pulls && <div class="gh-pulls" key={pulls.id}>{pulls.names.map((n, i) => <span key={i} style={{ animationDelay: `${i * 0.18}s` }}>{n}</span>)}</div>}
         {rewind !== 0 && <div class="gh-rewind" key={rewind}>⟲ 時間倒退了</div>}
-        {bs.domain && <div class="domain-chip" style={{ borderColor: DOMAINS[bs.domain].color, color: DOMAINS[bs.domain].color }} title={DOMAINS[bs.domain].desc}><Icon name="sparkle" /> 領域・{DOMAINS[bs.domain].name}<span>{DOMAINS[bs.domain].short}</span></div>}
-        {field && <div class={`field-chip ${bs.domain ? 'below' : ''}`} style={{ borderColor: FIELDS[field.id].color }} title={FIELDS[field.id].desc}><i style={{ background: FIELDS[field.id].color }} />{FIELDS[field.id].name}<span>剩 {field.turns} 回合</span></div>}
+        {(field || bs.domain) && <div class="battle-conditions">
+          {bs.domain && <div class="domain-chip" style={{ borderColor: DOMAINS[bs.domain].color, color: DOMAINS[bs.domain].color }} title={DOMAINS[bs.domain].desc}><Icon name="sparkle" /> 領域・{DOMAINS[bs.domain].name}<span>{DOMAINS[bs.domain].short}</span></div>}
+          {field && <div class="field-chip" style={{ borderColor: FIELDS[field.id].color }} title={FIELDS[field.id].desc}><i style={{ background: FIELDS[field.id].color }} />{FIELDS[field.id].name}<span>剩 {field.turns} 回合</span></div>}
+        </div>}
         <button class="speed" onClick={toggleFast} aria-pressed={fast}>{fast ? '▶▶ 快速' : '▶ 一般'}</button>
         {mode === 'reel' && !vp.portrait && reel}
         {toast && <div class="item-toast" key={toast.id}><Sprite form={toast.form} size={48} /><span class="grow"><b><Icon name="heal" /> {toast.text}</b><Bar value={toast.hp} max={toast.max} /><span class="num small">HP {toast.from} → {toast.hp}/{toast.max}</span></span></div>}
@@ -725,7 +731,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           </div>
         </Win>
       )}
-      dock={mode === 'reel' && vp.portrait ? reel : (
+      dock={mode === 'reel' && vp.portrait ? reel : (<>
+        {portraitEnemies && !intro && <div class="enemy-readouts">{enemyCards}</div>}
         <div class="dock-split battle-dock">
           <Win class="msg">
             {!vp.portrait && mode === 'main' && targetRow}
@@ -806,6 +813,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
             )}
           </Win>
         </div>
+      </>
       )} />
   );
 }

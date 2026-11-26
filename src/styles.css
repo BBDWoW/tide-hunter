@@ -340,10 +340,9 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 
 /* ── M3：新異常狀態、場地 ── */
 .st-blind { background: #5a5a6a; } .st-bleed { background: #b0203a; } .st-trap { background: #7a6a4a; } .st-charge { background: #2f8fd8; } .st-lock { background: #c23fa8; }
-.field-chip { position: absolute; top: calc(var(--u) * 3); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 0.4em; background: rgba(5, 10, 32, 0.75); border: 1px solid; color: #fff; font-size: max(10px, calc(var(--u) * 3.4)); padding: 0.2em 0.7em; white-space: nowrap; pointer-events: none; }
+.field-chip { display: flex; align-items: center; gap: 0.4em; background: rgba(5, 10, 32, 0.75); border: 1px solid; color: #fff; font-size: max(10px, calc(var(--u) * 3.4)); padding: 0.2em 0.7em; white-space: nowrap; pointer-events: none; }
 .field-chip i { width: 0.7em; height: 0.7em; display: inline-block; }
 .field-chip span { opacity: 0.75; font-size: 0.85em; }
-.portrait .field-chip { top: auto; bottom: calc(var(--u) * 26); }
 
 /* ── 個體值與分支進化 ── */
 .iv-stars { color: #ffcf4a; letter-spacing: 1px; font-size: 0.9em; white-space: nowrap; }
@@ -411,7 +410,7 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .dex-split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: calc(var(--u) * 3); margin-top: calc(var(--u) * 2); }
 .dex-list { overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 22), 1fr)); gap: calc(var(--u) * 1.2); align-content: start; padding-right: calc(var(--u) * 1); scrollbar-width: thin; }
 .dex-list .dex-cell { padding: calc(var(--u) * 1) calc(var(--u) * 0.4); }
-.dex-list .dex-cell .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.dex-list .dex-cell .small { line-height: 1.3; overflow-wrap: anywhere; max-width: 100%; }
 .dex-side { overflow: auto; display: grid; gap: calc(var(--u) * 1.5); align-content: start; justify-items: start; background: rgba(255, 255, 255, 0.05); padding: calc(var(--u) * 2.5); scrollbar-width: thin; }
 .dex-side > .sprite { justify-self: center; }
 .dex-stats { display: grid; gap: 2px; width: 100%; }
@@ -571,9 +570,11 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 /* 橫式開著視窗時，把背後的工具列和指令區藏起來，避免看起來能按、按錯地方 */
 .console.landscape .frame:has(.panel-layer) .title-tools,
 .console.landscape .frame:has(.panel-layer) .voy-tools,
-.console.landscape .frame:has(.panel-layer.closable) .dock,
 .console.landscape .frame:has(.panel-layer) .hud,
 .console.landscape .frame:has(.panel-layer) .speed { visibility: hidden; }
+
+/* 背後的指令與游標一起收起，避免透過視窗顯示。 */
+.console.landscape .frame:has(.panel-layer.closable) .dock { display: none; }
 
 /* 橫式觸控：戰鬥指令改成「技能 2×2｜動作 2×2」左右並排，高度不會蓋到夥伴 */
 @media (pointer: coarse) {
@@ -616,25 +617,24 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .bag-body { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: calc(var(--u) * 3); align-items: start; }
 .portrait .bag-body { grid-template-columns: 1fr; }
 .bag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(max(76px, calc(var(--u) * 26)), 1fr)); gap: 8px; }
-.bag-cell { display: grid; justify-items: center; gap: 2px; padding: 8px 4px 6px; background: rgba(5, 10, 32, 0.45); border: 1px solid transparent; color: var(--ink); font-family: inherit; cursor: pointer; min-height: 76px; }
+.bag-cell { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; justify-items: center; gap: 2px; padding: 8px 4px 6px; background: rgba(5, 10, 32, 0.45); border: 1px solid transparent; color: var(--ink); font-family: inherit; cursor: pointer; min-height: 76px; }
 .bag-cell.on { border-color: var(--amber); background: rgba(255, 207, 74, 0.12); }
 .bag-cell.empty { opacity: 0.45; }
 .bag-cell .icon { color: #cfe4ff; }
 .bag-cell.on .icon { color: var(--amber); }
-.bag-name { font-size: 0.78em; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.bag-name { font-size: max(12px, 0.78em); line-height: 1.25; max-width: 100%; overflow-wrap: anywhere; text-align: center; }
 .bag-count { font-size: 0.72em; color: var(--dim); }
 .bag-detail { display: grid; gap: calc(var(--u) * 2); padding: calc(var(--u) * 3); background: rgba(255, 255, 255, 0.05); border-left: 3px solid var(--amber); }
 .bag-detail .icon { color: var(--amber); }
 /* 橫式背包：格子縮小、一排放 5 格，整頁不用捲 */
 .console.landscape .bag { gap: 6px; }
-.console.landscape .bag-grid { grid-template-columns: repeat(auto-fill, minmax(60px, 1fr)); gap: 6px; }
+.console.landscape .bag-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, max(60px, 4em)), 1fr)); gap: 6px; }
 .console.landscape .bag-cell { min-height: 58px; padding: 5px 2px 4px; }
 .console.landscape .bag-cell .icon { width: 1.5em; height: 1.5em; }
 .console.landscape .bag-tabs .tab { min-height: 36px; }
 .console.landscape .bag-detail { padding: 8px 10px; gap: 6px; }
 .console.landscape .big-panel:has(.bag) { gap: 6px; }
 .console.landscape .bag-body { grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr); gap: 8px; }
-.console.landscape .bag-grid { grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); }
 .console.landscape .bag-detail .big-name { font-size: 1em; }
 /* 可關閉的視窗會把指令區藏起來，所以視窗可以用到整個畫面高度 */
 .console.landscape .panel-layer.closable.with-dock { padding-top: calc(var(--u) * 3); padding-bottom: calc(var(--u) * 3); }
@@ -666,10 +666,8 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 .confirm-btns { display: grid; gap: calc(var(--u) * 1.5); }
 
 /* 特殊區域的領域效果標籤 */
-.domain-chip { position: absolute; top: calc(var(--u) * 3); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 0.4em; white-space: nowrap; background: rgba(5, 10, 32, 0.8); border: 1px solid; font-size: max(10px, calc(var(--u) * 3.4)); padding: 0.15em 0.6em; z-index: 3; text-shadow: 0 1px 0 #000; }
+.domain-chip { display: flex; align-items: center; gap: 0.4em; white-space: nowrap; background: rgba(5, 10, 32, 0.8); border: 1px solid; font-size: max(10px, calc(var(--u) * 3.4)); padding: 0.15em 0.6em; z-index: 3; text-shadow: 0 1px 0 #000; }
 .domain-chip span { color: #dfe8ff; opacity: 0.8; font-size: 0.85em; }
-.field-chip.below { top: calc(var(--u) * 10); }
-.portrait .domain-chip { top: auto; bottom: calc(var(--u) * 33); }
 
 /* ── 特殊區域過場動畫 ── */
 .zone-cut { position: fixed; inset: 0; z-index: 70; background: #000; cursor: pointer; overflow: hidden; display: grid; place-items: end center; padding-bottom: max(7vh, env(safe-area-inset-bottom)); }
@@ -725,8 +723,6 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 .ev-chip.good { border-color: #6fdc6a; color: #c8ffbe; }
 .ev-chip.bad { border-color: #ff7a66; color: #ffc4b8; }
 .reduce-fx .ev-chip { animation: none; }
-.console.landscape .domain-chip { left: 57%; }
-.console.landscape .field-chip.below { left: 57%; }
 
 /* ── 神之手 ── */
 .godhand-panel .win-title { color: #fff6d0; letter-spacing: 0.15em; }
@@ -954,3 +950,29 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 .journal-date { color: #3c635d; }
 .dex-side:has(.journal-plate) .dex-evo { background: #334c50; }
 .dex-side:has(.journal-plate) .dex-stats i { background: #4f8373; }
+
+/* 細小的數字用等寬數碼排版，維持手機上的可讀尺寸。 */
+.hud .lv, .hpnum, .slot-lv, .dex-stats b, .journal-date {
+  font-family: "Noto Sans TC", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-size: max(11px, .83em);
+  line-height: 1.25;
+}
+.hud .lv, .hpnum { white-space: nowrap; }
+.hud .rar, .dex-side .rar { font-size: max(9px, .62em); }
+.dex-side:has(.journal-plate) .stage { color: #344d55; border-color: #6b7d78; font-size: max(11px, .8em); }
+.dex-head { flex-wrap: wrap; row-gap: .25em; }
+.dex-close { white-space: nowrap; }
+
+.battle-conditions { position: absolute; top: calc(var(--u) * 3); left: 36%; right: 14%; z-index: 3; display: grid; justify-items: center; gap: 2px; pointer-events: none; }
+.battle-conditions > div { max-width: 100%; white-space: normal; flex-wrap: wrap; justify-content: center; }
+.portrait .battle-conditions { inset: auto auto calc(var(--u) * 2) 2%; width: 48%; justify-items: start; }
+.hud { grid-template-columns: minmax(0,1fr); }
+.hud-top { flex-wrap: wrap; row-gap: 2px; }
+.hud-name, .boss-tag { flex: none; white-space: nowrap; }
+.hud .hud-note { overflow-wrap: anywhere; }
+.enemy-readouts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 6px; align-items: start; margin-bottom: 6px; }
+.portrait .enemy-readouts .hud { position: static; width: 100%; }
+.portrait:has(.enemy-readouts) .speed { inset: auto auto calc(var(--u) * 3) calc(var(--u) * 4); }
+.enemy-readouts .hud-sub { display: flex; }
+.lower .dock:has(.enemy-readouts) .battle-dock { height: auto; }
