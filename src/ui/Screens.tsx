@@ -321,8 +321,6 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
       overlay={<>
         <Win class="banner left"><span class="eyebrow">{run.daily ? `每日 · ${run.dailyRule ? dailyRuleInfo(run.dailyRule).name + ' · ' : ''}` : ''}{run.star ? `${'★'.repeat(run.star)} · ` : ''}{zoneOf(run).special ? '特殊區域' : `海域 ${run.zoneNo + 1}`} · {zoneOf(run).name}{isDomain(run.zone) && <span class="voy-domain" style={{ color: DOMAINS[run.zone].color }}> · 領域「{DOMAINS[run.zone].name}」</span>}</span><b>第 {run.station + 1} / {run.route.length} 站 · {node ? NODE_INFO[node.kind].name : '選擇航線'}</b><span class={`tod-chip tod-${timeOfDay(run)}`}><Icon name={timeOfDay(run) === 'night' ? 'moon' : 'sun'} /> {TOD_INFO[timeOfDay(run)].name}</span></Win>
         <Win class="banner right"><span class="res"><Icon name="shell" /> {run.shells}</span><span class="res">捕捉餌 {run.catchBait}</span></Win>
-        {run.picked === null && !panel && timeOfDay(run) !== 'day' && <Tip id={`tod-${timeOfDay(run)}`}>{TOD_INFO[timeOfDay(run)].name}：{TOD_INFO[timeOfDay(run)].desc}</Tip>}
-        {run.picked === null && !panel && <Tip id="voyage">點海圖上的圖示選擇航線。釣點會遇到野生潮靈，精英更強，掛旗子的船隊會連續派出好幾隻。右上角可以看隊伍和背包。</Tip>}
         <div class="voy-tools">
           <button class={`tool-btn ${panel === 'party' ? 'on' : ''}`} onClick={() => setPanel(panel === 'party' ? null : 'party')}><Icon name="party" /> 隊伍</button>
           <button class={`tool-btn ${panel === 'items' ? 'on' : ''}`} onClick={() => setPanel(panel === 'items' ? null : 'items')}><Icon name="bag" /> 背包</button>
@@ -345,6 +343,8 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
       dock={
         <div class="dock-split">
           <Win class="msg">
+            {run.picked === null && !panel && <Tip inline id="voyage">點四角亮起的站點選擇航線。紅旗是走過的島。</Tip>}
+            {run.picked === null && !panel && timeOfDay(run) !== 'day' && <Tip inline id={`tod-${timeOfDay(run)}`}>{TOD_INFO[timeOfDay(run)].desc}</Tip>}
             {notice && <p class="accent">{notice}</p>}
             {node && action ? <p>{action.text}</p> : <p><b>選擇航線：</b>{NODE_INFO[hv.kind].name}{hv.kind === 'fish' || hv.kind === 'elite' ? `（${spotName(run, hv.spot).name}）` : ''}——{NODE_INFO[hv.kind].desc}</p>}
             <div class="party-strip">

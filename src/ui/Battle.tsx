@@ -18,7 +18,7 @@ import { foeMods, battleMods, boon, LANDING_BONUS, zoneOf } from '../game/run';
 import type { Encounter, RunState } from '../game/run';
 import { spriteSize } from '../render/pixel';
 import { drawFx, FX_MS, fxFrames, fxOffset, fxSkill, hasFx, loadFx } from '../render/vfx';
-import { auraColor, burst, drawBattle, drawNet, fisherCanvas, H, monSlot, view, W, type Beam, type MonView, type Particle } from '../render/scene';
+import { auraColor, burst, elemBurst, drawBattle, drawNet, fisherCanvas, H, monSlot, view, W, type Beam, type MonView, type Particle } from '../render/scene';
 import { Tip, AbilityLines, Bar, ElemChip, Elems, Energy, IvStars, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
@@ -171,7 +171,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   };
   const anim = useRef({
     mons: [mkView(0, disp.current[0].form), mkView(1, disp.current[1].form)] as MonView[],
-    lungeT: [0, 0, 0], dashT: [0, 0, 0], shakeT: [0, 0, 0], fade: [1, 1, 0] as number[], enter: [0, 0, 0] as number[],
+    lungeT: [0, 0, 0], dashT: [0, 0, 0], shakeT: [0, 0, 0], recoil: [0, 0, 0], fade: [1, 1, 0] as number[], enter: [0, 0, 0] as number[],
     dashTo: [1, 0, 0] as number[], // 衝刺的目標（畫面上的第幾隻）
     parts: [] as Particle[], beams: [] as Beam[],
     fx: [] as { code: string; from: number; to: number; e: number; big?: boolean }[], // 播放中的技能特效（e = 已播放幾格；big：統領者的招式放大）
@@ -200,7 +200,13 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       a.enter[side] = Math.min(1, a.enter[side] + dt * 2.2);
       const p = posOf(side, v.form), e = 1 - Math.pow(1 - a.enter[side], 3);
       v.x = p.x + (1 - e) * (side === 0 ? -90 : 90);
-      v.y = p.y; v.base = { x: p.bx, y: p.by };
+      if (side === 1 && intro) {
+        const close = intro === 'out' ? 1 : 1.08;
+        v.scale = p.scale * close;
+        v.x = p.cx + (v.x - p.cx) * close;
+        v.y = p.by + (p.y - p.by) * close;
+      } else { v.scale = p.scale; v.y = p.y; }
+      v.base = { x: p.bx, y: p.by };
       if (side === 2) v.y = p.y + (1 - e) * 40; // 被召喚的霸主從海裡升上來
       // 近戰：衝到對手面前再退回來
       a.dashT[side] = Math.max(0, a.dashT[side] - dt);
@@ -212,6 +218,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       }
       a.lungeT[side] = Math.max(0, a.lungeT[side] - dt);
       v.lunge = Math.sin((a.lungeT[side] / 0.25) * Math.PI) * 12 * (a.lungeT[side] > 0 ? 1 : 0);
+      a.recoil[side] = Math.max(0, a.recoil[side] - dt * 12);
+      v.x += Math.round(a.recoil[side]) * (side === 0 ? -1 : 1);
       v.flash = Math.max(0, v.flash - dt);
       a.shakeT[side] = Math.max(0, a.shakeT[side] - dt);
       v.shake = a.shakeT[side] > 0 ? 1 : 0;
@@ -251,10 +259,17 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     drawBattle(ctx, t, dt, a.mons, a.parts, a.beams, zoneOf(run).theme, { field: fieldRef.current, quake: q, flash: fl, flashColor: a.flashColor, fxLayer });
     if (a.mons[1].form === 'godhand' && a.fade[1] > 0) { const c = monSlot(1, 'godhand'); drawGodHand(ctx, t, c.cx, a.mons[1].y ?? c.y, c.scale, 0, false); }
     if (net.current) { const c = monSlot(1, a.mons[1].form); const n = net.current; n.glow = Math.max(0, n.glow - dt); drawNet(ctx, c.cx, c.cy + 6, n.wob, n.glow); }
-    // 1 對 2：目前選的攻擊目標上方有一個上下跳的箭頭
+    // 1 對 2：目前選的攻擊目標腳邊有一對亮色標記
     if (allySlot.current != null && (mode === 'main' || mode === 'skills') && finalSlots(bs).length > 1) {
       const tv = target === allySlot.current ? 2 : 1, m = a.mons[tv];
-      if (m) { const p = posOf(tv, m.form), y = Math.round(p.y - 6 + Math.sin(t * 6) * 2); ctx.fillStyle = '#ffcf4a'; ctx.fillRect(p.cx - 3, y, 7, 2); ctx.fillRect(p.cx - 2, y + 2, 5, 1); ctx.fillRect(p.cx - 1, y + 3, 3, 1); ctx.fillRect(p.cx, y + 4, 1, 1); }
+      if (m) {
+        const p = posOf(tv, m.form);
+        for (const side of [-1, 1]) {
+          const x = p.bx + side * 11;
+          ctx.fillStyle = '#302442'; ctx.fillRect(x - 3, p.by, 7, 4);
+          ctx.fillStyle = '#ffcf4a'; ctx.fillRect(x - 2, p.by + 1, 5, 2);
+        }
+      }
     }
     if (a.rod >= 0) { a.rod += dt * (hurry.current ? 3 : fastRef.current ? 1.5 : 1); drawRod(ctx, a.rod, a.mons.map((m, i) => (i === 0 || !m || a.fade[i] <= 0 ? null : posOf(i, m.form)))); if (a.rod > ROD_T) a.rod = -1; }
   };
@@ -367,16 +382,20 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           break;
         }
         d[v].hp = e.hp; d[v].shield = e.shield;
-        a.mons[v].flash = 0.35; a.shakeT[v] = 0.3;
-        // 打擊感：暴擊與效果絕佳會震動畫面、閃光，並停頓一下（hit-stop）
         const big = e.amount >= d[v].max * 0.25;
-        if (e.crit) { sfx('crit'); jolt(3.5, 0.35); }
-        else if (e.eff >= 2) { sfx('super'); jolt(2.5, 0.22, '#ffe08a'); }
+        a.mons[v].flash = e.crit ? 0.24 : 0.12;
+        a.recoil[v] = e.crit || big ? 4 : 2;
+        if (e.eff >= 2 && e.elem) {
+          const c = center(v);
+          elemBurst(a.parts, c.x, c.y, e.elem);
+        }
+        if (e.crit) { sfx('crit'); jolt(2, 0.12); }
+        else if (e.eff >= 2) sfx('super');
         else if (e.eff > 0 && e.eff < 1) sfx('weak');
-        else { sfx('hit'); if (big) jolt(1.5); }
+        else sfx('hit');
         pop(v, `-${e.amount}`, e.crit ? 'crit' : e.eff >= 2 ? 'super' : e.eff < 1 ? 'weak' : big ? 'big' : '', e.crit ? '暴擊！' : e.eff >= 2 ? '效果絕佳' : e.eff > 0 && e.eff < 1 ? '效果不好' : undefined);
         rerender();
-        if (e.crit || e.eff >= 2) await new Promise((r) => setTimeout(r, 110)); // 停頓不受快速模式影響
+        if (e.crit || big) await new Promise((r) => setTimeout(r, 110)); // 停頓不受快速模式影響
         await wait(420); break;
       }
       case 'heal': {
@@ -638,6 +657,17 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const loveLock = !!bs.godhand && bs.godhand.loveTurn === bs.turn; // 無法忽視的愛：只能攻擊
   const toggleFast = () => { const v = !fast; setFast(v); try { localStorage.setItem(SPEED_KEY, v ? 'fast' : 'normal'); } catch { /* 略過 */ } };
 
+  const targetRow = duo && (
+    <div class="target-row" role="radiogroup" aria-label="攻擊目標">
+      <span class="small dim">攻擊目標</span>
+      {finalSlots(bs).map(i => (
+        <button key={i} class={`chip-btn ${target === i ? 'hot' : ''}`} role="radio"
+          aria-checked={target === i} onClick={() => pickTarget(i)}>
+          {FORMS[bs.sides[1].team[i].form].name}
+        </button>
+      ))}
+    </div>
+  );
   const reel = <Reel rarity={FORMS[foe.form].rarity} hpRatio={foe.hp / maxHp(foe)} hasStatus={!!foe.status} name={FORMS[foe.form].name} zoneBonus={boon(run, 'reelzone') * 0.15 + (run.perks?.reel ?? 0)} onDone={onReel} />;
   const startReel = () => { if (run.catchBait <= 0) return; sfx('cast'); run.catchBait--; setMode('reel'); };
   const picking = mode === 'switch' || mode === 'force' || mode === 'itemTarget';
@@ -657,7 +687,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         </>}
         {popups.map((p) => {
           const c = posOf(p.side, (disp.current[p.side] ?? disp.current[1]).form);
-          return <span key={p.id} class={`pop ${p.cls}`} style={{ left: `${((c.cx + p.dx) / W) * 100}%`, top: `${((c.cy - 30) / H) * 100}%` }}>{p.label && <small>{p.label}</small>}{p.text}</span>;
+          const top = Math.max(p.side === 1 ? 15 : 49, c.cy - 30);
+          return <span key={p.id} class={`pop ${p.cls}`} style={{ left: `${((c.cx + p.dx) / W) * 100}%`, top: `${(top / H) * 100}%` }}>{p.label && <small>{p.label}</small>}{p.text}</span>;
         })}
         {bs.godhand && <div class="gh-counter"><Icon name="heart" /> 陪神之手玩：第 <b>{Math.min(bs.turn, bs.godhand.survive)}</b> / {bs.godhand.survive} 回合{bs.godhand.rewinds > 0 && <span>（被倒退 {bs.godhand.rewinds} 次）</span>}{loveLock && <em>只能攻擊！</em>}</div>}
         {cut && <div class={`final-cut ${cut.tone ?? ''}`} onClick={() => { introSkip.current = true; }} role="button" aria-label="跳過劇情"><i class="bi-bar top" /><i class="bi-bar bottom" /><div class="fc-card"><b class="fc-title">{cut.title}</b>{cut.lines.map((l, i) => <p key={i} style={{ animationDelay: `${0.3 + i * 0.9}s` }}>{l}</p>)}</div><span class="bi-skip">點一下跳過</span></div>}
@@ -668,9 +699,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         <button class="speed" onClick={toggleFast} aria-pressed={fast}>{fast ? '▶▶ 快速' : '▶ 一般'}</button>
         {mode === 'reel' && !vp.portrait && reel}
         {toast && <div class="item-toast" key={toast.id}><Sprite form={toast.form} size={48} /><span class="grow"><b><Icon name="heal" /> {toast.text}</b><Bar value={toast.hp} max={toast.max} /><span class="num small">HP {toast.from} → {toast.hp}/{toast.max}</span></span></div>}
-        {mode === 'main' && !boss && <Tip id="battle">直接點技能出招（◆ 是能量消耗）。對手 HP 條下面的「下一步」是牠這回合要做的事。把對手打虛弱再按「捕捉」，比較容易收服。點 HP 框可以看詳細資料。</Tip>}
-        {mode === 'main' && final && <Tip id="final">統領者有兩條血，每 5 回合會放一次大絕招「五海歸一・默海破曉」（資料框會倒數），打中後全隊每隻夥伴都會各中一種異常，記得準備珍珠精華！打掉第一條血後，祂會召喚一隻霸主變成 1 對 2：用「攻擊目標」或點對手的資料框選要打哪一隻（再點一次可以看詳細資料），「漁夫的釣竿」可以橫掃全場並降低對手能力。</Tip>}
-        {mode === 'main' && boss && !final && <Tip id="boss">霸主的 HP 掉到一半時會狂暴：攻擊提高，但防禦會露出破綻。霸主不能捕捉，也不能逃跑。</Tip>}
+
       </>}
       onPanelClose={info !== null ? () => setInfo(null) : mode === 'switch' || mode === 'itemTarget' ? () => setMode(mode === 'itemTarget' ? 'items' : 'main') : undefined}
       panel={info !== null ? <InfoPanel bs={bs} side={info} idx={infoIdx} boss={boss} onClose={() => setInfo(null)} /> : picking && (
@@ -699,11 +728,12 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       dock={mode === 'reel' && vp.portrait ? reel : (
         <div class="dock-split battle-dock">
           <Win class="msg">
+            {!vp.portrait && mode === 'main' && targetRow}
             <div class="tap-hurry" onClick={() => { if (mode === 'busy') hurry.current = true; }}>
             {hs ? (
               <div class="skill-info">
                 <div class="row-gap"><b class="big-name">{hs.name}</b>{hs.elem ? <ElemChip e={hs.elem} /> : <span class="chip neutral">無</span>}</div>
-                <p class="small">{hs.power ? (() => { const p = Math.round(effPower(bs, 0, 1, hs)); return p !== hs.power ? `威力 ${hs.power} → ${p}` : `威力 ${hs.power}`; })() : '變化技'} · 能量 {hs.cost} · 命中 {Math.round(Math.min(1, hitChance(bs, 0, hs)) * 100)}{hs.power > 0 && (() => { const e = effectiveness(hs.elem, formOf(foe).elems); return e >= 2 ? ' · 效果絕佳！' : e < 1 ? ' · 效果不好' : ''; })()}</p>
+                <p class="small">{hs.power ? (() => { const p = Math.round(effPower(bs, 0, 1, hs)); return p !== hs.power ? `威力 ${hs.power} → ${p}` : `威力 ${hs.power}`; })() : '變化技'} · 能量 {hs.cost} · 命中 {Math.round(Math.min(1, hitChance(bs, 0, hs)) * 100)}{hs.power > 0 && (() => { const e = effectiveness(hs.elem, formOf(duo ? bs.sides[1].team[target] ?? foe : foe).elems); return e >= 2 ? ' · 效果絕佳！' : e < 1 ? ' · 效果不好' : ''; })()}</p>
                 <p class="small dim">{hs.desc}</p>
                 {TOUCH && armed === peek && <p class="small accent">再點一次使用</p>}
               </div>
@@ -711,6 +741,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
               <div class="skill-info"><b class="big-name">{ITEMS[hi].name}</b><p class="small dim">{ITEMS[hi].desc}</p></div>
             ) : (
               <div class="log" aria-live="polite">
+                {mode === 'main' && <Tip inline id={final ? 'final' : boss ? 'boss' : 'battle'}>{final ? (duo ? '點名字切換目標。' : '留意大絕倒數，提前換上能承受攻擊的夥伴。') : boss ? '霸主半血會狂暴，攻擊變強、防禦下降。' : '先看「下一步」再選招。標示「剋你」時，可換夥伴避開弱點。'}</Tip>}
                 {log.slice(-2).map((l, i, arr) => <p key={log.length - arr.length + i} class={i === arr.length - 1 ? 'last' : 'prev'}>{l}</p>)}
               </div>
             )}
@@ -726,12 +757,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
             )}
             {mode === 'main' && (
               <div class="battle-main" onMouseLeave={() => { if (!TOUCH) setPeek(-1); }}>
-                {duo && (
-                  <div class="target-row" role="radiogroup" aria-label="攻擊目標">
-                    <span class="small dim">攻擊目標</span>
-                    {finalSlots(bs).map((i) => <button key={i} class={`chip-btn ${target === i ? 'hot' : ''}`} role="radio" aria-checked={target === i} onClick={() => pickTarget(i)}>{FORMS[bs.sides[1].team[i].form].name}</button>)}
-                  </div>
-                )}
+                {vp.portrait && targetRow}
                 <div class="cmd-grid">
                   {me.skills.map((id, i) => {
                     const sk = SKILLS[id], ok = canAfford(bs, 0, i);
@@ -841,7 +867,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
         {side === 0 && <span class="hpnum">{d.hp}/{d.max}</span>}
       </div>
       {note && <div class="hud-note">{note}</div>}
-      {intent && <div class={`hud-intent ${warn ? 'warn' : ''}`} title={warn ? '對你的夥伴效果絕佳！' : undefined}><span class="dim">下一步</span> <Icon name={intent.icon} /> {intent.name}{warn && ' ‼'}</div>}
+      {intent && <div class={`hud-intent ${warn ? 'warn' : ''}`} title={warn ? '對你的夥伴效果絕佳！' : undefined}><span class="dim">下一步</span> <Icon name={intent.icon} /> {intent.name}{warn && '・剋你'}</div>}
     </div>
   );
 }

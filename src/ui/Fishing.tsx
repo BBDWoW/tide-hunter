@@ -1,6 +1,6 @@
 import { ChestReveal } from './Treasure';
 import { Icon } from './Icon';
-// 釣魚：選魚餌 → 對準海面的漣漪拋竿（力量條）→ 等待（小心假咬鉤）→ 咬鉤時點擊 → 上鉤後才知道是大是小
+// 釣魚：選魚餌 → 對準海面的漣漪拋竿（力量條）→ 等待（小心假咬鉤）→ 咬鉤時點擊 → 上鉤後揭曉種類
 import { useRef, useState } from 'preact/hooks';
 import { LURES, type LureId } from '../data/boons';
 import { castTarget, judgeLanding, landingZones, nodeOf, rollShadows, rollTreasure, spotName, zoneOf, type Landing, type Loot, type RunState, type Shadow } from '../game/run';
@@ -18,7 +18,7 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
   const spot = nodeOf(run).spot;
   const hasLures = run.lures.star > 0 || run.lures.legend > 0;
   const meter = useRef<HTMLElement>(null);
-  // 水面下的魚是隨機決定的，玩家看不到大小；用了特殊魚餌會引來大魚
+  // 魚影大小由釣點決定；用了特殊魚餌會引來大魚
   const roll = (l: LureId, fishOnly = false) => {
     const sh = rollShadows(run, l, fishOnly);
     const big = sh.findIndex((x) => x.size === 3);
@@ -37,9 +37,9 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
     view: { phase: 'choose', power: 0, castT: 0, bobX: 170, shadows: [], sel: 0, spot: zoneOf(run).theme === 'day' ? spot : 'none', theme: zoneOf(run).theme, ripple: 170 } as FishView,
     t: 0, wait: 0, nibbles: 0, nib: 0, bite: 0, q: 0, done: false, land: 'miss' as Landing,
   });
-  // 只有霸主看得到影子，其他的要上鉤才知道
-  st.current.view.shadows = boss ? shadows : [];
-  st.current.view.sel = boss ? sel : 0;
+  // 拋竿前可比較輪廓，咬鉤後才揭曉種類。
+  st.current.view.shadows = shadows;
+  st.current.view.sel = sel;
   st.current.view.ripple = spotX.current;
   const setP = (p: FishPhase) => { st.current.view.phase = p; setPhase(p); };
   const lureUsed = useRef<LureId>('normal');
@@ -62,7 +62,7 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
     setMsg('換個位置再拋一次！');
     setP('choose');
   };
-  const startCast = () => { sfx('select'); st.current.t = Math.random() * 2; setP('cast'); setMsg('停在黃色區域！紅色是完美落點。'); };
+  const startCast = () => { sfx('select'); st.current.t = Math.random() * 2; setP('cast'); setMsg('點一下定力道，瞄準兩道刻痕之間。'); };
 
   const draw = (ctx: CanvasRenderingContext2D, t: number, dt: number) => {
     const s = st.current, v = s.view; s.t += dt;
@@ -77,13 +77,13 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
         // 甩太偏，魚會被嚇到：等比較久、假咬鉤比較多
         const spook = s.land === 'far' ? 2 : s.land === 'miss' ? 1 : 0;
         s.wait = 1 + Math.random() * 1.6 + spook * 0.8; s.nibbles = boss ? 0 : Math.floor(Math.random() * 3) + spook;
-        setMsg(s.land === 'far' ? '魚被嚇到了……' : '等待上鉤……');
+        setMsg(s.land === 'perfect' && shadows[sel]?.kind === 'fish' ? '完美落點！對手開場 HP 降低。' : s.land === 'far' ? '魚被嚇到了……' : '等浮標整顆沉下再收竿。');
       }
     } else if (v.phase === 'wait') {
       s.wait -= dt;
       if (s.wait <= 0) {
-        if (s.nibbles > 0) { s.nibbles--; s.nib = 0.55; sfx('nibble'); setP('nibble'); }
-        else { sfx('bite'); setP('bite'); s.bite = 0.9; setMsg('咬鉤了！'); }
+        if (s.nibbles > 0) { s.nibbles--; s.nib = 0.55; sfx('nibble'); setP('nibble'); setMsg('魚在試探，再等等。'); }
+        else { sfx('bite'); setP('bite'); s.bite = 0.9; setMsg('咬鉤！點一下收竿。'); }
       }
     } else if (v.phase === 'nibble') {
       s.nib -= dt;
@@ -130,6 +130,12 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
     <GameScreen vp={vp} tappable={sceneTap} onScene={sceneTap ? (tap as unknown as Record<string, unknown>) : undefined}
       scene={<SceneCanvas draw={draw} label="釣魚場景" />}
       overlay={<>
+        {phase === 'choose' && shadows.length > 1 && shadows.map((sh, i) => (
+          <button key={i} class="hit fish-target" aria-label={`選擇${['小', '中', '大'][sh.size - 1]}魚影`} aria-pressed={sel === i}
+            style={{ left: `${(sh.x - 16) / 256 * 100}%` }}
+            onPointerDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}
+            onClick={() => { setSel(i); spotX.current = sh.x; sfx('select'); }} />
+        ))}
         {phase === 'cast' && (() => {
           const tp = castTarget(spotX.current), z = landingZones(run);
           const band = (w: number) => ({ bottom: `${Math.max(0, tp - w) * 100}%`, height: `${Math.min(1, tp + w) * 100 - Math.max(0, tp - w) * 100}%` });
@@ -137,11 +143,11 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
         })()}
         {phase === 'hooked' && <div class="flash" />}
         {phase === 'loot' && loot && <ChestReveal loot={loot} onOpened={() => setOpened(true)} />}
-        {phase === 'choose' && !boss && <Tip id="fishing">點畫面拋竿，力量條停在黃色區域就會落在漣漪上（紅色是完美）。浮標猛地下沉時再點一次！落點越準，對手開場的 HP 越少、越好抓。</Tip>}
+
       </>}
       dock={
         <div class="dock-split">
-          <Win class="msg"><p class="msg-text">{phase === 'loot' && loot ? (opened ? <><b>{loot.title}</b><br />{loot.text}</> : '打開來看看……') : msg}</p></Win>
+          <Win class="msg">{phase === 'choose' && !boss && <Tip inline id="fishing">點魚影選落點，再點「拋竿」。</Tip>}<p class="msg-text">{phase === 'loot' && loot ? (opened ? <><b>{loot.title}</b><br />{loot.text}</> : '打開來看看……') : msg}</p></Win>
           <Win class="cmd">
             {phase === 'lure' && <div class="cmd-grid">
               <MenuItem onClick={() => pickLure('normal')} hot sub="∞">普通餌</MenuItem>

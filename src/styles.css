@@ -888,3 +888,32 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 .legend-eyebrow { font-size: 0.8em; letter-spacing: 0.3em; color: #ffcf4a; }
 .legend-stats { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; text-align: left; font-size: 0.85em; margin-top: 4px; }
 .legend-stats span { color: var(--dim, #9aa8c8); }
+
+.log:has(.tip.inline) > p { display: none; }
+.battle-dock .log .tip.inline { margin: 0; }
+.hud.targeted .hud-intent { border-left: 3px solid #ffcf4a; }
+.hud-intent, .skill-info, .msg-text, .tip { font-family: "Noto Sans TC", "PingFang TC", sans-serif; }
+
+.cast-meter .zone-perfect::before, .cast-meter .zone-perfect::after {
+  content: ''; position: absolute; left: -3px; right: -3px; height: 2px; background: #fff0b2; box-shadow: 0 1px #442740;
+}
+.cast-meter .zone-perfect::before { top: 0; }
+.cast-meter .zone-perfect::after { bottom: 0; }
+.msg:has(> .tip.inline) > .msg-text { display: none; }
+
+.msg:has(.party-strip) > .tip.inline ~ :is(.tip, p, .party-strip) { display: none; }
+
+.fish-target { top: 49%; height: 20%; width: 12.5%; }
+.fish-target:focus-visible { outline: 2px dashed #fff7bc; }
+
+.overlay:has(.hud-ally) .hud-1 { width: 31%; }
+.overlay .hud-ally { left: 34%; top: calc(var(--u) * 4); }
+.hud .hud-note { color: #75450b; }
+.battle-dock .msg:has(.target-row) .tap-hurry { height: auto; }
+.battle-dock .target-row { align-items: center; gap: 0.35em; }
+@media (pointer: coarse) {
+  .console.landscape .battle-main .rod-btn { grid-column: 1 / -1; flex-direction: row; }
+}
+
+.battle-dock .msg:has(.target-row) .tip.inline { flex-direction: row; align-items: center; }
+.battle-dock .msg:has(.target-row) .tip.inline small { white-space: nowrap; margin-left: auto; }

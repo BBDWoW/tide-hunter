@@ -84,7 +84,7 @@ type BEventBase =
   | { t: 'msg'; text: string }
   | { t: 'use'; side: SideId; skill: string }
   | { t: 'miss'; side: SideId }
-  | { t: 'dmg'; side: SideId; amount: number; hp: number; eff: number; crit: boolean; shield: number }
+  | { t: 'dmg'; side: SideId; elem?: Elem | null; amount: number; hp: number; eff: number; crit: boolean; shield: number }
   | { t: 'heal'; side: SideId; amount: number; hp: number }
   | { t: 'shield'; side: SideId; amount: number }
   | { t: 'status'; side: SideId; status: StatusId | null }
@@ -459,7 +459,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
       r.dmg = Math.max(1, Math.floor(r.dmg * 0.6));
       ev.push({ t: 'block', side: foe }); ev.push({ t: 'msg', text: `${nameOf(s, foe)} 擋下了一部分傷害！` });
     }
-    const real = dealDamage(s, foe, r.dmg, r.eff, r.crit, ev);
+    const real = dealDamage(s, foe, r.dmg, r.eff, r.crit, sk.elem, ev);
     total += real;
     afterHitAbilities(s, side, foe, ev);
     // 反擊架勢：把傷害反彈回去
@@ -576,7 +576,7 @@ export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill,
   return { dmg: Math.max(1, Math.floor(base * mod)), eff, crit };
 }
 
-function dealDamage(s: BattleState, side: SideId, dmg: number, eff: number, crit: boolean, ev: BEvent[]): number {
+function dealDamage(s: BattleState, side: SideId, dmg: number, eff: number, crit: boolean, elem: Elem | null, ev: BEvent[]): number {
   const m = active(s, side), v = volOf(s, side);
   let absorbed = 0;
   if (v.shield > 0) { absorbed = Math.min(v.shield, dmg); v.shield -= absorbed; dmg -= absorbed; }
@@ -588,7 +588,7 @@ function dealDamage(s: BattleState, side: SideId, dmg: number, eff: number, crit
     ev.push({ t: 'msg', text: `${nameOf(s, side)} 握緊了不屈珍珠，撐住了！` });
   }
   m.hp -= real;
-  ev.push({ t: 'dmg', side, amount: real, hp: m.hp, eff, crit, shield: v.shield });
+  ev.push({ t: 'dmg', side, elem, amount: real, hp: m.hp, eff, crit, shield: v.shield });
   if (absorbed) ev.push({ t: 'msg', text: `護盾擋下了 ${absorbed} 點傷害！` });
   const att: SideId = side === 0 ? 1 : 0, am = active(s, att);
   if (absorbed && bn(s, side, 'x_thorns') && am.hp > 0) {

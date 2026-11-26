@@ -136,6 +136,20 @@ function fromArt(name: string, w: number, h: number) {
   if (!img) return null;
   return cached('art-' + name, w, h, (x) => { x.imageSmoothingEnabled = false; x.drawImage(img, 0, 0, w, h); });
 }
+// 海圖與遠景共用同一對高低冰峰，保留峰頂裂口。
+function twinPeaks(ctx: CanvasRenderingContext2D, x: number, y: number, height: number) {
+  for (const [offset, h] of [[0, height], [height * 0.62, height * 0.65]]) {
+    const top = Math.round(x + offset);
+    for (let row = 0; row < h; row++) {
+      const half = Math.floor(row * 0.45);
+      ctx.fillStyle = '#d9f2fb'; ctx.fillRect(top - half, y - Math.ceil(h) + row, half + 1, 1);
+      ctx.fillStyle = '#84b3cc'; ctx.fillRect(top + 1, y - Math.ceil(h) + row, half, 1);
+      if (row > h / 5 && row < h * 0.65) {
+        ctx.fillStyle = '#6195af'; ctx.fillRect(top - Math.floor(row / 5), y - Math.ceil(h) + row, 1, 1);
+      }
+    }
+  }
+}
 function backdrop(id: ThemeId) {
   const art = fromArt('bg-' + id, W, H);
   if (art) return art;
@@ -165,9 +179,17 @@ function backdrop(id: ThemeId) {
     islands(x, hz, th.far, 9, 5, 150, 256);
     islands(x, hz, th.near, 4, 11, 168, 246);
     islands(x, hz, th.near, 7, 6, 18, 70);
+    if (id === 'day') {
+      pxLine(x, 149, hz, 147, hz - 11, '#516f7d');
+      for (let k = 0; k < 3; k++) {
+        x.fillStyle = '#d6cc9e'; x.fillRect(147, hz - 10 + k * 3, 3, 1);
+        x.fillStyle = '#7193a0'; x.fillRect(140 - k * 3, hz - 2 + k, 6, 1);
+      }
+    }
     if (id === 'ice') {
+      twinPeaks(x, 116, hz, 26);
       // 冰山
-      for (const [cx, w, h] of [[30, 16, 18], [120, 22, 26], [176, 12, 12], [236, 18, 20]] as const) {
+      for (const [cx, w, h] of [[30, 16, 18], [176, 12, 12], [236, 18, 20]] as const) {
         for (let yy = 0; yy < h; yy++) { const hw = Math.round((w * (yy + 1)) / h / 2); x.fillStyle = yy < h * 0.3 ? '#ffffff' : '#d8ecf8'; x.fillRect(cx - hw, hz - h + yy, hw * 2, 1); x.fillStyle = '#a8c8e4'; x.fillRect(cx, hz - h + yy, hw, 1); }
       }
     }
@@ -180,6 +202,10 @@ function backdrop(id: ThemeId) {
       x.fillStyle = 'rgba(255,120,40,0.25)'; for (let r = 4; r < 22; r += 3) pxCircle(x, vx, hz - 32, r, 'rgba(255,120,40,0.06)', hz - 28);
     }
     if (id === 'forest') {
+      // 葉脈形樹根
+      pxLine(x, 147, hz, 161, hz - 10, '#376c44');
+      pxLine(x, 151, hz - 5, 151, hz - 9, '#376c44');
+      pxLine(x, 154, hz - 5, 161, hz - 5, '#376c44');
       // 巨樹剪影
       for (const [cx, h, w] of [[40, 38, 16], [96, 30, 12], [160, 44, 20], [224, 34, 14]] as const) {
         x.fillStyle = '#1e4a2a'; x.fillRect(cx - 2, hz - h + 10, 4, h - 10);
@@ -187,11 +213,25 @@ function backdrop(id: ThemeId) {
       }
     }
     if (id === 'void') {
+      // 兩道浮岩圍成眼形
+      for (const dy of [-1, 1]) {
+        pxLine(x, 91, 23, 104, 23 + dy * 5, '#673581');
+        pxLine(x, 104, 23 + dy * 5, 117, 23, '#673581');
+      }
+      x.fillStyle = '#9859aa'; x.fillRect(103, 21, 2, 4);
       // 浮空碎石
       const r = seeded(91);
       for (let i = 0; i < 9; i++) { const cx = Math.floor(r() * W), cy = 8 + Math.floor(r() * (hz - 18)), w = 3 + Math.floor(r() * 7); x.fillStyle = '#2a1440'; x.fillRect(cx, cy, w, 3); x.fillRect(cx + 1, cy + 3, w - 2, 2); x.fillStyle = '#6a3a9a'; x.fillRect(cx, cy, w, 1); }
     }
     if (id === 'core') {
+      // 遠方的方核遺構
+      for (const dx of [-1, 1]) {
+        pxLine(x, 69, hz - 17, 69 + dx * 8, hz - 13, '#4399aa');
+        pxLine(x, 69 + dx * 8, hz - 13, 69, hz - 9, '#4399aa');
+        pxLine(x, 69 + dx * 8, hz - 13, 69 + dx * 8, hz - 5, '#327685');
+        pxLine(x, 69 + dx * 8, hz - 5, 69, hz - 1, '#327685');
+      }
+      pxLine(x, 69, hz - 9, 69, hz - 1, '#4399aa');
       // 海面網格
       x.fillStyle = 'rgba(95,241,255,0.18)';
       for (let k = 0; k < 8; k++) { const y = Math.round(hz + 2 + Math.pow(k / 8, 1.6) * (H - hz)); x.fillRect(0, y, W, 1); }
@@ -345,7 +385,7 @@ function seaBase(ctx: CanvasRenderingContext2D, t: number, id: ThemeId = 'day') 
 }
 
 // ── 戰鬥地形 ──
-export const BATTLE = { player: { x: 66, y: 100 }, enemy: { x: 190, y: 66 }, back: { x: 210, y: 74 }, ally: { x: 128, y: 90 } };
+export const BATTLE = { player: { x: 66, y: 100 }, enemy: { x: 190, y: 66 }, back: { x: 210, y: 74 }, ally: { x: 141, y: 96 } };
 
 const PLAT: Record<string, { rim: [string, string]; top: [string, string]; side: [string, string]; mid: [string, string]; deco: string[]; grass: string | null; rtop: [string, string]; rtop2: [string, string]; rbot: [string, string]; rmid: [string, string] }> = {
   day: { rim: ['#8fd8e8', '#bfeff6'], top: ['#fff4d0', '#f6e2a8'], side: ['#b8915a', '#c9a468'], mid: ['#e0c080', '#ecd394'], deco: ['#fffaf0', '#ff9a8a'], grass: '#5fae5a', rtop: ['#7ab86a', '#5fa25a'], rtop2: ['#a6d48a', '#8cc474'], rbot: ['#5a6878', '#6a7888'], rmid: ['#a8b0b8', '#8c96a2'] },
@@ -412,7 +452,7 @@ export interface Beam { x0: number; y0: number; x1: number; y1: number; life: nu
 export function monSlot(side: 0 | 1, form: string, pos?: 'back' | 'ally') {
   const f = FORMS[form], king = spriteSize(f?.sprite ?? '') > 64; // 霸主專屬版（世界大小 96）
   // 霸主專屬版（96 大小）當你的夥伴時再縮小一點，頭頂才不會被對手的資料框蓋住
-  const sc = (f?.scale ?? 1) * (king && side === 0 ? 0.88 : 1), b0 = side === 0 ? BATTLE.player : pos ? BATTLE[pos] : BATTLE.enemy;
+  const sc = (f?.scale ?? 1) * (pos ? 0.72 : king && side === 0 ? 0.88 : 1), b0 = side === 0 ? BATTLE.player : pos ? BATTLE[pos] : BATTLE.enemy;
   const size = spriteSize(f?.sprite ?? '') * sc;
   // 霸主專屬版（96 大小）比較高：站的位置往下移一點，頭頂才不會超出畫面
   const base = side === 1 && !pos && king ? { x: b0.x, y: b0.y + 6 } : b0;
@@ -560,7 +600,7 @@ export function burst(parts: Particle[], x: number, y: number, kind: 'hit' | 'sp
   if ((kind === 'hit' || kind === 'splash' || kind === 'beam') && elem) elemBurst(parts, x, y, elem);
 }
 /** 屬性專屬的命中特效 */
-function elemBurst(parts: Particle[], x: number, y: number, e: Elem) {
+export function elemBurst(parts: Particle[], x: number, y: number, e: Elem) {
   const n = Math.max(3, Math.round(14 * partMul())), r = Math.random;
   for (let i = 0; i < n; i++) {
     switch (e) {
@@ -642,12 +682,16 @@ function boat(ctx: CanvasRenderingContext2D, bob: number) {
 }
 const SH_W = { 1: 12, 2: 20, 3: 32 } as const;
 function fishShadow(ctx: CanvasRenderingContext2D, x: number, y: number, size: 1 | 2 | 3, t: number, alpha = 0.45) {
-  const w = SH_W[size], h = Math.round(w * 0.35), dir = Math.sin(t * 0.7 + x) > 0 ? 1 : -1;
-  ctx.fillStyle = `rgba(6,30,70,${alpha})`;
-  ctx.fillRect(Math.round(x - w / 2), Math.round(y - h / 2) + 1, w, Math.max(2, h - 2));
-  ctx.fillRect(Math.round(x - w / 2 + 2), Math.round(y - h / 2), w - 4, h);
-  const tx = Math.round(x - (w / 2 + 4) * dir);
-  ctx.fillRect(Math.min(tx, tx + 4 * dir), Math.round(y - h / 2), 4, h);
+  const w = SH_W[size], h = Math.max(2, Math.round(w * 0.2));
+  const dir = Math.cos(t * 0.7) >= 0 ? 1 : -1;
+  ctx.save(); ctx.globalAlpha *= alpha;
+  ctx.translate(Math.round(x), Math.round(y)); ctx.scale(dir, 1);
+  pxEllipse(ctx, 0, 0, w / 2, h, () => '#061e46');
+  ctx.fillStyle = '#061e46';
+  const tail = -Math.floor(w / 2);
+  for (let i = 0; i < 4; i++) ctx.fillRect(tail - i, -i, 1, i * 2 + 1);
+  ctx.fillRect(0, -h - 1, 3, 2);
+  ctx.restore();
 }
 function spotDecor(ctx: CanvasRenderingContext2D, spot: string, t: number) {
   if (spot === 'none') return;
@@ -668,14 +712,12 @@ export function drawFishing(ctx: CanvasRenderingContext2D, t: number, _dt: numbe
   drawSea(ctx, t, v.theme ?? 'day');
   spotDecor(ctx, v.spot, t);
   const bob = Math.round(Math.sin(t * 1.5));
-  // 魚群的漣漪：拋竿的目標（看不出底下是大魚還小魚）
+  // 魚群的漣漪：標出選取的拋竿目標
   if (v.ripple && (v.phase === 'choose' || v.phase === 'cast')) {
-    const rx = Math.round(v.ripple), ry = 88;
-    // 水面下有東西：一團固定大小的暗影（看不出大小）
-    ctx.globalAlpha = 0.28; pxEllipse(ctx, rx, ry + 1, 12, 4, () => '#06204a'); ctx.globalAlpha = 1;
+    const rx = Math.round(v.ripple), ry = 83;
     for (let k = 0; k < 3; k++) {
       const r = ((t * 7 + k * 6) % 18) + 3, a = 1 - r / 21;
-      ctx.globalAlpha = Math.min(1, a * 1.3);
+      ctx.globalAlpha = Math.min(0.55, a);
       for (let i = 0; i < 48; i++) { const an = (i / 48) * Math.PI * 2; if (i % 4 === 0) continue; ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(rx + Math.cos(an) * r), Math.round(ry + Math.sin(an) * r * 0.32), 2, 1); }
     }
     ctx.globalAlpha = 1;
@@ -683,7 +725,7 @@ export function drawFishing(ctx: CanvasRenderingContext2D, t: number, _dt: numbe
   }
   // 魚影
   v.shadows.forEach((sh, i) => {
-    const y = 86 + i * 7 + Math.sin(t * 1.6 + i) * 2;
+    const y = 82 + Math.sin(t * 1.6 + i) * 2;
     if (v.phase === 'choose' || v.phase === 'cast') {
       fishShadow(ctx, sh.x + Math.sin(t * 0.7 + i * 2) * 6, y, sh.size, t);
       if (i === v.sel) {
@@ -707,8 +749,16 @@ export function drawFishing(ctx: CanvasRenderingContext2D, t: number, _dt: numbe
     if (v.phase === 'flying') { const k = Math.min(1, v.castT / 0.6); bx = tipX + (v.bobX - tipX) * k; by = tipY + (wy - tipY) * k - Math.sin(k * Math.PI) * 30; }
     const dip = v.phase === 'bite' ? (Math.floor(t * 12) % 2 ? 3 : 1) : v.phase === 'nibble' ? (Math.floor(t * 8) % 2) : 0;
     by += dip + (v.phase === 'wait' ? Math.round(Math.sin(t * 2.2) * 0.6) : 0);
-    ctx.globalAlpha = 0.8; pxLine(ctx, tipX, tipY, bx + 1, by, '#ffffff'); ctx.globalAlpha = 1;
-    ctx.fillStyle = '#ff3a4a'; ctx.fillRect(bx, by, 3, 2); ctx.fillStyle = '#ffffff'; ctx.fillRect(bx, by + 2, 3, 1);
+    ctx.globalAlpha = 0.85;
+    const midX = Math.round((tipX + bx) / 2);
+    const midY = Math.round((tipY + by) / 2) + (v.phase === 'wait' || v.phase === 'nibble' ? 4 : 0);
+    pxLine(ctx, tipX, tipY, midX, midY, '#ffffff');
+    pxLine(ctx, midX, midY, bx + 1, by, '#ffffff');
+    ctx.globalAlpha = 1;
+    if (v.phase !== 'bite') {
+      ctx.fillStyle = '#ff3a4a'; ctx.fillRect(bx, by, 3, 2);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(bx, by + 2, 3, 1);
+    }
     if (v.phase !== 'flying') { ctx.fillStyle = 'rgba(255,255,255,0.7)'; const r = 4 + ((t * 6) % 6); ctx.fillRect(Math.round(bx + 1 - r), wy + 3, 2, 1); ctx.fillRect(Math.round(bx + r), wy + 3, 2, 1); }
     if (v.phase === 'nibble') {
       ctx.fillStyle = '#ffffff'; for (let i = 0; i < 3; i++) ctx.fillRect(bx - 3 + i * 3, by - 8, 2, 2);
@@ -837,6 +887,10 @@ function chartBase(route: ChartNode[][], seed: number, theme = 'day') {
       const i = (y * W + xx) * 4; img.data[i] = c[0]; img.data[i + 1] = c[1]; img.data[i + 2] = c[2]; img.data[i + 3] = 255;
     }
     x.putImageData(img, 0, 0);
+    if (theme === 'ice') {
+      const [firstX, firstY] = chartPos(0, 0, route[0].length);
+      twinPeaks(x, firstX + 8, firstY + 4, 10);
+    }
     const cx = 240, cy = 126;
     x.fillStyle = 'rgba(232,251,255,0.6)';
     for (let a2 = 0; a2 < 40; a2++) { const an = (a2 / 40) * Math.PI * 2; x.fillRect(Math.round(cx + Math.cos(an) * 8), Math.round(cy + Math.sin(an) * 8), 1, 1); }
@@ -942,9 +996,12 @@ export function drawChart(ctx: CanvasRenderingContext2D, t: number, route: Chart
     ctx.globalAlpha = 1;
     if (rise < 1) { const rr = 4 + rise * 10; ctx.fillStyle = `rgba(232,251,255,${1 - rise})`; for (let k = 0; k < 16; k++) { const an = (k / 16) * Math.PI * 2; ctx.fillRect(Math.round(x + Math.cos(an) * rr), Math.round(y - 2 + Math.sin(an) * rr * 0.4), 1, 1); } }
     if (i === station && (picked === null || picked === j)) {
-      ctx.fillStyle = '#ffcf4a';
-      const r = 10 + Math.sin(t * 5) * 1.5;
-      for (let a2 = 0; a2 < 32; a2++) { if (a2 % 2) continue; const an = (a2 / 32) * Math.PI * 2; ctx.fillRect(Math.round(x + Math.cos(an) * r), Math.round(y - 8 + Math.sin(an) * r * 0.8), 1, 1); }
+      const cy = Math.round(y + (1 - rise) * 10) - 8;
+      for (const dx of [-1, 1]) for (const dy of [-1, 1]) {
+        const edge = x + dx * 9, top = cy + dy * 7;
+        pxLine(ctx, edge, top, edge - dx * 3, top, '#fff7bc');
+        pxLine(ctx, edge, top, edge, top - dy * 3, '#fff7bc');
+      }
     }
   }));
   // 走過的每一站插上小旗子（剛打完的那一站，旗子在揭開霧的時候升起來）
