@@ -138,7 +138,7 @@ export function GodHandScreen({ vp, run, onFight, onDone }: { vp: Viewport; run:
   /** 把霸主交給玩家：隊伍有空位就加入，滿了就送回棲息灣 */
   const giveBoss = (): string => {
     const mon = makeMon(gh.boss, gh.lv);
-    markCaught(gh.boss); run.caught++;
+    markCaught(gh.boss, run.zone); run.caught++;
     if (run.party.length < PARTY_MAX) { run.party.push(mon); return `${bossName}（Lv${mon.lv}）加入了隊伍！`; }
     const meta = loadMeta(); meta.bay.push(newBayMon(gh.boss)); saveMeta(meta);
     return `隊伍已經滿了，${bossName} 先被送回棲息灣。`;
@@ -223,7 +223,7 @@ export function settleGodHand(run: RunState, won: boolean): string {
   const gh = run.godHand!;
   if (won) {
     const name = FORMS[gh.boss].name;
-    const mon = makeMon(gh.boss, gh.lv); markCaught(gh.boss); run.caught++;
+    const mon = makeMon(gh.boss, gh.lv); markCaught(gh.boss, run.zone); run.caught++;
     let got: string;
     if (run.party.length < PARTY_MAX) { run.party.push(mon); got = `${name}（Lv${mon.lv}）加入了隊伍！`; }
     else { const meta = loadMeta(); meta.bay.push(newBayMon(gh.boss)); saveMeta(meta); got = `隊伍已經滿了，${name} 先被送回棲息灣。`; }

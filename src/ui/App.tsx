@@ -166,7 +166,7 @@ export function App() {
     const gh = r.godHand!, hand = makeMon('godhand', gh.lv);
     hand.skills = ['gh_toss', 'gh_love', 'gh_fire', 'gh_stay', 'gh_pull'];
     hand.hpFixed = 1000 * Math.max(...r.party.map(maxHp)); hand.hp = hand.hpFixed;
-    markSeen('godhand');
+    markSeen('godhand', r.zone);
     go({ k: 'battle', enc: { mon: hand, rarity: 'SSR', godhand: true } });
   };
   /** 戰鬥結算完、離開這一站（打倒霸主時前往下一片海域或通關） */
@@ -198,7 +198,7 @@ export function App() {
       body = <StarterPick vp={vp} onBack={() => go({ k: 'title' })} onPick={(form) => { const m = loadMeta(); const b = newBayMon(form); m.bay.push(b); m.selected = b.id; saveMeta(m); startRun(monFromBay(b)); }} />;
       break;
     case 'voyage':
-      body = <Voyage vp={vp} run={run!} onGo={() => { const k = nodeOf(run!).kind; if (k === 'event') go({ k: 'event', ev: (devEv && EVENTS.find((e) => e.id === devEv)) || pickEvent(run!) }); else if (k === 'crew') { const enc = rollCrew(run!); enc.team!.forEach((m) => markSeen(m.form)); saveRun(run); go({ k: 'battle', enc }); } else go({ k: 'fishing' }); }} onNext={() => advance()} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
+      body = <Voyage vp={vp} run={run!} onGo={() => { const k = nodeOf(run!).kind; if (k === 'event') go({ k: 'event', ev: (devEv && EVENTS.find((e) => e.id === devEv)) || pickEvent(run!) }); else if (k === 'crew') { const enc = rollCrew(run!); enc.team!.forEach((m) => markSeen(m.form, run!.zone)); saveRun(run); go({ k: 'battle', enc }); } else go({ k: 'fishing' }); }} onNext={() => advance()} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
       break;
     case 'fishing':
       body = <Fishing vp={vp} run={run!} boss={boss} onDone={advance} onHook={(q, sh, landing) => {
@@ -207,7 +207,7 @@ export function App() {
         const cut = LANDING_BONUS[landing].hpCut * (boss ? 0.5 : 1);
         if (cut > 0) enc.mon.hp = Math.max(1, Math.round(enc.mon.hp * (1 - cut)));
         enc.landing = landing;
-        markSeen(enc.mon.form);
+        markSeen(enc.mon.form, run!.zone);
         // 對手的圖可能還在背景下載：最多等 1.5 秒再進戰鬥，免得一開場看不到牠
         Promise.race([ensureSprite(FORMS[enc.mon.form].sprite, enc.mon.mutant), new Promise((r) => setTimeout(r, 1500))]).then(() => go({ k: 'battle', enc }));
       }} />;
@@ -246,7 +246,7 @@ export function App() {
         if (f) {
           run!.eventFight = undefined; saveRun(run);
           const mon = makeMon(f.form, f.lv, false, true, () => next(run!.rng));
-          markSeen(mon.form);
+          markSeen(mon.form, run!.zone);
           go({ k: 'battle', enc: { mon, rarity: FORMS[f.form].rarity } });
           return;
         }

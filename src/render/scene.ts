@@ -665,11 +665,22 @@ export const fisherCanvas = (blink: boolean) => cached(`fisher-${blink}`, 16, FI
 });
 /** 釣竿握把的位置（相對於船） */
 export const HAND = { dx: 14, dy: -14 };
-function boat(ctx: CanvasRenderingContext2D, bob: number) {
+function boat(ctx: CanvasRenderingContext2D, bob: number, lean = 0, lift = 0) {
   const x = BOAT.x, y = BOAT.y + bob;
   // 釣客（先畫，船身會蓋住腳）
   const blink = (performance.now() / 1000) % 4 < 0.14;
-  ctx.drawImage(fisherCanvas(blink), x + 1, y - 28);
+  const pose = cached(`fisher-pose-${Number(blink)}-${lean}`, 28, FISHER.length, c => {
+    const fisher = fisherCanvas(blink);
+    // 以髖部為支點移動肩膀，腳仍貼著船板。
+    for (let row = 0; row < fisher.height; row++) {
+      const shift = Math.round(lean * Math.max(0, 1 - row / 21));
+      c.drawImage(fisher, 0, row, 16, 1, 6 + shift, row, 16, 1);
+    }
+  });
+  ctx.drawImage(pose, x - 5, y - 28);
+  const hx = x + HAND.dx + Math.round(lean / 3), hy = y + HAND.dy - lift;
+  pxLine(ctx, hx - 4, y - 14, hx, hy, '#c28232');
+  ctx.fillStyle = '#ffd9b8'; ctx.fillRect(hx - 1, hy, 3, 2);
   // 船身：深色外框、木板、亮邊
   ctx.fillStyle = '#2a160c'; ctx.fillRect(x - 33, y - 5, 70, 1); ctx.fillRect(x - 33, y - 4, 1, 4); ctx.fillRect(x + 36, y - 4, 1, 4);
   ctx.fillRect(x - 31, y + 3, 1, 3); ctx.fillRect(x + 34, y + 3, 1, 3); ctx.fillRect(x - 28, y + 6, 1, 2); ctx.fillRect(x + 31, y + 6, 1, 2); ctx.fillRect(x - 24, y + 8, 52, 1);
@@ -678,6 +689,11 @@ function boat(ctx: CanvasRenderingContext2D, bob: number) {
   ctx.fillStyle = '#6a3c20'; ctx.fillRect(x - 30, y, 64, 3); ctx.fillRect(x - 27, y + 3, 58, 3); ctx.fillRect(x - 23, y + 6, 50, 2);
   ctx.fillStyle = '#4a2814'; ctx.fillRect(x - 27, y + 5, 58, 1); ctx.fillRect(x - 23, y + 7, 50, 1);
   ctx.fillStyle = '#e8e0c8'; ctx.fillRect(x - 26, y + 1, 54, 1);
+  // 船頭的黃銅捲線器與纜繩。
+  ctx.fillStyle = '#392d39'; ctx.fillRect(x + 22, y - 9, 8, 5); ctx.fillRect(x + 23, y - 11, 6, 6);
+  ctx.fillStyle = '#d69a51'; ctx.fillRect(x + 24, y - 10, 4, 4);
+  ctx.fillStyle = '#ffe7aa'; ctx.fillRect(x + 25, y - 9, 2, 2);
+  pxLine(ctx, x + 29, y - 7, x + 34, y - 5, '#d7c49c');
   ctx.fillStyle = '#d23a5a'; ctx.fillRect(x - 24, y + 2, 4, 1); ctx.fillRect(x + 24, y + 2, 4, 1);
 }
 const SH_W = { 1: 12, 2: 20, 3: 32 } as const;
@@ -738,9 +754,12 @@ export function drawFishing(ctx: CanvasRenderingContext2D, t: number, _dt: numbe
       fishShadow(ctx, sh.x + (sh.x > v.bobX ? 1 : -1) * Math.min(60, t * 0), y, sh.size, t, 0.18);
     }
   });
-  boat(ctx, bob);
-  const hx = BOAT.x + HAND.dx, hy = BOAT.y + HAND.dy + bob;
-  let tipX = hx + 42, tipY = hy - 34;
+  const pulling = v.phase === 'bite' || v.phase === 'hooked';
+  const lean = pulling ? -5 : v.phase === 'cast' ? -Math.round(v.power * 5) : v.phase === 'flying' ? 3 : 0;
+  const lift = pulling ? 3 : Math.max(0, -lean);
+  boat(ctx, bob, lean, lift);
+  const hx = BOAT.x + HAND.dx + Math.round(lean / 3), hy = BOAT.y + HAND.dy + bob - lift;
+  let tipX = hx + (pulling ? 32 : 42), tipY = hy - (pulling ? 39 : 34);
   if (v.phase === 'cast') { const k = v.power; tipX = hx + 40 - k * 50; tipY = hy - 34 - k * 4; }
   pxLine(ctx, hx, hy, tipX, tipY, '#3a2a1a'); pxLine(ctx, hx + 1, hy, tipX + 1, tipY, '#e8d8a8');
   if (v.phase !== 'cast' && v.phase !== 'choose') {
@@ -825,6 +844,11 @@ export function drawStarterScene(ctx: CanvasRenderingContext2D, t: number, forms
 // ── 港口：棧橋、燈塔、棲息灣裡游動的夥伴 ──
 export function drawPort(ctx: CanvasRenderingContext2D, t: number, bay: { id: string; mutant?: boolean }[]) {
   drawSea(ctx, t, 'day');
+  // 遠方的補給船在燈塔後方通過。
+  const ferry = Math.floor((t * 3) % (W + 54)) - 26;
+  ctx.fillStyle = '#50677b'; ctx.fillRect(ferry, 53, 22, 2); ctx.fillRect(ferry + 3, 55, 17, 2);
+  ctx.fillStyle = '#eacda2'; ctx.fillRect(ferry + 4, 49, 7, 4);
+  ctx.fillStyle = '#ae6253'; ctx.fillRect(ferry + 6, 46, 2, 3);
   // 燈塔
   const lx = 30;
   ctx.fillStyle = '#5a6a7a'; ctx.fillRect(lx - 9, 52, 18, 8);
@@ -838,12 +862,58 @@ export function drawPort(ctx: CanvasRenderingContext2D, t: number, bay: { id: st
   // 倉庫
   ctx.fillStyle = '#8a5a3a'; ctx.fillRect(4, 96, 40, 20); ctx.fillStyle = '#c84a3a'; for (let i = 0; i < 9; i++) ctx.fillRect(0 + i * 2, 96 - i, 48 - i * 4, 1);
   ctx.fillStyle = '#3a2418'; ctx.fillRect(19, 104, 9, 12); ctx.fillStyle = '#ffe48a'; ctx.fillRect(8, 102, 6, 5); ctx.fillRect(33, 102, 6, 5);
-  // 棲息灣的夥伴
+  // 吊臂、吊鉤與等待裝船的木箱。
+  ctx.fillStyle = '#493b40'; ctx.fillRect(61, 83, 3, 33);
+  pxLine(ctx, 62, 84, 88, 68, '#594646'); pxLine(ctx, 62, 89, 88, 70, '#ae7959');
+  pxLine(ctx, 62, 83, 88, 70, '#e2ab6a');
+  const hook = 87 + Math.round(Math.sin(t * .6) * 2);
+  pxLine(ctx, 87, 70, 87, hook, '#394b53'); ctx.fillRect(87, hook, 3, 1);
+  for (const [cx, cy] of [[49, 109], [58, 109], [53, 102]]) {
+    ctx.fillStyle = '#653f30'; ctx.fillRect(cx, cy, 9, 7);
+    ctx.fillStyle = '#c48c53'; ctx.fillRect(cx + 1, cy + 1, 7, 5);
+    pxLine(ctx, cx + 1, cy + 5, cx + 7, cy + 1, '#966339');
+  }
+  drawHarborPartners(ctx, t, bay, false);
+}
+
+export function drawBay(ctx: CanvasRenderingContext2D, t: number, bay: { id: string; mutant?: boolean }[]) {
+  drawSea(ctx, t, 'day');
+  const shore = cached('bay-tidal-pool', W, H, x => {
+    for (let y = 59; y < H; y++) {
+      const edge = Math.round(112 - (y - 59) * .85 + 8 * Math.sin(y / 12));
+      x.fillStyle = '#75b9ac'; x.fillRect(edge, y, W - edge, 1);
+      x.fillStyle = '#368f90'; x.fillRect(edge - 9, y, 9, 1);
+      if (y > 108) {
+        const sand = edge + Math.round((H - y) * 2.4);
+        x.fillStyle = '#d8c997'; x.fillRect(sand, y, W - sand, 1);
+      }
+    }
+    const rng = seeded(319);
+    for (let i = 0; i < 80; i++) {
+      const cx = Math.floor(rng() * W), cy = 79 + Math.floor(rng() * 65);
+      if (cx < 120 - (cy - 59) * .85) continue;
+      x.fillStyle = cy > 123 ? '#c6c496' : '#98cabe';
+      x.fillRect(cx, cy, 2 + Math.floor(rng() * 4), 1);
+    }
+    for (const [cx,cy,rx] of [[28,94,16],[66,112,12],[103,86,8],[209,69,13]]) {
+      pxEllipse(x,cx,cy,rx,4,()=> '#617f79');
+      pxEllipse(x,cx-1,cy-2,rx-2,3,()=> '#b4c0a4');
+    }
+  });
+  drawWideBg(ctx, shore);
+  for (const [cx,cy] of [[28,98],[65,116],[104,90]]) {
+    const shift = Math.round(Math.sin(t + cx) * 3);
+    ctx.fillStyle = '#cae4cf'; ctx.fillRect(cx + shift, cy, 7, 1);
+  }
+  drawHarborPartners(ctx, t, bay, true);
+}
+
+function drawHarborPartners(ctx: CanvasRenderingContext2D, t: number, bay: { id: string; mutant?: boolean }[], resting: boolean) {
   // 小尺寸、分兩排在海面上漂（異變個體用異變的顏色）
   bay.slice(0, 10).forEach(({ id, mutant }, i) => {
     const f = FORMS[id]; if (!f) return;
     const n = miniSize(f.sprite); // 霸主專屬版跟一般大型夥伴一樣大，不會擠成一團
-    const x = 64 + (i % 5) * 38 + (i >= 5 ? 19 : 0) + Math.sin(t * 0.5 + i * 1.7) * 6, y = 70 + (i >= 5 ? 22 : 0) + Math.sin(t * 1.3 + i) * 1.5;
+    const x = (resting ? 28 : 106) + (i % 5) * (resting ? 38 : 28) + (i >= 5 ? 19 : 0) + Math.sin(t * 0.5 + i * 1.7) * 6, y = (resting ? 82 : 70) + (i >= 5 ? 22 : 0) + Math.sin(t * (resting ? .8 : 1.3) + i) * (resting ? 3 : 1.5);
     const flip = Math.cos(t * 0.5 + i * 1.7) < 0;
     shadowMini(ctx, x, y + n / 2 - 1, n);
     drawSpriteMini(ctx, f.sprite, PAL[f.pal], Math.round(x - n / 2), Math.round(y - n / 2), { f: animFrame(f.sprite, t, i), flip, recolor: recolorOf(id, mutant) });

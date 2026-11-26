@@ -5,7 +5,7 @@ import { FORMS } from '../data/creatures';
 import { SKILLS } from '../data/skills';
 import { RARITY_ORDER } from '../data/types';
 import { bayCap, bayStartLevel, dismantle, dismantleValue, loadMeta, saveMeta, selectedBay, type BayMon } from '../game/meta';
-import { drawPort } from '../render/scene';
+import { drawBay } from '../render/scene';
 import { Elems, IvStars, RarityTag, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
@@ -35,7 +35,7 @@ export function Bay({ vp, onBack, onGacha, hint }: { vp: Viewport; onBack: () =>
   );
 
   return (
-    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawPort(c, t, list.map((x) => ({ id: x.root, mutant: x.mutant })))} label="棲息灣" />}
+    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawBay(c, t, list.map((x) => ({ id: x.root, mutant: x.mutant })))} label="棲息灣" />}
       panel={
         <Win class="big-panel bay" title={`棲息灣　${meta.bay.length}/${bayCap(meta)}　珍珠 ◆ ${meta.pearls}`} onClose={onBack} closeLabel="返回標題">
           {note && <p class="accent small">{note}</p>}

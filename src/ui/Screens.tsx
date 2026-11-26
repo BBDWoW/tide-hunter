@@ -189,7 +189,7 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
   const [, force] = useState(0);
   const refresh = () => { setMeta(loadMeta()); force((n) => n + 1); };
   return (
-    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawPort(c, t, meta.bay.map((b) => ({ id: b.form, mutant: b.mutant })))} label="港口與棲息灣" />}
+    <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => drawPort(c, t, meta.bay.map((b) => ({ id: b.form, mutant: b.mutant })))} label="補給港口" />}
       onPanelClose={onBack} outsideClose={false}
       panel={
         <Win class="big-panel port" title={`港口　珍珠 ◆ ${meta.pearls}`} onClose={onBack} closeLabel="返回標題">
@@ -587,6 +587,8 @@ export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
   const all = Object.values(FORMS).filter((f) => !f.secret).sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity));
   const [sel, setSel] = useState<string | null>(() => all.find((x) => dex.seen.includes(x.id))?.id ?? null);
   const f = sel ? FORMS[sel] : null;
+  const discovery = sel ? dex.discoveries?.[sel] : undefined;
+  const place = discovery?.place;
   // 進化路線：從最初型態往後展開（分支用「／」）
   const line = (() => {
     if (!f) return [];
@@ -606,7 +608,7 @@ export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
       panel={
         <Win class="big-panel dex-panel">
           <div class="dex-head">
-            <b>圖鑑</b><span class="small dim">見過 {dex.seen.length}・收服 {dex.caught.length}・共 {all.length}</span>
+            <b>潮靈觀察手冊</b><span class="small dim">見過 {dex.seen.length}・收服 {dex.caught.length}・共 {all.length}</span>
             <button class="chip-btn dex-close" onClick={onBack}>✕ 返回</button>
           </div>
           <div class="dex-split">
@@ -629,7 +631,12 @@ export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
             </div>
             <div class="dex-side">
               {sel === 'tide_moxu' ? <LegendPage won={legendWon} legend={legend} /> : f ? <>
-                <Sprite form={f.id} size={144} />
+                <div class="journal-plate">
+                  {place && <span class="journal-stamp"><Icon name="flag" /> {place === 'port' ? '港口' : ZONES[place]?.name}</span>}
+                  <Sprite form={f.id} size={144} />
+                  {f.height && <div class="journal-ruler" aria-label={`身高 ${f.height} 公尺`}><span>0</span><i /><span>{f.height} m</span></div>}
+                </div>
+                {discovery && <small class="journal-date">首次發現　<time dateTime={discovery.date}>{discovery.date}</time></small>}
                 <div class="row-gap">{f.no && <span class="num dim">No.{String(f.no).padStart(4, '0')}</span>}<b class="big-name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={f.id} /></div>
                 <div class="row-gap"><Elems list={f.elems} /><span class="dim small">{f.category}</span>{dex.caught.includes(f.id) ? <span class="small accent">已收服</span> : <span class="small dim">只見過</span>}</div>
                 {f.height && <span class="dim small">身高 {f.height} m・體重 {f.weight?.toFixed(1)} kg</span>}

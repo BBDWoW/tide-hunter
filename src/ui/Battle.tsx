@@ -867,7 +867,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
         {side === 0 && <span class="hpnum">{d.hp}/{d.max}</span>}
       </div>
       {note && <div class="hud-note">{note}</div>}
-      {intent && <div class={`hud-intent ${warn ? 'warn' : ''}`} title={warn ? '對你的夥伴效果絕佳！' : undefined}><span class="dim">下一步</span> <Icon name={intent.icon} /> {intent.name}{warn && '・剋你'}</div>}
+      {intent && <div class={`hud-intent ${warn ? 'warn' : ''}`} title={warn ? '對你的夥伴效果絕佳！' : undefined}><span class="intent-label">下一步</span><strong><Icon name={intent.icon} /> {intent.name}</strong>{warn && <b class="intent-threat">剋你</b>}</div>}
     </div>
   );
 }

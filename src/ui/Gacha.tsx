@@ -34,7 +34,7 @@ export function Gacha({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
     const best = res.reduce((a, b) => (rank(b.tier) > rank(a.tier) ? b : a));
     sfx(best.form ? 'reveal' : 'escape');
     set({ phase: best.form ? 'reveal' : 'miss', rod: best.tier, pool: best.path.length ? best.tier : null, form: best.form, mutant: best.mutant });
-    res.forEach((r) => r.form && markCaught(r.form));
+    res.forEach((r) => r.form && markCaught(r.form, 'port'));
     setResults(res); setBusy(false); setMeta(loadMeta());
     setMsg(res.length === 1 ? (best.form ? `${best.mutant ? '✦ 異變的 ' : ''}${FORMS[best.form].name}上鉤了！已經住進棲息灣。` : `線斷了……退還 ${BROKEN_REFUND} 顆珍珠。`) : '十連抽結束！所有夥伴都住進棲息灣了。');
   };

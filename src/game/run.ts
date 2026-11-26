@@ -586,7 +586,7 @@ export function loadRun(): RunState | null {
 }
 
 /** legend：圖鑑的「傳說」紀錄（統領者・潮汐默旭）：遇過了沒、打倒幾次、第一次打倒的日期 */
-export interface Dex { seen: string[]; caught: string[]; bestStation: number; clears: number; bosses?: string[]; evolved?: string[]; mutants?: number; legend?: { met: boolean; wins: number; first?: string } }
+export interface Dex { discoveries?: Record<string, { date: string; place?: ZoneId | 'port' }>; seen: string[]; caught: string[]; bestStation: number; clears: number; bosses?: string[]; evolved?: string[]; mutants?: number; legend?: { met: boolean; wins: number; first?: string } }
 export function loadDex(): Dex {
   try {
     const d = JSON.parse(localStorage.getItem(DEX_KEY) || 'null');
@@ -603,9 +603,14 @@ export function updateDex(fn: (d: Dex) => void) {
   fn(d);
   try { localStorage.setItem(DEX_KEY, JSON.stringify(d)); } catch { /* 略過 */ }
 }
-export const markSeen = (form: string) => updateDex((d) => { if (!d.seen.includes(form)) d.seen.push(form); });
-export const markCaught = (form: string) => updateDex((d) => {
-  if (!d.seen.includes(form)) d.seen.push(form);
+function recordDiscovery(d: Dex, form: string, place?: ZoneId | 'port') {
+  if (d.seen.includes(form)) return;
+  d.seen.push(form);
+  (d.discoveries ??= {})[form] = { date: todayKey(), place };
+}
+export const markSeen = (form: string, place?: ZoneId | 'port') => updateDex(d => recordDiscovery(d, form, place));
+export const markCaught = (form: string, place?: ZoneId | 'port') => updateDex(d => {
+  recordDiscovery(d, form, place);
   if (!d.caught.includes(form)) d.caught.push(form);
 });
 

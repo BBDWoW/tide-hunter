@@ -6,7 +6,7 @@ import { SKILLS } from '../data/skills';
 import { RARITY, STAGE_NAME } from '../data/types';
 import { evolve, evolveTarget, formOf, gainXp, maxHp, skillSlots, xpReward, xpToNext, type Mon } from '../game/creature';
 import { EGG_DROP, EGG_INFO } from '../game/eggs';
-import { eggZoneOf, FINAL_ZONE, saveRun, applyBoon, giveHeld, boon, isBoss, markCaught, updateDex, nodeOf, PARTY_MAX, rollBoons, ZONES, type RunState, type ZoneId } from '../game/run';
+import { eggZoneOf, FINAL_ZONE, saveRun, applyBoon, giveHeld, boon, isBoss, loadDex, markCaught, updateDex, nodeOf, PARTY_MAX, rollBoons, ZONES, type RunState, type ZoneId } from '../game/run';
 import { BOON_STYLE, BOON_TIER, BOONS } from '../data/boons';
 import { HELD } from '../data/held';
 import { EVO_W, playEvolution } from '../render/evo';
@@ -30,6 +30,7 @@ type Step = 'caught' | 'results' | 'tasks' | 'boon' | 'end';
 export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: RunState; result: BattleResult; onDone: () => void }) {
   const [lines, setLines] = useState<Line[]>([]);
   const [tasks, setTasks] = useState<Task[] | null>(null);
+  const [firstCatch] = useState(() => result.outcome === 'caught' && !loadDex().caught.includes(result.enemy.form));
   const caughtMon = useRef<Mon | null>(null);
   // 戰鬥勝利或收服後：三選一能力卡（霸主戰後直接結算，不抽卡）
   const [boonOpts] = useState<string[] | null>(() => (result.outcome !== 'fled' && !isBoss(run) ? rollBoons(run, nodeOf(run).kind === 'elite' || !!result.team) : null));
@@ -46,7 +47,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
       enemy.wild = false; enemy.status = null;
       enemy.hp = Math.max(1, Math.round(maxHp(enemy) * ratio));
       caughtMon.current = enemy;
-      markCaught(enemy.form);
+      markCaught(enemy.form, run.zone);
       if (enemy.mutant) updateDex((d) => { d.mutants = (d.mutants ?? 0) + 1; });
       run.caught++;
       if (boon(run, 'x_thrift') && next(run.rng) < 0.5) { run.catchBait++; out.push({ uid: '_bait', text: '回收網：捕捉餌拿回來了！' }); }
@@ -136,8 +137,8 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
 
   let body;
   if (stepNow === 'caught' && caughtMon.current) body = (
-    <Win class="big-panel after" title="收服成功！">
-      <CaughtCard mon={caughtMon.current} />
+    <Win class="big-panel after" title={firstCatch ? '首次收服！' : '收服成功！'}>
+      <CaughtCard mon={caughtMon.current} first={firstCatch} />
       <MenuItem onClick={() => go(nextFrom('caught'))} hot>下一步</MenuItem>
     </Win>
   );
@@ -167,7 +168,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
         onDone={(learn) => {
           const m = find(cur.uid)!;
           updateDex((d) => { d.evolved = [...new Set([...(d.evolved ?? []), cur.to])]; });
-          markCaught(cur.to);
+          markCaught(cur.to, run.zone);
           const branch = Object.values(FORMS).flatMap((f) => f.evolve ?? []).find((e) => e.to === cur.to && (e.style || e.zone));
           const why = branch?.zone ? `（受到${ZONES[branch.zone as ZoneId]?.name ?? ''}的環境影響）` : branch?.style ? `（依戰鬥風格走向${branch.style === 'guard' ? '守護型' : '攻擊型'}）` : '';
           note(m.uid, `進化成了 ${formOf(m).name}！${why}`);
@@ -205,11 +206,11 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
   );
 }
 
-function CaughtCard({ mon }: { mon: Mon }) {
+function CaughtCard({ mon, first }: { mon: Mon; first: boolean }) {
   const f = formOf(mon);
   return (
-    <div class="caught-card" style={{ '--rar': RARITY[f.rarity].color }}>
-      <Sprite form={mon.form} size={144} mutant={mon.mutant} />
+    <div class={`caught-card ${first ? 'first-catch' : ''}`} style={{ '--rar': RARITY[f.rarity].color, '--reveal': f.rarity === 'S' || f.rarity === 'SSR' ? '900ms' : '600ms' }}>
+      <div class="catch-portrait"><Sprite form={mon.form} size={144} mutant={mon.mutant} /></div>
       <div class="grow">
         <div class="row-gap"><b class="big-name">{f.name}</b><RarityTag r={f.rarity} /><StageTag form={mon.form} />{mon.mutant && <span class="mutant-tag">✦ 異變</span>}</div>
         <div class="row-gap"><Elems list={f.elems} /><span class="muted">{f.category} · Lv{mon.lv}</span></div>
