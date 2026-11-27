@@ -573,7 +573,13 @@ const SAVE_KEY = 'tidehunter.run.v4';
 const DEX_KEY = 'tidehunter.dex.v1';
 
 export function saveRun(run: RunState | null) {
-  try { if (run) localStorage.setItem(SAVE_KEY, JSON.stringify(run)); else localStorage.removeItem(SAVE_KEY); } catch { /* 無法存檔時略過 */ }
+  try {
+    if (run) localStorage.setItem(SAVE_KEY, JSON.stringify(run));
+    else localStorage.removeItem(SAVE_KEY);
+    return true;
+  } catch {
+    return false;
+  }
 }
 export function loadRun(): RunState | null {
   try {

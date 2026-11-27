@@ -663,6 +663,13 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 .console.landscape .frame:has(.reel) .overlay { z-index: 4; }
 .console.landscape .reel { background: rgba(3, 8, 26, 0.5); box-shadow: 0 0 0 100vmax rgba(3, 8, 26, 0.5); }
 
+/* 存檔確認 */
+.save-dialog { --u: 2.4px; width: min(340px, calc(100% - 32px)); max-height: calc(100% - 32px); border: 0; padding: 0; background: transparent; color: var(--ink); }
+.save-dialog::backdrop { background: rgba(3, 8, 26, .72); }
+.save-dialog h2 { margin: 0 0 .65em; font-size: 18px; color: var(--amber); line-height: 1.35; }
+.save-dialog .mi { min-height: 44px; }
+.save-dialog .mi:focus-visible { outline: 1px solid var(--amber); outline-offset: -1px; }
+
 /* 開新局前的確認 */
 .confirm-panel { width: min(100%, calc(var(--u) * 150)); }
 .warn-text { color: #ffb0a0; }

@@ -254,6 +254,13 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
   const rested = run.camp?.key === campKey ? run.camp.text : null;
   const setRested = (text: string) => { run.camp = { key: campKey, text }; };
   const [panel, setPanel] = useState<'party' | 'items' | 'shop' | null>(null);
+  const [confirmSave, setConfirmSave] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
+  const saveDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = saveDialog.current;
+    if (confirmSave && dialog && !dialog.open) dialog.showModal();
+  }, [confirmSave]);
   const [cut, setCut] = useState<DomainId | null>(null); // 進入特殊區域的過場動畫
   const [hover, setHover] = useState(0);
   const [, force] = useState(0);
@@ -326,7 +333,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
         <div class="voy-tools">
           <button class={`tool-btn ${panel === 'party' ? 'on' : ''}`} onClick={() => setPanel(panel === 'party' ? null : 'party')}><Icon name="party" /> 隊伍</button>
           <button class={`tool-btn ${panel === 'items' ? 'on' : ''}`} onClick={() => setPanel(panel === 'items' ? null : 'items')}><Icon name="bag" /> 背包</button>
-          <button class="tool-btn" onClick={onQuit}><Icon name="save" /> 存檔</button>
+          <button class="tool-btn" disabled={!!sail.current} onClick={() => { setSaveFailed(false); setConfirmSave(true); }}><Icon name="save" /> 存檔</button>
         </div>
         {run.picked === null && opts.map((o, j) => {
           const [x, y] = chartPos(run.station, j, opts.length);
@@ -368,6 +375,18 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
           </Win>
         </div>
       } />
+    {confirmSave && (
+      <dialog ref={saveDialog} class="save-dialog" aria-labelledby="save-dialog-title" onClose={() => setConfirmSave(false)}>
+        <Win>
+          <h2 id="save-dialog-title">存檔並返回主畫面？</h2>
+          {saveFailed && <p class="warn-text" role="alert">存檔失敗，請再試一次。</p>}
+          <div class="confirm-btns">
+            <MenuItem onClick={() => saveDialog.current?.close()}>取消</MenuItem>
+            <MenuItem hot onClick={() => { if (saveRun(run)) onQuit(); else setSaveFailed(true); }}>存檔並返回</MenuItem>
+          </div>
+        </Win>
+      </dialog>
+    )}
     {cut && <ZoneCutscene zone={cut} mode="enter" onDone={() => setCut(null)} />}
   </>
   );
