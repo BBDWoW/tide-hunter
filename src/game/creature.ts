@@ -98,7 +98,9 @@ export function makeMon(formId: string, lv: number, boss = false, wild = false, 
   const basic = pickBasic(formId, known);
   // 第 1 格是普攻，其他 3 格放最近學會的技能（沒學到的就空著）
   // 霸主例外：用設計好的 4 招招式組
-  const picked = boss ? known.slice(-STAGE_SLOTS[f.stage]) : [basic, ...known.filter((id) => id !== basic).slice(-(STAGE_SLOTS[f.stage] - 1))];
+  // 靈龜初始保留招牌大招，高等級加入的夥伴可以在隊伍面板換上已解鎖的招式。
+  const loadout = formId === 'oracle' ? f.learn.filter(([level]) => level === 1).map(([, id]) => id) : known;
+  const picked = boss ? known.slice(-STAGE_SLOTS[f.stage]) : [basic, ...loadout.filter((id) => id !== basic).slice(-(STAGE_SLOTS[f.stage] - 1))];
   const m: Mon = { uid: newUid(), form: formId, lv, xp: 0, hp: 0, skills: picked, status: null, boss, wild, iv: boss ? [0, 0, 0, 0] : rollIv(rnd) };
   m.hp = maxHp(m);
   return m;
@@ -159,7 +161,7 @@ export function evolve(m: Mon, to: string): string[] {
 export const skillSlots = (m: Mon) => STAGE_SLOTS[formOf(m).stage];
 
 // ── 普攻：不耗能量的攻擊技，固定在第 1 格、不能被忘記 ──
-export const isBasicAttack = (id: string) => !!SKILLS[id] && SKILLS[id].cost === 0 && SKILLS[id].power > 0;
+export const isBasicAttack = (id: string) => id !== 'oracle_tide' && !!SKILLS[id] && SKILLS[id].cost === 0 && SKILLS[id].power > 0;
 /** 這隻生物的普攻：優先選本系的不耗能攻擊，都沒有就是「撞擊」 */
 export function pickBasic(formId: string, known: string[]): string {
   const elems = FORMS[formId].elems;

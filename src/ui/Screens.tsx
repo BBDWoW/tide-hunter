@@ -4,6 +4,7 @@ import { DOMAINS, isDomain, type DomainId } from '../data/domains';
 import { Icon } from './Icon';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
+import { SKILLS } from '../data/skills';
 import { FORMS, STARTERS } from '../data/creatures';
 import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/types';
 import { ITEMS, statusLabel, type ItemId } from '../game/battle';
@@ -335,7 +336,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
       onPanelClose={panel && panel !== 'shop' ? () => setPanel(null) : undefined}
       panel={panel && (
         <Win class="big-panel" title={panel === 'party' ? `隊伍 ${run.party.length}/6` : panel === 'shop' ? `漂流商店　貝殼幣 ${run.shells}` : '背包'} onClose={panel === 'shop' ? onNext : () => setPanel(null)} closeLabel={panel === 'shop' ? '離開商店' : '關閉'}>
-          {panel === 'party' && <PartyList run={run} onChange={() => force((n) => n + 1)} />}
+          {panel === 'party' && <PartyList run={run} onChange={() => { saveRun(run); force((n) => n + 1); }} />}
           {panel === 'items' && <ItemList run={run} onChange={() => { saveRun(run); force((n) => n + 1); }} />}
           {panel === 'shop' && <ShopList run={run} onChange={() => { saveRun(run); force((n) => n + 1); }} />}
         </Win>
@@ -431,6 +432,29 @@ function HeldRow({ run, m, onChange }: { run: RunState; m: Mon; onChange: () => 
   );
 }
 
+function OracleSkills({ mon, onChange }: { mon: Mon; onChange: () => void }) {
+  const learned = formOf(mon).learn.filter(([level]) => level <= mon.lv);
+  return <details class="oracle-skills">
+    <summary>更換靈龜技能</summary>
+    {mon.skills.slice(1).map((equipped, index) => (
+      <label key={index} class="oracle-skill-slot">
+        <span>技能 {index + 2}</span>
+        <select value={equipped} onChange={(event) => {
+          const skill = event.currentTarget.value;
+          if (!learned.some(([, id]) => id === skill) || mon.skills.includes(skill)) return;
+          mon.skills[index + 1] = skill;
+          onChange();
+        }}>
+          <option value={equipped}>{SKILLS[equipped].name}</option>
+          {learned.filter(([, id]) => !mon.skills.includes(id)).map(([level, id]) => (
+            <option key={id} value={id}>{SKILLS[id].name}（Lv{level}）</option>
+          ))}
+        </select>
+      </label>
+    ))}
+  </details>;
+}
+
 function PartyList({ run, onChange }: { run: RunState; onChange: () => void }) {
   return (<>
     <ResoLine run={run} />
@@ -451,6 +475,7 @@ function PartyList({ run, onChange }: { run: RunState; onChange: () => void }) {
               <Bar value={m.xp} max={xpToNext(m.lv)} kind="xp" />
               <AbilityLines form={f.id} label={false} />
               <div class="skills-col">{m.skills.map((s) => <SkillLine id={s} key={s} />)}</div>
+              {m.form === 'oracle' && <OracleSkills mon={m} onChange={onChange} />}
               {i > 0 && <button class="chip-btn" onClick={() => { const [x] = run.party.splice(i, 1); run.party.unshift(x); onChange(); }}>設為先發</button>}
             </div>
           </div>

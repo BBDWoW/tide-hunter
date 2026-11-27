@@ -985,3 +985,8 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
   .battle-dock .target-row .small { line-height: 1.15; }
   .battle-dock .target-row .chip-btn { padding: 2px; line-height: 1.2; white-space: normal; }
 }
+
+.oracle-skills { margin-block: .45em; }
+.oracle-skills summary { cursor: pointer; color: var(--ink); }
+.oracle-skill-slot { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: .5em; margin-top: .35em; }
+.oracle-skill-slot select { width: 100%; min-width: 0; min-height: 30px; font: inherit; color: #fff1c6; background: #182747; border: 1px solid var(--bevel); }

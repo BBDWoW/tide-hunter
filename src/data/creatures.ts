@@ -314,7 +314,8 @@ const F: Form[] = [
     learn: [[15, 'abyssmaw'], [15, 'datastorm'], [16, 'crash'], [17, 'datagrid'], [18, 'opportunist']], desc: '被這隻眼睛注視的地方，現實就會開始崩解。' },
   // ── 超特殊：神之手（打倒霸主後極低機率出現） ──
   { id: 'oracle', name: '卜潮靈龜', family: 'oracle', stage: 3, rarity: 'SSR', category: '神獸', elems: ['rock', 'spirit'], sprite: 'oracle', pal: 'tide',
-    base: { hp: 88, atk: 46, def: 146, spd: 16 }, ability: 'omen', learn: [[1, 'tackle'], [1, 'harden'], [1, 'rockslide'], [1, 'oracle_tide']],
+    base: { hp: 88, atk: 46, def: 146, spd: 16 }, ability: 'omen', learn: [[1, 'tackle'], [1, 'harden'], [1, 'rockslide'], [1, 'oracle_tide'],
+      [6, 'focus'], [10, 'purify'], [14, 'counterscale'], [20, 'reefspikes'], [26, 'bigquake']],
     desc: '缺月冠下，藍色龜魂蜷在半透明的重甲中。每受一擊，古老的刻紋便喚醒牠一分。' },
   { id: 'godhand', name: '神之手', family: 'godhand', stage: 3, rarity: 'SSR', category: '神獸', elems: [], sprite: 'godhand', pal: 'water', secret: true, scale: 0.95,
     base: { hp: 100, atk: 1, def: 200, spd: 60 }, ability: 'none',
