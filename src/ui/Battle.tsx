@@ -11,10 +11,10 @@ import { FORMS } from '../data/creatures';
 import { FIELDS, SKILLS, type FieldId, type StatusId } from '../data/skills';
 import { effectiveness, ELEM, RARITY, type Elem } from '../data/types';
 import {
-  active, aiChoose, aiForcedSwitch, canAfford, canRod, createBattle, finalSlots, skillFor, planAlly, startFinal, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, REDUCED_HEALING_TURN, resolveTurn, restorePulled, statusLabel, volOf,
+  active, aiChoose, aiForcedSwitch, canAfford, canRod, createBattle, battleStats, battleMaxHp, clearConvergence, finalSlots, skillFor, planAlly, startFinal, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, REDUCED_HEALING_TURN, resolveTurn, restorePulled, statusLabel, volOf,
   type Action, type BattleState, type BEvent, type ItemId, type SideId,
 } from '../game/battle';
-import { blockRate, dodgeRate, formOf, maxHp, statsOf, type Mon } from '../game/creature';
+import { blockRate, dodgeRate, formOf, maxHp, type Mon } from '../game/creature';
 import { makeRng, next } from '../game/rng';
 import { catchChance, rollShakes } from '../game/capture';
 import { foeMods, battleMods, boon, LANDING_BONUS, zoneOf } from '../game/run';
@@ -33,7 +33,7 @@ export interface BattleResult { outcome: 'win' | 'lose' | 'caught' | 'fled'; ene
 interface Intent { key: string; act: Action; icon: string; name: string; elem: Elem | null; atk: boolean }
 
 type Mode = 'busy' | 'main' | 'skills' | 'switch' | 'force' | 'items' | 'itemTarget' | 'reel' | 'lifestone';
-interface Disp { form: string; lv: number; hp: number; max: number; energy: number; status: StatusId | null; shield: number; trap?: number; mutant?: boolean }
+interface Disp { form: string; lv: number; hp: number; max: number; energy: number; status: StatusId | null; shield: number; trap?: number; convergenceLoss?: number; mutant?: boolean }
 interface Popup { id: number; side: number; text: string; cls: string; label?: string; dx: number } // side：畫面上的角色（0 我方、1 對手、2 被召喚的霸主）
 
 const SPEED_KEY = 'tidehunter.speed';
@@ -120,7 +120,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const [rewind, setRewind] = useState(0);
   const snap = (side: SideId): Disp => {
     const m = active(bs, side);
-    return { form: m.form, lv: m.lv, hp: m.hp, max: maxHp(m), energy: volOf(bs, side).energy, status: m.status, shield: volOf(bs, side).shield, mutant: m.mutant };
+    return { form: m.form, lv: m.lv, hp: m.hp, max: battleMaxHp(bs, side), energy: volOf(bs, side).energy, status: m.status, shield: volOf(bs, side).shield, convergenceLoss: volOf(bs, side).convergenceLoss, mutant: m.mutant };
   };
   const disp = useRef<Disp[]>([snap(0), snap(1)]); // [我方, 對手, 被召喚的霸主]
   // 最終決戰 1 對 2：被召喚的霸主在對手隊伍的哪個位置、玩家要打哪一隻
@@ -415,6 +415,13 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         }
         await wait(260); break;
       }
+      case 'convergence': {
+        const slot = vi(e);
+        d[slot].convergenceLoss = e.loss;
+        d[slot].hp = e.hp; d[slot].max = e.max;
+        sfx('debuff'); rerender();
+        break;
+      }
       case 'omen': {
         const m = a.mons[vi(e)]; m.omenMarks = e.marks; m.omenElapsed = 0;
         break;
@@ -507,7 +514,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         a.fade[v] = 1; a.enter[v] = 0;
         a.mons[v] = { ...a.mons[v], omenMarks: bs.sides[e.side].vol[bs.sides[e.side].team[e.index].uid].omenMarks, omenElapsed: 1, form: e.form, scale: posOf(v, e.form).scale, y: posOf(v, e.form).y, aura: auraColor(e.form), mutant: bs.sides[e.side].team[e.index].mutant };
         const m = bs.sides[e.side].team[e.index];
-        d[v] = { form: e.form, lv: m.lv, hp: e.hp, max: maxHp(m), energy: e.energy, status: e.status, shield: 0, mutant: m.mutant };
+        d[v] = { form: e.form, lv: m.lv, hp: e.hp, max: e.max, energy: e.energy, status: e.status, shield: 0, convergenceLoss: e.convergenceLoss, mutant: m.mutant };
         sfx('enter');
         // 落地時濺起水花
         setTimeout(() => { const c = center(v); burst(a.parts, c.x, c.y + 14, 'splash', 'water'); }, 380);
@@ -632,6 +639,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       sfx('fanfare'); setBossDown(true); say(final ? '日月御潮的默旭被擊敗了！' : `霸主「${FORMS[enc.mon.form].name}」被擊敗了！`);
       const end = Date.now() + 3400;
       while (Date.now() < end && !introSkip.current) await new Promise((r) => setTimeout(r, 40));
+      clearConvergence(bs, 0);
       onEnd({ outcome, enemy: enc.mon, participants: [...participants.current] });
       return;
     }
@@ -642,6 +650,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       if ((run.lifeStones ?? 0) > 0) { await wait(500); say(`要使用生命石讓全隊復活嗎？（剩 ${run.lifeStones} 顆）`); setMode('lifestone'); return; }
     }
     await wait(1100);
+    clearConvergence(bs, 0);
     onEnd({ outcome, enemy: crew ? active(bs, 1) : enc.mon, participants: [...participants.current], team: enc.team });
   }
 
@@ -660,7 +669,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     say(boss ? '再戰一次吧！' : '要繼續戰鬥，還是剪線逃跑？');
     setMode('main');
   }
-  const giveUp = async () => { setMode('busy'); await wait(300); onEnd({ outcome: 'lose', enemy: enc.mon, participants: [...participants.current] }); };
+  const giveUp = async () => { setMode('busy'); await wait(300); clearConvergence(bs, 0); onEnd({ outcome: 'lose', enemy: enc.mon, participants: [...participants.current] }); };
 
   /** 觸控：第一下選取並顯示說明，第二下才執行；有滑鼠時直接執行 */
   const confirmTap = (i: number, act: () => void) => {
@@ -810,8 +819,9 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           <div class="pick-grid">
             {run.party.map((m, i) => {
               const isActive = i === bs.sides[0].active;
+              const max = battleMaxHp(bs, 0, m);
               const disabled = mode === 'itemTarget'
-                ? (itemPick === 'revive' ? m.hp > 0 : m.hp <= 0 || m.hp >= maxHp(m))
+                ? (itemPick === 'revive' ? m.hp > 0 : m.hp <= 0 || m.hp >= max)
                 : m.hp <= 0 || isActive;
               return (
                 <button class="pick" disabled={disabled} key={m.uid}
@@ -819,8 +829,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                   <Sprite form={m.form} size={48} mutant={m.mutant} />
                   <span class="grow">
                     <span class="row-gap"><b>{FORMS[m.form].name}</b><span class="num">Lv{m.lv}</span>{isActive && <span class="small dim">出場中</span>}</span>
-                    <Bar value={m.hp} max={maxHp(m)} />
-                    <span class="small dim">{Math.max(0, m.hp)}/{maxHp(m)}{m.status ? ` · ${statusLabel(m.status)}` : ''}</span>
+                    <Bar value={m.hp} max={max} />
+                    <span class="small dim">{Math.max(0, m.hp)}/{max}{m.status ? ` · ${statusLabel(m.status)}` : ''}</span>
                   </span>
                 </button>
               );
@@ -971,6 +981,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
         <Energy value={d.energy} max={MAX_ENERGY} />
         {side === 0 && <span class="hpnum">{d.hp}/{d.max}</span>}
       </div>
+      {!!d.convergenceLoss && <div class="hud-note convergence-loss">全能力 −{d.convergenceLoss}%</div>}
       {note && <div class="hud-note">{note}</div>}
       {intent && <div class={`hud-intent ${warn ? 'warn' : ''}`} title={warn ? '對你的夥伴效果絕佳！' : undefined}><span class="intent-label">下一步</span><strong><Icon name={intent.icon} /> {intent.name}</strong>{warn && <b class="intent-threat">剋你</b>}</div>}
     </div>
@@ -981,7 +992,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
 // 戰鬥中查看資料：自己看得到技能，對手只看得到狀態與被動特性
 const STAGE_LABEL = { atk: '攻擊', def: '防禦', spd: '速度' } as const;
 function InfoPanel({ bs, side, idx, boss, onClose }: { bs: BattleState; side: SideId; idx?: number; boss: boolean; onClose: () => void }) {
-  const m = idx != null ? bs.sides[side].team[idx] : active(bs, side), f = formOf(m), v = bs.sides[side].vol[m.uid], mx = maxHp(m), st = statsOf(m);
+  const m = idx != null ? bs.sides[side].team[idx] : active(bs, side), f = formOf(m), v = bs.sides[side].vol[m.uid], st = battleStats(bs, side, m), mx = st.hp;
   const stages = (Object.keys(STAGE_LABEL) as (keyof typeof STAGE_LABEL)[]).filter((k) => v.stages[k]);
   const mine = side === 0;
   return (
@@ -997,6 +1008,7 @@ function InfoPanel({ bs, side, idx, boss, onClose }: { bs: BattleState; side: Si
       </div>
       <div class="row-gap">
         {m.status && <span class={`st st-${m.status}`}>{statusLabel(m.status)}{m.statusTurns ? ` ${m.statusTurns}` : ''}</span>}
+        {!!v.convergenceLoss && <span class="st st-down">全能力 −{v.convergenceLoss}%</span>}
         {stages.map((k) => <span key={k} class={`st ${v.stages[k] > 0 ? 'st-up' : 'st-down'}`}>{STAGE_LABEL[k]} {v.stages[k] > 0 ? '+' : ''}{v.stages[k]}</span>)}
         {v.shield > 0 && <span class="st st-shield">護盾 {v.shield}</span>}
         {v.charged && <span class="st st-charge">蓄力</span>}
