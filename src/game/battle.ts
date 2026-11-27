@@ -1,6 +1,7 @@
 // 回合制戰鬥引擎（純邏輯，不碰畫面）。
 // 兩邊都是「Side」，由誰操作（玩家、AI、之後的連線玩家）由外部決定。
 // 所有隨機都走 state.rng，所以同樣的初始狀態＋同樣的行動序列一定得到同樣結果。
+import { nextOracleMark } from '../data/oracle';
 import { DOMAINS, type DomainId } from '../data/domains';
 import { FIELDS, SKILLS, type FieldId, type Skill, type StatKey, type StatusId } from '../data/skills';
 import { effectiveness, ELEM } from '../data/types';
@@ -22,6 +23,8 @@ export interface Volatile {
   undyingUsed: boolean;
   charged?: boolean; // 蓄力中：下一次攻擊威力 ×2
   lockOn?: boolean; // 鎖定中：下一次攻擊必定命中且暴擊
+  omenMarks?: number[];
+  omenTurn?: number;
   counter?: number; // 本回合的反擊比例
   pearlUsed?: boolean; // 不屈珍珠已經用掉
   relay?: number; // 接力：下一招的威力倍率
@@ -83,6 +86,7 @@ export type BEvent = BEventBase & { slot?: number };
 type BEventBase =
   | { t: 'msg'; text: string }
   | { t: 'use'; side: SideId; skill: string }
+  | { t: 'omen'; side: SideId; marks: number[] }
   | { t: 'miss'; side: SideId }
   | { t: 'dmg'; side: SideId; elem?: Elem | null; amount: number; hp: number; eff: number; crit: boolean; shield: number }
   | { t: 'heal'; side: SideId; amount: number; hp: number }
@@ -174,7 +178,8 @@ export function skillFor(m: Mon, slot: number): Skill {
 
 export function canAfford(s: BattleState, side: SideId, slot: number): boolean {
   if (slot < 0) return true;
-  return volOf(s, side).energy >= skillFor(active(s, side), slot).cost;
+  const skill = skillFor(active(s, side), slot), v = volOf(s, side);
+  return v.energy >= skill.cost && (skill.id !== 'oracle_tide' || v.omenMarks?.length === 3);
 }
 
 // ── 主流程：雙方各一個行動，結算一回合 ──
@@ -356,14 +361,18 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
   let sk = skillFor(me, slot);
   if (!canAfford(s, side, slot)) sk = STRUGGLE;
   if (me.status === 'glitch' && me.skills.length > 1 && chance(s.rng, 0.3)) {
-    const alt = SKILLS[me.skills[int(s.rng, 0, me.skills.length - 1)]];
-    if (alt.cost <= v.energy) { sk = alt; ev.push({ t: 'msg', text: `資料錯亂！技能變成了 ${alt.name}！` }); }
+    const altSlot = int(s.rng, 0, me.skills.length - 1), alt = SKILLS[me.skills[altSlot]];
+    if (canAfford(s, side, altSlot)) { sk = alt; ev.push({ t: 'msg', text: `資料錯亂！技能變成了 ${alt.name}！` }); }
+  }
+  if (sk.id === 'oracle_tide') {
+    v.omenMarks = [];
+    ev.push({ t: 'omen', side, marks: [] });
   }
   v.energy -= sk.cost;
   ev.push({ t: 'energy', side, value: v.energy });
   if (sk !== STRUGGLE) { me.style ??= { atk: 0, guard: 0 }; if (sk.power > 0) me.style.atk++; else me.style.guard++; }
   ev.push({ t: 'use', side, skill: sk.id });
-  ev.push({ t: 'msg', text: `${myName} 使用了 ${sk.name}！` });
+  if (sk.id !== 'oracle_tide') ev.push({ t: 'msg', text: `${myName} 使用了 ${sk.name}！` });
 
   if (sk.id.startsWith('gh_')) { godHandSkill(s, side, sk.id, ev); return; }
   const fx = sk.fx ?? {};
@@ -444,7 +453,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
   const chained = !!fx.chain && tgt.status === fx.chain.id;
   if (chained) ev.push({ t: 'msg', text: `趁對手${STATUS_NAME[fx.chain!.id]}，威力提升了！` });
   else if (fx.vsStatus && tgt.status) ev.push({ t: 'msg', text: '趁虛而入，威力提升了！' });
-  if (v.charged) ev.push({ t: 'msg', text: '釋放蓄積的力量！' });
+  if (v.charged && sk.id !== 'oracle_tide') ev.push({ t: 'msg', text: '釋放蓄積的力量！' });
   let hits = fx.multi ? int(s.rng, fx.multi[0], fx.multi[1]) + bn(s, side, 'x_chain') : 1;
   if (!fx.multi && isBasicAttack(sk.id) && bn(s, side, 'x_echo') && chance(s.rng, 0.4)) { hits = 2; ev.push({ t: 'msg', text: '回音！普攻再打了一次！' }); }
   let total = 0, landed = 0;
@@ -456,9 +465,11 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     // 格擋：這一下傷害減少 40%
     if (target.status !== 'freeze' && target.status !== 'sleep' && chance(s.rng, blockRate(formOf(target)))) {
       r.dmg = Math.max(1, Math.floor(r.dmg * 0.6));
-      ev.push({ t: 'block', side: foe }); ev.push({ t: 'msg', text: `${nameOf(s, foe)} 擋下了一部分傷害！` });
+      ev.push({ t: 'block', side: foe });
+      if (sk.id !== 'oracle_tide') ev.push({ t: 'msg', text: `${nameOf(s, foe)} 擋下了一部分傷害！` });
     }
     const real = dealDamage(s, foe, r.dmg, r.eff, r.crit, sk.elem, ev);
+    recordOracleHit(s, foe, sk.id, ev);
     total += real;
     afterHitAbilities(s, side, foe, ev);
     // 反擊架勢：把傷害反彈回去
@@ -556,6 +567,8 @@ export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill,
   let D = statsOf(tg).def * stageMult(vt.stages.def) * md.def;
   if (hasAb(ft, 'sturdy')) D *= 1.2;
   if (held(tg, 'berserkscale')) D *= 0.8;
+  D *= 1 + (vt.omenMarks?.length ?? 0) * 0.05;
+  if (sk.id === 'oracle_tide') A = statsOf(me).def * stageMult(vm.stages.def) * ma.def * 1.15 * (held(me, 'berserkscale') ? 0.8 : 1);
   const base = (((2 * me.lv) / 5 + 2) * effPower(s, side, foe, sk) * A) / D / 50 + 2;
   const eff = effectiveness(sk.elem, ft.elems);
   const forced = vm.lockOn || (!!sk.fx?.chain?.crit && tg.status === sk.fx.chain.id);
@@ -754,13 +767,23 @@ export function forcedSwitch(s: BattleState, side: SideId, to: number): BEvent[]
 
 // ── AI ──
 /** 神之手的技能 */
+function recordOracleHit(s: BattleState, side: SideId, skill: string, ev: BEvent[]) {
+  const m = active(s, side), v = volOf(s, side);
+  if (!hasAb(formOf(m), 'omen') || m.hp <= 0 || v.omenTurn === s.turn) return;
+  v.omenTurn = s.turn;
+  const lit = v.omenMarks ?? [];
+  if (lit.length >= 3) return;
+  v.omenMarks = [...lit, nextOracleMark(lit, skill)];
+  ev.push({ t: 'omen', side, marks: v.omenMarks });
+}
+
 function godHandSkill(s: BattleState, side: SideId, id: string, ev: BEvent[]) {
   const g = s.godhand, foe: SideId = side === 0 ? 1 : 0, tg = active(s, foe), tname = nameOf(s, foe);
   if (!g) return;
   if (id === 'gh_toss') {
     const n = int(s.rng, 1, 20), hits = Math.min(n, tg.hp);
     ev.push({ t: 'toss', side: foe, hits });
-    for (let i = 0; i < hits; i++) { tg.hp = Math.max(0, tg.hp - 1); ev.push({ t: 'dmg', side: foe, amount: 1, hp: tg.hp, eff: 1, crit: false, shield: 0 }); }
+    for (let i = 0; i < hits; i++) { tg.hp = Math.max(0, tg.hp - 1); ev.push({ t: 'dmg', side: foe, amount: 1, hp: tg.hp, eff: 1, crit: false, shield: 0 }); if (i === 0) recordOracleHit(s, foe, id, ev); }
     ev.push({ t: 'msg', text: `神之手抓起 ${tname} 拋來拋去！拋接了 ${n} 次！` });
   } else if (id === 'gh_love') {
     g.loveTurn = s.turn + 1;
@@ -813,7 +836,7 @@ export function aiChoose(s: BattleState, side: SideId): Action {
   let best: { slot: number; score: number } = { slot: -1, score: 1 };
   me.skills.forEach((id, slot) => {
     const sk = SKILLS[id];
-    if (!sk || sk.cost > v.energy) return;
+    if (!sk || !canAfford(s, side, slot)) return;
     const fx = sk.fx ?? {};
     let score = 0;
     if (sk.power > 0) {

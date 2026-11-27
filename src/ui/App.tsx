@@ -1,4 +1,5 @@
 import { setTimeOfDay } from '../render/scene';
+import { OracleQuest, startOracleQuest } from './OracleQuest';
 import { Finale } from './Finale';
 import { ensureSprite } from '../render/art';
 import { GuardianReward, ZoneCutscene } from './Special';
@@ -82,7 +83,7 @@ type Screen =
   | { k: 'title' } | { k: 'starter' } | { k: 'voyage' } | { k: 'fishing' }
   | { k: 'battle'; enc: Encounter } | { k: 'after'; result: BattleResult }
   | { k: 'end'; win: boolean; pearls: number } | { k: 'dex' } | { k: 'help' } | { k: 'port' }
-  | { k: 'event'; ev: GameEvent } | { k: 'boon' } | { k: 'zonepick' } | { k: 'bay'; hint?: string } | { k: 'gacha'; from: 'bay' | 'port' } | { k: 'guardian' } | { k: 'godhand' } | { k: 'finale' };
+  | { k: 'oracle' } | { k: 'event'; ev: GameEvent } | { k: 'boon' } | { k: 'zonepick' } | { k: 'bay'; hint?: string } | { k: 'gacha'; from: 'bay' | 'port' } | { k: 'guardian' } | { k: 'godhand' } | { k: 'finale' };
 
 export function App() {
   const vp = useViewport();
@@ -191,14 +192,14 @@ export function App() {
   switch (screen.k) {
     case 'title':
       body = <Title vp={vp} hasSave={!!loadRun()} onNew={onNew} onDaily={() => { const day = todayKey(); startRun(dailyPartner(day), day); }} onBay={() => go({ k: 'bay' })}
-        onContinue={() => { const r = loadRun(); if (!r) return; setRun(r); if (r.godHand) { if (r.godHand.stage === 'fight') r.godHand.stage = 'ask'; go({ k: 'godhand' }); } else if (r.finale === 'intro' || r.finale === 'fight' || r.finale === 'ending') { if (r.finale === 'fight') r.finale = 'intro'; go({ k: 'finale' }); } else if (r.guardianWin) go({ k: 'guardian' }); else if (r.after?.boons) go({ k: 'boon' }); else if (r.after) finishAfter(r); else go(r.pendingZone ? { k: 'zonepick' } : { k: 'voyage' }); }}
+        onContinue={() => { const r = loadRun(); if (!r) return; setRun(r); if (r.oracleQuest) go({ k: 'oracle' }); else if (r.godHand) { if (r.godHand.stage === 'fight') r.godHand.stage = 'ask'; go({ k: 'godhand' }); } else if (r.finale === 'intro' || r.finale === 'fight' || r.finale === 'ending') { if (r.finale === 'fight') r.finale = 'intro'; go({ k: 'finale' }); } else if (r.guardianWin) go({ k: 'guardian' }); else if (r.after?.boons) go({ k: 'boon' }); else if (r.after) finishAfter(r); else go(r.pendingZone ? { k: 'zonepick' } : { k: 'voyage' }); }}
         onDex={() => go({ k: 'dex' })} onHelp={() => go({ k: 'help' })} onPort={() => go({ k: 'port' })} />;
       break;
     case 'starter':
       body = <StarterPick vp={vp} onBack={() => go({ k: 'title' })} onPick={(form) => { const m = loadMeta(); const b = newBayMon(form); m.bay.push(b); m.selected = b.id; saveMeta(m); startRun(monFromBay(b)); }} />;
       break;
     case 'voyage':
-      body = <Voyage vp={vp} run={run!} onGo={() => { const k = nodeOf(run!).kind; if (k === 'event') go({ k: 'event', ev: (devEv && EVENTS.find((e) => e.id === devEv)) || pickEvent(run!) }); else if (k === 'crew') { const enc = rollCrew(run!); enc.team!.forEach((m) => markSeen(m.form, run!.zone)); saveRun(run); go({ k: 'battle', enc }); } else go({ k: 'fishing' }); }} onNext={() => advance()} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
+      body = <Voyage vp={vp} run={run!} onGo={() => { const k = nodeOf(run!).kind; if (k === 'event' && (devEv === 'oracle' || (!devEv && next(run!.rng) < 0.02))) { startOracleQuest(run!); go({ k: 'oracle' }); } else if (k === 'event') go({ k: 'event', ev: (devEv && EVENTS.find((e) => e.id === devEv)) || pickEvent(run!) }); else if (k === 'crew') { const enc = rollCrew(run!); enc.team!.forEach((m) => markSeen(m.form, run!.zone)); saveRun(run); go({ k: 'battle', enc }); } else go({ k: 'fishing' }); }} onNext={() => advance()} onQuit={() => { saveRun(run); go({ k: 'title' }); }} />;
       break;
     case 'fishing':
       body = <Fishing vp={vp} run={run!} boss={boss} onDone={advance} onHook={(q, sh, landing) => {
@@ -214,6 +215,13 @@ export function App() {
       break;
     case 'battle':
       body = <Battle vp={vp} run={run!} enc={screen.enc} boss={(boss || !!screen.enc.final) && !screen.enc.godhand} onEnd={(result) => {
+        if (screen.enc.oracle) {
+          const r = run!;
+          if (result.outcome === 'win') { r.battlesWon++; r.oracleQuest!.stage = 'choice'; saveRun(r); go({ k: 'oracle' }); }
+          else if (result.outcome === 'lose') finishRun(false);
+          else { r.oracleQuest = undefined; advance(r); }
+          return;
+        }
         if (screen.enc.godhand) { settleGodHand(run!, result.outcome === 'win'); saveRun(run); go({ k: 'godhand' }); return; }
         if (screen.enc.final) {
           // 打贏：播結局；打輸：三片海域還是算通關，但統領者會等你下次再來
@@ -252,6 +260,10 @@ export function App() {
         }
         advance();
       }} />;
+      break;
+    case 'oracle':
+      body = <OracleQuest vp={vp} run={run!} onChange={() => go({ k: 'oracle' })} onDone={() => { run!.oracleQuest = undefined; advance(); }}
+        onFight={() => { const q = run!.oracleQuest!; q.stage = 'fight'; saveRun(run); go({ k: 'battle', enc: { mon: { ...q.mon }, rarity: 'SSR', oracle: true } }); }} />;
       break;
     case 'godhand':
       body = <GodHandScreen vp={vp} run={run!} onFight={() => godHandFight(run!)} onDone={() => afterBoss(run!)} />;

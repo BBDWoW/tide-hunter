@@ -9,7 +9,7 @@ export interface Stats { hp: number; atk: number; def: number; spd: number }
 export type AbilityId =
   | 'moist' | 'blazing' | 'photosyn' | 'hardshell' | 'firststrike' | 'undying'
   | 'lure' | 'regen' | 'sturdy' | 'static' | 'stinger' | 'tidegod' | 'colossal' | 'stormking'
-  | 'oceanpower' | 'dragonpresence' | 'waterbarrier' | 'swiftswim' | 'waterabsorb' | 'thickfat' | 'waterveil' | 'poisonbody' | 'none';
+  | 'oceanpower' | 'dragonpresence' | 'waterbarrier' | 'swiftswim' | 'waterabsorb' | 'thickfat' | 'waterveil' | 'poisonbody' | 'omen' | 'none';
 
 export const ABILITIES: Record<AbilityId, { name: string; desc: string }> = {
   moist: { name: '潤澤', desc: '每回合結束回復最大 HP 的 1/16。' },
@@ -34,6 +34,7 @@ export const ABILITIES: Record<AbilityId, { name: string; desc: string }> = {
   dragonpresence: { name: '龍之氣勢', desc: '每回合多回復 1 點能量。' },
   waterbarrier: { name: '水之結界', desc: '不會陷入任何異常狀態。' },
   stormking: { name: '雷霆之王', desc: '速度提高 20%，攻擊時 30% 使對手麻痺。' },
+  omen: { name: '受擊成卦', desc: '每回合首次被直接攻擊命中時點亮一道刻紋。每道增加 5% 防禦，集滿三道即可施放三卜鎮潮。' },
   none: { name: '—', desc: '' },
 };
 
@@ -312,6 +313,9 @@ const F: Form[] = [
     base: { hp: 98, atk: 112, def: 86, spd: 96 }, ability: 'lure', extra: ['dragonpresence'],
     learn: [[15, 'abyssmaw'], [15, 'datastorm'], [16, 'crash'], [17, 'datagrid'], [18, 'opportunist']], desc: '被這隻眼睛注視的地方，現實就會開始崩解。' },
   // ── 超特殊：神之手（打倒霸主後極低機率出現） ──
+  { id: 'oracle', name: '卜潮靈龜', family: 'oracle', stage: 3, rarity: 'SSR', category: '神獸', elems: ['rock', 'spirit'], sprite: 'oracle', pal: 'tide',
+    base: { hp: 88, atk: 46, def: 146, spd: 16 }, ability: 'omen', learn: [[1, 'tackle'], [1, 'harden'], [1, 'rockslide'], [1, 'oracle_tide']],
+    desc: '缺月冠下，藍色龜魂蜷在半透明的重甲中。每受一擊，古老的刻紋便喚醒牠一分。' },
   { id: 'godhand', name: '神之手', family: 'godhand', stage: 3, rarity: 'SSR', category: '神獸', elems: [], sprite: 'godhand', pal: 'water', secret: true, scale: 0.95,
     base: { hp: 100, atk: 1, def: 200, spd: 60 }, ability: 'none',
     learn: [[1, 'gh_toss'], [1, 'gh_love'], [1, 'gh_fire'], [1, 'gh_stay'], [1, 'gh_pull']], desc: '從天上伸出的一隻白色的手，擁有壓垮世界的力量。但其實，它只是想有人陪。' },

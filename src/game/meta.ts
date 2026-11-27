@@ -139,7 +139,7 @@ export const ZONE_BOSSES = new Set(['whale', 'frostking', 'lavadragon', 'mainfra
 /** 可以抽到的生物：每一族的最初型態（不含霸主、環境形態） */
 export function gachaPool(r: Rarity): string[] {
   const targets = new Set(Object.values(FORMS).flatMap((f) => (f.evolve ?? []).map((e) => e.to)));
-  return Object.values(FORMS).filter((f) => !f.secret && !ZONE_BOSSES.has(f.id) && !targets.has(f.id) && !f.regional && f.rarity === r).map((f) => f.id);
+  return Object.values(FORMS).filter((f) => !f.secret && f.id !== 'oracle' && !ZONE_BOSSES.has(f.id) && !targets.has(f.id) && !f.regional && f.rarity === r).map((f) => f.id);
 }
 export interface PullResult { rod: Tier; path: Tier[]; tier: Tier; form: string | null; mutant: boolean; bayId?: string }
 export function rollPull(rnd: () => number = Math.random): PullResult {

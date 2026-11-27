@@ -1,6 +1,6 @@
 // 屬性、稀有度與相剋表
 
-export type Elem = 'water' | 'fire' | 'grass' | 'elec' | 'ice' | 'rock' | 'fly' | 'dark' | 'data';
+export type Elem = 'water' | 'fire' | 'grass' | 'elec' | 'ice' | 'rock' | 'spirit' | 'fly' | 'dark' | 'data';
 
 export const ELEM: Record<Elem, { name: string; color: string }> = {
   water: { name: '水', color: '#3d9be9' },
@@ -8,6 +8,7 @@ export const ELEM: Record<Elem, { name: string; color: string }> = {
   grass: { name: '草', color: '#56b85a' },
   elec: { name: '電', color: '#f5c932' },
   ice: { name: '冰', color: '#8fd8ee' },
+  spirit: { name: '靈', color: '#8abcf8' },
   rock: { name: '岩', color: '#b08a5a' },
   fly: { name: '飛', color: '#9fb4ff' },
   dark: { name: '暗', color: '#8a62d8' },
@@ -21,6 +22,7 @@ const STRONG: Record<Elem, Elem[]> = {
   grass: ['water', 'rock'],
   elec: ['water', 'fly'],
   ice: ['grass', 'fly'],
+  spirit: [],
   rock: ['fire', 'ice', 'fly'],
   fly: ['grass'],
   dark: ['data'],
@@ -33,6 +35,7 @@ const WEAK: Record<Elem, Elem[]> = {
   grass: ['grass', 'fire', 'fly'],
   elec: ['elec', 'grass', 'rock'],
   ice: ['ice', 'fire', 'water'],
+  spirit: [],
   rock: ['rock'],
   fly: ['elec', 'rock'],
   dark: ['dark'],

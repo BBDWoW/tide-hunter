@@ -1,5 +1,6 @@
 // 技能特效：每招三張圖集（back 畫在角色後面，front／particles 畫在角色前面），單格 192×104、4×3 共 12 格、每格 100ms。
 // 位置每一格都從角色目前的繪製矩形重新計算（會跟著衝刺、浮動、鏡像一起動）。
+import { oracleImpact } from '../data/oracle';
 import SKILL_FX from '../art/vfx_skills.json';
 import { spriteSockets } from './art';
 
@@ -77,7 +78,7 @@ export function drawFx(ctx: CanvasRenderingContext2D, code: string, layer: Layer
   const s = FX[code], image = imgs.get(code)?.[layer];
   if (!s || !image || frame < 0 || frame >= fxFrames(code)) return;
   if (s.r === 'eclipse') { drawEclipse(ctx, image, s, layer, frame, caster, target, arena); return; }
-  const source = actorPoint(caster, sock(caster, s.socket)), body = actorPoint(caster, sock(caster, 'body')), hit = actorPoint(target, sock(target, 'body'));
+  const source = actorPoint(caster, sock(caster, s.socket)), body = actorPoint(caster, sock(caster, 'body')), hit = actorPoint(target, target.sprite === 'oracle' ? oracleImpact(code).map(n => n / 128) as [number, number] : sock(target, 'body'));
   const scale = caster.rect.w / caster.logical;
   const sx = (frame % 4) * FW, sy = Math.floor(frame / 4) * FH;
   const face = hit.x >= source.x ? 1 : -1, style = s.style;

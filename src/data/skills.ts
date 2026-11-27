@@ -55,6 +55,7 @@ export interface Skill {
 }
 
 const S: Skill[] = [
+  { id: 'oracle_tide', name: '三卜鎮潮', elem: 'spirit', power: 85, cost: 0, acc: 100, desc: '消耗三道刻紋，以當下的防禦代替攻擊計算傷害。', anim: 'splash' },
   // 無屬性
   { id: 'tackle', name: '撞擊', elem: null, power: 40, cost: 0, acc: 100, desc: '用身體撞向對手。', anim: 'hit' },
   { id: 'harden', name: '硬化', elem: null, power: 0, cost: 1, acc: 100, desc: '提高自己的防禦。', fx: { stat: { key: 'def', delta: 1, self: true } }, anim: 'buff' },

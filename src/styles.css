@@ -7,7 +7,7 @@
   --win-a: rgba(22, 40, 96, 0.93); --win-b: rgba(9, 16, 50, 0.95);
   --bevel: #8fc0ff; --bevel-2: #1d3a80; --edge: #050a20;
   --el-water: #3d9be9; --el-fire: #f0602f; --el-grass: #56b85a; --el-elec: #f5c932; --el-ice: #8fd8ee;
-  --el-rock: #b08a5a; --el-fly: #9fb4ff; --el-dark: #8a62d8; --el-data: #2fe0c8;
+  --el-spirit: #8abcf8; --el-rock: #b08a5a; --el-fly: #9fb4ff; --el-dark: #8a62d8; --el-data: #2fe0c8;
   --f-pixel: "DotGothic16", "Noto Sans TC", system-ui, sans-serif;
   --f-num: "Press Start 2P", "DotGothic16", monospace;
   color-scheme: dark;

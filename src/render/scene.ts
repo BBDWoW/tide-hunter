@@ -1,6 +1,7 @@
 // 場景繪製（256×144 像素）：海景全景、戰鬥地形、釣魚、標題、海圖、海底
 import { FORMS, recolorOf } from '../data/creatures';
 import { ELEM, type Elem } from '../data/types';
+import { drawOmen } from './oracle';
 import { animFrame, drawSprite, drawSpriteMini, PAL, spriteSize, miniSize } from './pixel';
 import { sceneArt, spriteIdle } from './art';
 import { fx, partMul } from './fx';
@@ -442,7 +443,7 @@ function foamRing(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: num
   }
 }
 
-export interface MonView { form: string; x: number; y: number; flip: boolean; flash: number; shake: number; lunge: number; alpha: number; scale: number; tint?: string; aura?: string; mutant?: boolean; enter?: number; low?: boolean; ox?: number; oy?: number; base?: { x: number; y: number } }
+export interface MonView { omenMarks?: number[]; omenElapsed?: number; castingOracle?: boolean; form: string; x: number; y: number; flip: boolean; flash: number; shake: number; lunge: number; alpha: number; scale: number; tint?: string; aura?: string; mutant?: boolean; enter?: number; low?: boolean; ox?: number; oy?: number; base?: { x: number; y: number } }
 /** 戰鬥畫面的額外演出：場地、畫面震動、全畫面閃光 */
 export interface BattleFx { field?: string | null; quake?: number; flash?: number; flashColor?: string; fxLayer?: (ctx: CanvasRenderingContext2D, which: 'back' | 'front', rects: ({ x: number; y: number; w: number } | null)[]) => void }
 export interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; g?: number }
@@ -505,7 +506,7 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
   for (const [i, m] of mons.entries()) {
     if (!m || m.alpha <= 0) continue;
     const f = FORMS[m.form];
-    const fr = animFrame(f.sprite, t, i);
+    const fr = m.castingOracle ? 0 : animFrame(f.sprite, t, i);
     const { sx, sy, sxx } = pos[i]!;
     // 登場：前半段是白色剪影
     const white = (m.flash > 0 && Math.floor(m.flash * 20) % 2 === 0) || (m.enter !== undefined && m.enter < 0.55);
@@ -521,6 +522,12 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
       if (Math.random() < dt * 14) parts.push({ x: sx + n * (0.15 + Math.random() * 0.7), y: sy + n * (0.5 + Math.random() * 0.4), vx: (Math.random() - 0.5) * 6, vy: -18 - Math.random() * 16, life: 0.9, max: 0.9, color: Math.random() < 0.5 ? m.aura : '#ffffff', size: Math.random() < 0.3 ? 2 : 1 });
     }
     drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(sxx), Math.round(sy), { f: fr, flip: m.flip, alpha: m.alpha, scale: m.scale, tint: white ? '#ffffff' : m.tint, recolor: rc });
+    if (m.omenMarks?.length && m.form === 'oracle') {
+      m.omenElapsed = (m.omenElapsed ?? 0) + dt;
+      ctx.save(); ctx.globalAlpha *= m.alpha;
+      drawOmen(ctx, m.omenMarks, m.omenElapsed, fr, pos[i]!.rect, m.flip);
+      ctx.restore();
+    }
   }
   bfx.fxLayer?.(ctx, 'front', rects);
   for (const b of beams) {

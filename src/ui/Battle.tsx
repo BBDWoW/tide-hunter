@@ -1,3 +1,4 @@
+import { drawOracleTide, loadOracleArt } from '../render/oracle';
 import { drawGodHand } from './GodHand';
 import { DOMAINS, isDomain } from '../data/domains';
 import { Icon } from './Icon';
@@ -94,7 +95,7 @@ const readSpeed = () => { try { return localStorage.getItem(SPEED_KEY) !== 'norm
 export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunState; enc: Encounter; boss: boolean; onEnd: (r: BattleResult) => void }) {
   const bsRef = useRef<BattleState | null>(null);
   if (!bsRef.current) {
-    bsRef.current = createBattle(makeRng((next(run.rng) * 2 ** 32) >>> 0), { team: run.party, name: '你', mods: battleMods(run) }, { team: enc.team ?? [enc.mon], name: boss ? '霸主' : enc.crew ?? '野生', boss, mods: foeMods(run) }, !enc.team, isDomain(run.zone) ? run.zone : undefined, !!enc.godhand);
+    bsRef.current = createBattle(makeRng((next(run.rng) * 2 ** 32) >>> 0), { team: run.party, name: '你', mods: battleMods(run) }, { team: enc.team ?? [enc.mon], name: boss ? '霸主' : enc.crew ?? '野生', boss, mods: foeMods(run) }, !enc.team && !enc.oracle, isDomain(run.zone) ? run.zone : undefined, !!enc.godhand);
     if (enc.final) {
       startFinal(bsRef.current);
       // 開發用：網址加 ?finalhp=1 讓統領者開場只剩 1 HP，方便測第二條血
@@ -103,6 +104,9 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     }
   }
   const bs = bsRef.current;
+  useEffect(() => {
+    if (bs.sides.some(side => side.team.some(m => m.form === 'oracle'))) void loadOracleArt().catch(() => {});
+  }, [bs]);
   const [shownTurn, setShownTurn] = useState(bs.turn);
   const crew = !!enc.team; // 對手船隊：多隻敵人、不能收服
   const gh = !!enc.godhand; // 神之手之戰：撐過 20 回合
@@ -168,7 +172,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
 
   const mkView = (side: SideId, form: string): MonView => {
     const p = monSlot(side, form);
-    return { form, x: p.x, y: p.y, flip: side === 1, flash: 0, shake: 0, lunge: 0, alpha: 0, scale: p.scale, aura: auraColor(form, side === 1 && boss), mutant: active(bs, side).mutant };
+    return { form, omenMarks: volOf(bs, side).omenMarks, x: p.x, y: p.y, flip: side === 1, flash: 0, shake: 0, lunge: 0, alpha: 0, scale: p.scale, aura: auraColor(form, side === 1 && boss), mutant: active(bs, side).mutant };
   };
   const anim = useRef({
     mons: [mkView(0, disp.current[0].form), mkView(1, disp.current[1].form)] as MonView[],
@@ -230,10 +234,15 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     }
     // 技能特效：往前播，並套用素材裡施術者／目標的抖動
     const spd = hurry.current ? 4 : fastRef.current ? 2 : 1;
-    for (const f of a.fx) f.e += (dt * 1000 * spd) / FX_MS;
+    for (const f of a.fx) f.e += (dt * 1000 * spd) / (f.code === 'oracle_tide' ? 90 : FX_MS);
     a.fx = a.fx.filter((f) => f.e < fxFrames(f.code));
-    for (const v of a.mons) { v.ox = 0; v.oy = 0; }
+    for (const v of a.mons) { v.ox = 0; v.oy = 0; v.castingOracle = false; }
     for (const f of a.fx) {
+      if (f.code === 'oracle_tide') {
+        const caster = a.mons[f.from]; caster.castingOracle = true;
+        caster.oy = f.e >= 2 && f.e < 7 ? 1 : 0;
+        continue;
+      }
       const fr = Math.floor(f.e);
       for (const [sd, who] of [[f.from, 'caster'], [f.to, 'target']] as const) {
         const v = a.mons[sd]; if (!v) continue;
@@ -245,6 +254,10 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       for (const f of a.fx) {
         const r0 = rects[f.from], r1 = rects[f.to];
         if (!r0 || !r1) continue;
+        if (f.code === 'oracle_tide') {
+          drawOracleTide(c, Math.floor(f.e), r0, a.mons[f.from].flip, r1, which === 'front');
+          continue;
+        }
         // 統領者的招式：特效放大成 1.8 倍
         const actor = (sd: number, r: { x: number; y: number; w: number }, big?: boolean) => { const sp = FORMS[a.mons[sd].form].sprite; return { rect: r, sprite: sp, facesLeft: a.mons[sd].flip, logical: spriteSize(sp) / (big ? 1.8 : 1) }; };
         const A = actor(f.from, r0, f.big), B = actor(f.to, r1), fr = Math.floor(f.e);
@@ -288,7 +301,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       else if (boss) { for (const line of BOSS_INTRO[enc.mon.form] ?? []) { say(line); await wait(900); } say(final ? `統領者「${ef.name}」降臨了！這是最後的決戰！` : `霸主「${ef.name}」擋住了去路！`); }
       else if (gh) { say('一隻巨大的白色手，從雲裡伸了下來。'); await wait(900); say('神之手：「陪我玩 20 回合……好不好？」'); }
       else say(`野生的 ${ef.name} 出現了！`);
-      if (gh) { /* 神之手：沒有稀有度 */ }
+      if (enc.oracle) say('龜甲上的濁潮退去。卜潮靈龜正等你出招。');
+      else if (gh) { /* 神之手：沒有稀有度 */ }
       else if (final) { /* 統領者：不顯示稀有度提示 */ }
       else if (enc.rarity === 'SSR') say('★ 傳說級的氣息！這可能是唯一的機會！');
       else if (enc.rarity === 'S') say('☆ 史詩級的稀有生物！');
@@ -328,6 +342,16 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         // 施術者、目標在畫面上是第幾隻（1 對 2 時看 slot）
         const from = vi(e), to = e.side === 0 ? (e.slot != null && e.slot === allySlot.current ? 2 : 1) : 0;
         const moxu = from !== 0 && a.mons[from]?.form === 'tide_moxu';
+        if (e.skill === 'oracle_tide') {
+          await loadOracleArt().catch(() => {});
+          say('卜潮靈龜使用了三卜鎮潮！'); sfx('skill:water');
+          const fx = {code: e.skill, from, to, e: 0}; a.fx.push(fx);
+          await new Promise<void>(done => {
+            const tick = () => fx.e >= 9 ? done() : requestAnimationFrame(tick);
+            requestAnimationFrame(tick);
+          });
+          break;
+        }
         if (e.skill === 'moxu_daybreak') { await playUlt(from, to); break; }
         const sk = SKILLS[e.skill] ?? { anim: 'hit', elem: null };
         const c = center(to), me = center(from);
@@ -357,6 +381,10 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           setTimeout(() => burst(a.parts, c.x, c.y - 4, kind === 'splash' ? 'splash' : 'hit', sk.elem), 150);
         }
         await wait(260); break;
+      }
+      case 'omen': {
+        const m = a.mons[vi(e)]; m.omenMarks = e.marks; m.omenElapsed = 0;
+        break;
       }
       case 'miss': break;
       case 'dodge': { const v = vi(e); sfx('dodge'); a.shakeT[v] = 0.15; a.lungeT[v] = 0.25; pop(v, '閃避！', 'miss'); await wait(200); break; }
@@ -434,7 +462,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         const v = vi(e);
         if (e.side === 0) participants.current.add(bs.sides[0].team[e.index].uid);
         a.fade[v] = 1; a.enter[v] = 0;
-        a.mons[v] = { ...a.mons[v], form: e.form, scale: posOf(v, e.form).scale, y: posOf(v, e.form).y, aura: auraColor(e.form), mutant: bs.sides[e.side].team[e.index].mutant };
+        a.mons[v] = { ...a.mons[v], omenMarks: bs.sides[e.side].vol[bs.sides[e.side].team[e.index].uid].omenMarks, omenElapsed: 1, form: e.form, scale: posOf(v, e.form).scale, y: posOf(v, e.form).y, aura: auraColor(e.form), mutant: bs.sides[e.side].team[e.index].mutant };
         const m = bs.sides[e.side].team[e.index];
         d[v] = { form: e.form, lv: m.lv, hp: e.hp, max: maxHp(m), energy: e.energy, status: e.status, shield: 0, mutant: m.mutant };
         sfx('enter');
@@ -672,7 +700,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     </div>
   );
   const reel = <Reel rarity={FORMS[foe.form].rarity} hpRatio={foe.hp / maxHp(foe)} hasStatus={!!foe.status} name={FORMS[foe.form].name} zoneBonus={boon(run, 'reelzone') * 0.15 + (run.perks?.reel ?? 0)} onDone={onReel} />;
-  const startReel = () => { if (run.catchBait <= 0) return; sfx('cast'); run.catchBait--; setMode('reel'); };
+  const startReel = () => { if (enc.oracle || run.catchBait <= 0) return; sfx('cast'); run.catchBait--; setMode('reel'); };
   const picking = mode === 'switch' || mode === 'force' || mode === 'itemTarget';
   const hs = (mode === 'main' || mode === 'skills') && peek >= 0 ? SKILLS[me.skills[peek]] : null;
   const hi = mode === 'items' ? (Object.keys(ITEMS) as ItemId[])[hover] : null;
@@ -778,7 +806,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                     const sk = SKILLS[id], ok = canAfford(bs, 0, i);
                     return (
                       <MenuItem key={id} disabled={!ok} sel={TOUCH && armed === i} onHover={() => { setHover(i); if (!TOUCH) setPeek(i); }} onClick={() => confirmTap(i, () => submit({ type: 'skill', slot: i }))}
-                        sub={<span class="cost">{'◆'.repeat(sk.cost) || '—'}</span>}>
+                        sub={<span class="cost">{id === 'oracle_tide' ? `卦 ${volOf(bs, 0).omenMarks?.length ?? 0}/3` : '◆'.repeat(sk.cost) || '—'}</span>}>
                         <i class="dot" style={{ background: sk.elem ? `var(--el-${sk.elem})` : '#c8d2e8' }} />{sk.name}
                       </MenuItem>
                     );
@@ -786,7 +814,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                   {!meAffordAny && <MenuItem onClick={() => submit({ type: 'skill', slot: -1 })}>掙扎</MenuItem>}
                 </div>
                 <div class="act-row">
-                  {!boss && !crew && !gh && <button class="act-btn" onClick={startReel} disabled={run.catchBait <= 0}><Icon name="rod" /> 捕捉<small>×{run.catchBait}</small></button>}
+                  {!boss && !crew && !gh && !enc.oracle && <button class="act-btn" onClick={startReel} disabled={run.catchBait <= 0}><Icon name="rod" /> 捕捉<small>×{run.catchBait}</small></button>}
                   <button class="act-btn" disabled={loveLock} onClick={() => setMode('switch')}><Icon name="swap" /> 換人</button>
                   <button class="act-btn" disabled={loveLock} onClick={() => { setHover(0); setMode('items'); }}><Icon name="bag" /> 道具</button>
                   {!boss && !gh && <button class="act-btn" onClick={() => submit({ type: 'run' })}><Icon name="flee" /> 逃跑</button>}
@@ -801,7 +829,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                   const sk = SKILLS[id], ok = canAfford(bs, 0, i);
                   return (
                     <MenuItem key={id} disabled={!ok} sel={TOUCH && armed === i} onHover={() => setHover(i)} onClick={() => confirmTap(i, () => submit({ type: 'skill', slot: i }))}
-                      sub={<span class="cost">{'◆'.repeat(sk.cost) || '—'}</span>}>
+                      sub={<span class="cost">{id === 'oracle_tide' ? `卦 ${volOf(bs, 0).omenMarks?.length ?? 0}/3` : '◆'.repeat(sk.cost) || '—'}</span>}>
                       <i class="dot" style={{ background: sk.elem ? `var(--el-${sk.elem})` : '#c8d2e8' }} />{sk.name}
                     </MenuItem>
                   );
