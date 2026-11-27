@@ -103,13 +103,14 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
           <p class="small dim">聲音會在第一次點擊畫面後開始播放。電腦上也可以按 M 鍵切換靜音。</p>
         </Win>
       ) : news && (
-        <Win class="big-panel" title={`更新通知　目前版本 v${APP_VERSION}`} onClose={() => setNews(false)}>
-          <div class="item-list">
-            {CHANGELOG.map((c, i) => (
-              <div class="news-entry" key={c.version}>
-                <h3 class="sub-h">v{c.version}<span class="small dim">　{c.date}{i === 0 ? '　最新' : ''}</span></h3>
-                <ul>{c.items.map((t) => <li key={t}>{t}</li>)}</ul>
-              </div>
+        <Win class="big-panel" title="更新通知" onClose={() => setNews(false)}>
+          <div class="news-list">
+            {CHANGELOG.map((entry) => (
+              <article class="news-entry" key={entry.version}>
+                <h3>v{entry.version}</h3>
+                <p>{entry.items.join(' ')}</p>
+                <time dateTime={entry.date}>{entry.date}</time>
+              </article>
             ))}
           </div>
         </Win>

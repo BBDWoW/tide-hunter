@@ -332,8 +332,12 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .tool-btn:hover { background: rgba(5, 10, 32, 0.85); }
 .news-dot { position: absolute; top: 2px; right: 2px; width: 9px; height: 9px; border-radius: 50%; background: #ff4a5a; box-shadow: 0 0 0 2px rgba(5, 10, 32, 0.8); }
 .app-version { position: absolute; right: calc(var(--u) * 2); bottom: calc(var(--u) * 1.5); font-size: max(9px, calc(var(--u) * 2.6)); color: rgba(255, 255, 255, 0.55); text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6); pointer-events: none; }
-.news-entry ul { margin: 0.2em 0 0.6em; padding-left: 1.3em; }
-.news-entry li { margin: 0.2em 0; line-height: 1.45; }
+.news-entry { display: grid; grid-template-columns: 5em minmax(0, 1fr) auto; align-items: baseline; gap: .6em; padding: .55em 0; border-bottom: 1px solid var(--bevel); line-height: 1.4; }
+.news-entry h3, .news-entry p { margin: 0; font-size: inherit; }
+.news-entry h3 { color: var(--amber); }
+.news-entry time { color: var(--dim); font-size: max(11px, .8em); white-space: nowrap; }
+.portrait .news-entry { grid-template-columns: 5em minmax(0, 1fr); column-gap: .6em; row-gap: .2em; }
+.portrait .news-entry time { grid-column: 2; }
 .update-toast { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); z-index: 50; background: rgba(5, 10, 32, 0.92); border: 1px solid #ffcf4a; color: #fff; padding: 6px 14px; font-size: 14px; pointer-events: none; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis; }
 .update-toast b { color: #ffcf4a; }
 .update-toast.quiet { border-color: var(--bevel); opacity: 0.85; font-size: 12px; top: auto; bottom: 8px; }

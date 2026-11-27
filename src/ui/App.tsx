@@ -64,7 +64,7 @@ function UpdateToast({ version, safe }: { version: string; safe: boolean }) {
   }, [safe, left]);
   return (
     <div class={`update-toast ${safe ? '' : 'quiet'}`} role="status">
-      {safe ? <>有新版本 v{version}，<b>{Math.max(0, left)}</b> 秒後更新…</> : <>新版本 v{version} 已就緒，回到主畫面後會自動更新</>}
+      {safe ? <>v{version} 將於 <b>{Math.max(0, left)}</b> 秒後更新</> : <>v{version} 待更新，離開冒險後套用</>}
     </div>
   );
 }
