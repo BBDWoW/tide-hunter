@@ -63,7 +63,7 @@ export interface BattleState {
   final?: FinalState; // 最終決戰：統領者・潮汐默旭
 }
 /** 最終決戰：第二階段召喚霸主並獲得護盾，第三階段變身，每 5 回合放一次大絕招 */
-export interface FinalState { phase: 1 | 2 | 3; ally: number | null; ultIn: number; rodCd: number; rodUses: number; summoned?: string; allyPlan?: Action }
+export interface FinalState { phase: 1 | 2 | 3; ally: number | null; ultIn: number; rodCd: number; rodUses: number; summonShield: number; summoned?: string; allyPlan?: Action }
 export interface GodHandState { survive: number; rewinds: number; loveTurn: number; passion: string[]; pulled: Record<string, string[]>; saved: Record<string, string[]> }
 export const isGodHand = (m: Mon) => m.form === 'godhand';
 
@@ -518,8 +518,8 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     afterHitAbilities(s, side, foe, ev);
     // 反擊架勢：把傷害反彈回去
     const fv = volOf(s, foe);
-    if (fv.counter && real > 0 && me.hp > 0 && !summonShieldActive(s, side)) {
-      const back = Math.max(1, Math.floor(real * fv.counter));
+    if (fv.counter && real > 0 && me.hp > 0) {
+      const back = absorbSummonShield(s, me, Math.max(1, Math.floor(real * fv.counter)), ev);
       me.hp = Math.max(0, me.hp - back);
       ev.push({ t: 'dmg', side, amount: back, hp: me.hp, eff: 1, crit: false, shield: v.shield });
       ev.push({ t: 'msg', text: `${nameOf(s, foe)} 反彈了 ${back} 點傷害！` });
@@ -532,8 +532,8 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     const amt = healingAmount(s, side, me, Math.floor(total * drain));
     if (amt > 0) { me.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: me.hp }); ev.push({ t: 'msg', text: `${myName} 吸取了 ${amt} HP！` }); }
   }
-  if (fx.recoil && total > 0 && me.hp > 0 && !summonShieldActive(s, side)) {
-    const d = Math.max(1, Math.floor(total * fx.recoil));
+  if (fx.recoil && total > 0 && me.hp > 0) {
+    const d = absorbSummonShield(s, me, Math.max(1, Math.floor(total * fx.recoil)), ev);
     me.hp = Math.max(0, me.hp - d);
     ev.push({ t: 'dmg', side, amount: d, hp: me.hp, eff: 1, crit: false, shield: v.shield });
     ev.push({ t: 'msg', text: `${myName} 也受到了反作用力的傷害！` });
@@ -554,7 +554,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     if (fx.stat && !fx.stat.self && chance(s.rng, fx.stat.chance ?? 1)) changeStat(s, foe, fx.stat.key, fx.stat.delta, ev);
   }
   if (fx.stat?.self && me.hp > 0) changeStat(s, side, fx.stat.key, fx.stat.delta, ev);
-  if (fx.selfKO && me.hp > 0 && !summonShieldActive(s, side)) selfKO(s, side, ev);
+  if (fx.selfKO && me.hp > 0) selfKO(s, side, ev);
 }
 
 function selfKO(s: BattleState, side: SideId, ev: BEvent[]) {
@@ -639,16 +639,19 @@ export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill,
   return { dmg: Math.max(1, Math.floor(base * mod * (ma.damage ?? 1))), eff, crit };
 }
 
-function summonShieldActive(s: BattleState, side: SideId): boolean {
-  return side === 1 && s.sides[1].active === 0 && s.final?.phase === 2 && s.final.ally != null;
+function absorbSummonShield(s: BattleState, target: Mon, damage: number, ev: BEvent[]): number {
+  const final = s.final;
+  if (!final?.summonShield || target !== s.sides[1].team[0]) return damage;
+  const absorbed = Math.min(damage, final.summonShield);
+  final.summonShield -= absorbed;
+  ev.push({ t: 'summonShield', side: 1, slot: 0, amount: final.summonShield });
+  if (final.summonShield === 0) ev.push({ t: 'msg', text: '統領者的召喚護盾被打破了！' });
+  return damage - absorbed;
 }
 
 function dealDamage(s: BattleState, side: SideId, dmg: number, eff: number, crit: boolean, elem: Elem | null, ev: BEvent[]): number {
   const m = active(s, side), v = volOf(s, side);
-  if (summonShieldActive(s, side)) {
-    ev.push({ t: 'msg', text: '召喚護盾擋下了攻擊！先打倒協戰霸主。' });
-    return 0;
-  }
+  dmg = absorbSummonShield(s, m, dmg, ev);
   let absorbed = 0;
   if (v.shield > 0) { absorbed = Math.min(v.shield, dmg); v.shield -= absorbed; dmg -= absorbed; }
   let real = Math.min(m.hp, dmg);
@@ -662,8 +665,8 @@ function dealDamage(s: BattleState, side: SideId, dmg: number, eff: number, crit
   ev.push({ t: 'dmg', side, elem, amount: real, hp: m.hp, eff, crit, shield: v.shield });
   if (absorbed) ev.push({ t: 'msg', text: `護盾擋下了 ${absorbed} 點傷害！` });
   const att: SideId = side === 0 ? 1 : 0, am = active(s, att);
-  if (absorbed && bn(s, side, 'x_thorns') && am.hp > 0 && !summonShieldActive(s, att)) {
-    const back = Math.max(1, Math.floor(absorbed * 0.5));
+  if (absorbed && bn(s, side, 'x_thorns') && am.hp > 0) {
+    const back = absorbSummonShield(s, am, Math.max(1, Math.floor(absorbed * 0.5)), ev);
     am.hp = Math.max(0, am.hp - back);
     ev.push({ t: 'dmg', side: att, amount: back, hp: am.hp, eff: 1, crit: false, shield: volOf(s, att).shield });
     ev.push({ t: 'msg', text: `珊瑚刺反彈了 ${back} 點傷害！` });
@@ -744,12 +747,13 @@ function endOfTurn(s: BattleState, ev: BEvent[], only?: SideId) {
     if (m.hp <= 0) continue;
     const mx = battleMaxHp(s, side, m);
     v.counter = 0;
-    if (!summonShieldActive(s, side) && (m.status === 'burn' || m.status === 'poison' || m.status === 'bleed')) {
+    if (m.status === 'burn' || m.status === 'poison' || m.status === 'bleed') {
       const passion = m.status === 'burn' && !!s.godhand?.passion.includes(m.uid);
       const d = passion ? 2 : Math.max(1, Math.floor(mx / (m.status === 'burn' ? 16 : m.status === 'bleed' ? 12 : 10))) * (m.status === 'burn' && bn(s, side === 0 ? 1 : 0, 'x_wildfire') ? 2 : 1);
       const what = passion ? '熱情的火焰' : { burn: '灼傷', poison: '毒', bleed: '流血' }[m.status];
-      m.hp = Math.max(0, m.hp - d);
-      ev.push({ t: 'dmg', side, amount: d, hp: m.hp, eff: 1, crit: false, shield: v.shield });
+      const remaining = absorbSummonShield(s, m, d, ev);
+      m.hp = Math.max(0, m.hp - remaining);
+      ev.push({ t: 'dmg', side, amount: remaining, hp: m.hp, eff: 1, crit: false, shield: v.shield });
       ev.push({ t: 'msg', text: `${nameOf(s, side)} 受到${what}的傷害！` });
       checkFaints(s, ev);
       if (m.form !== f.id) return;
@@ -767,10 +771,11 @@ function endOfTurn(s: BattleState, ev: BEvent[], only?: SideId) {
     const fe = f.elems;
     const lavaHurt = s.field?.id === 'lava' && !fe.includes('fire') && !fe.includes('rock');
     const reef = (s.traps?.[side] ?? 0) > 0;
-    if ((lavaHurt || reef) && !summonShieldActive(s, side)) {
+    if (lavaHurt || reef) {
       const d = Math.max(1, Math.floor(mx / 16));
-      m.hp = Math.max(0, m.hp - d);
-      ev.push({ t: 'dmg', side, amount: d, hp: m.hp, eff: 1, crit: false, shield: v.shield });
+      const remaining = absorbSummonShield(s, m, d, ev);
+      m.hp = Math.max(0, m.hp - remaining);
+      ev.push({ t: 'dmg', side, amount: remaining, hp: m.hp, eff: 1, crit: false, shield: v.shield });
       ev.push({ t: 'msg', text: lavaHurt ? `${nameOf(s, side)} 被熔岩燙傷了！` : `${nameOf(s, side)} 被暗礁割傷了！` });
       checkFaints(s, ev);
       if (m.form !== f.id) return;
@@ -944,7 +949,7 @@ export const elemColor = (e: keyof typeof ELEM) => ELEM[e].color;
 
 // ── 最終決戰：統領者・潮汐默旭 ──
 export function startFinal(s: BattleState) {
-  s.final = { phase: 1, ally: null, ultIn: ULT_EVERY - 1, rodCd: 0, rodUses: 0 };
+  s.final = { phase: 1, ally: null, ultIn: ULT_EVERY - 1, rodCd: 0, rodUses: 0, summonShield: 0 };
   const main = s.sides[1].team[0];
   main.hpFixed = Math.round(maxHp(main) * FINAL_TUNE.barHp); main.hp = main.hpFixed;
 }
@@ -971,8 +976,11 @@ function finalFaint(s: BattleState, ev: BEvent[]) {
       ev.push({ t: 'faint', side: 1, slot: F.ally });
       ev.push({ t: 'msg', text: `${formOf(al).name} 倒下了，沉回了海裡！` });
       F.ally = null;
-      ev.push({ t: 'summonShield', side: 1, slot: 0, amount: 0 });
-      ev.push({ t: 'msg', text: '統領者的召喚護盾消失了！' });
+      if (F.summonShield > 0) {
+        F.summonShield = 0;
+        ev.push({ t: 'summonShield', side: 1, slot: 0, amount: 0 });
+        ev.push({ t: 'msg', text: '統領者的召喚護盾消失了！' });
+      }
     }
   }
   if (main.hp > 0 || F.ally != null || s.over) return;
@@ -987,8 +995,9 @@ function finalFaint(s: BattleState, ev: BEvent[]) {
     S1.team.push(al); S1.vol[al.uid] = freshVol(); F.ally = S1.team.length - 1; F.summoned = id;
     ev.push({ t: 'summon', side: 1, slot: F.ally, form: id, lv: al.lv, hp: al.hp, max: maxHp(al) });
     ev.push({ t: 'msg', text: `${formOf(al).name} 回應了統領者的潮聲，加入了戰鬥！` });
-    ev.push({ t: 'summonShield', side: 1, slot: 0, amount: main.hp * FINAL_TUNE.summonShield });
-    ev.push({ t: 'msg', text: '統領者獲得相當於最大生命 500% 的護盾！打倒協戰霸主才能解除。' });
+    F.summonShield = main.hp * FINAL_TUNE.summonShield;
+    ev.push({ t: 'summonShield', side: 1, slot: 0, amount: F.summonShield });
+    ev.push({ t: 'msg', text: '統領者獲得相當於最大生命 500% 的護盾！可以打破護盾，或擊倒協戰霸主解除。' });
     ev.push({ t: 'msg', text: '漁夫握緊了釣竿……現在可以使用「漁夫的釣竿」了！' });
     return;
   }
@@ -1017,11 +1026,8 @@ function doRod(s: BattleState, ev: BEvent[]) {
   ev.push({ t: 'msg', text: '漁夫跳了出來，甩起釣竿——魚線和魚鉤橫掃整片海面！' });
   const targets = finalSlots(s);
   for (const i of targets) {
-    if (i === 0 && summonShieldActive(s, 1)) {
-      ev.push({ t: 'msg', text: '召喚護盾擋下了釣竿對統領者的傷害！' });
-      continue;
-    }
-    const m = S1.team[i], d = Math.max(1, Math.floor(maxHp(m) * ROD_DMG));
+    const m = S1.team[i];
+    const d = absorbSummonShield(s, m, Math.max(1, Math.floor(maxHp(m) * ROD_DMG)), ev);
     m.hp = Math.max(0, m.hp - d);
     ev.push({ t: 'dmg', side: 1, slot: i, amount: d, hp: m.hp, eff: 1, crit: false, shield: S1.vol[m.uid].shield });
   }
@@ -1067,8 +1073,10 @@ function resolveFinal(s: BattleState, actions: [Action, Action]): BEvent[] {
       if (x.a.type === 'skill' && me.uid !== start0) continue;
       if (x.a.type === 'rod') doRod(s, ev);
       else if (x.a.type === 'skill') {
-        let tgt = x.a.target ?? 0;
-        if (!finalSlots(s).includes(tgt)) tgt = 0;
+        const slots = finalSlots(s);
+        const requested = x.a.target ?? 0;
+        const tgt = slots.includes(requested) ? requested : slots[0];
+        if (tgt === undefined) continue;
         const a = x.a;
         withSlot(s, tgt, () => {
           doAction(s, 0, a, ev); tagSlot(ev, from, tgt);

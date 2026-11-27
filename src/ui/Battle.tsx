@@ -888,7 +888,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                   <button class="act-btn" disabled={loveLock} onClick={() => setMode('switch')}><Icon name="swap" /> 換人</button>
                   <button class="act-btn" disabled={loveLock} onClick={() => { setHover(0); setMode('items'); }}><Icon name="bag" /> 道具</button>
                   {!boss && !gh && <button class="act-btn" onClick={() => submit({ type: 'run' })}><Icon name="flee" /> 逃跑</button>}
-                  {final && <button class={`act-btn rod-btn ${canRod(bs) ? 'ready' : ''}`} disabled={!canRod(bs)} onClick={() => submit({ type: 'rod' })} title="漁夫跳出來甩竿橫掃全場：造成最大 HP 10% 的傷害，攻擊、防禦各降低 10%（召喚護盾會擋下傷害）"><Icon name="rod" /> 漁夫的釣竿<small>{bs.final!.phase < 2 ? '第二條血時解鎖' : bs.final!.rodCd > 0 ? `${bs.final!.rodCd} 回合後` : '可以用！'}</small></button>}
+                  {final && <button class={`act-btn rod-btn ${canRod(bs) ? 'ready' : ''}`} disabled={!canRod(bs)} onClick={() => submit({ type: 'rod' })} title="漁夫跳出來甩竿橫掃全場：造成最大 HP 10% 的傷害，攻擊、防禦各降低 10%（可削減召喚護盾）"><Icon name="rod" /> 漁夫的釣竿<small>{bs.final!.phase < 2 ? '第二條血時解鎖' : bs.final!.rodCd > 0 ? `${bs.final!.rodCd} 回合後` : '可以用！'}</small></button>}
                 </div>
               </div>
             )}
@@ -974,7 +974,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
         {!!crewLeft && <span class="crew-left" title="船隊剩下的夥伴">{'●'.repeat(crewLeft)}</span>}
         {d.form !== 'godhand' && <span class="lv">Lv{d.lv}</span>}
       </div>
-      <div class="hud-sub"><Elems list={f.elems} />{f.id === 'godhand' && <span class="st st-shield">無屬性・異常無效</span>}{d.status && <span class={`st st-${d.status}`}>{statusLabel(d.status)}{turns ? ` ${turns >= 90 ? '∞' : turns}` : ''}</span>}{!!d.summonShield && <span class="st st-shield">召喚護盾 {d.summonShield}・先打倒霸主</span>}{d.shield > 0 && <span class="st st-shield">護盾 {d.shield}</span>}{(d.trap ?? 0) > 0 && <span class="st st-trap">暗礁 {d.trap}</span>}{charged && <span class="st st-charge">蓄力</span>}{locked && <span class="st st-lock">鎖定</span>}</div>
+      <div class="hud-sub"><Elems list={f.elems} />{f.id === 'godhand' && <span class="st st-shield">無屬性・異常無效</span>}{d.status && <span class={`st st-${d.status}`}>{statusLabel(d.status)}{turns ? ` ${turns >= 90 ? '∞' : turns}` : ''}</span>}{!!d.summonShield && <span class="st st-shield">召喚護盾 {d.summonShield}</span>}{d.shield > 0 && <span class="st st-shield">護盾 {d.shield}</span>}{(d.trap ?? 0) > 0 && <span class="st st-trap">暗礁 {d.trap}</span>}{charged && <span class="st st-charge">蓄力</span>}{locked && <span class="st st-lock">鎖定</span>}</div>
       <Bar value={d.hp} max={d.max} />
       <div class="hud-foot">
         <Energy value={d.energy} max={MAX_ENERGY} />

@@ -37,17 +37,22 @@ assert.equal(maxHp(ally), 2 * maxHp(makeMon(ally.form, ally.lv, true, true)));
 final.allyPlan = pass;
 const hitShield = resolveTurn(state, [{ type: 'skill', slot: 0, target: 0 }, pass]);
 assert.equal(boss.hp, first.hp);
-assert(!hitShield.some(event => event.t === 'summonShield'));
+assert(hitShield.some(event => event.t === 'summonShield' && event.amount < first.hp * 5));
 
 boss.hp = 1;
 boss.status = 'poison';
 boss.statusTurns = 2;
 final.allyPlan = pass;
 const allyHp = ally.hp;
+const shieldBeforeRod = final.summonShield;
 const protectedTurn = resolveTurn(state, [{ type: 'rod' }, pass]);
 assert.equal(boss.hp, 1);
 assert(ally.hp < allyHp);
-assert(!protectedTurn.some(event => event.t === 'phase3' || event.t === 'summonShield'));
+assert(!protectedTurn.some(event => event.t === 'phase3'));
+assert.equal(final.summonShield, shieldBeforeRod - 2 * Math.floor(first.hp * 0.1));
+
+// 擊倒霸主會解除尚未打破的護盾。
+const shieldBeforeFaint = final.summonShield;
 
 ally.hp = 1;
 boss.status = null;
@@ -59,6 +64,25 @@ assert(breakShield.some(event => event.t === 'summonShield' && event.amount === 
 assert.equal(boss.hp, 1);
 assert.equal(final.phase, 2);
 assert.deepEqual(finalSlots(state), [0]);
+
+// 重跑第二階段，驗證打破護盾後傷害溢出，霸主仍留在場上。
+const otherBoss = makeMon('tide_moxu', 28, true, true);
+const other = createBattle(makeRng(7), { team: [player], name: '玩家' },
+  { team: [otherBoss], name: '統領者', boss: true, mods: foeMods(run) }, false);
+startFinal(other);
+otherBoss.hp = 0;
+resolveTurn(other, [pass, pass]);
+const otherAllySlot = other.final!.ally!;
+other.final!.summonShield = 1;
+other.final!.allyPlan = pass;
+otherBoss.hp = 1;
+const shattered = resolveTurn(other, [{ type: 'rod' }, pass]);
+assert(shattered.some(event => event.t === 'summonShield' && event.amount === 0));
+assert.equal(otherBoss.hp, 0);
+assert.equal(other.final!.phase, 2);
+assert.deepEqual(finalSlots(other), [otherAllySlot]);
+assert(!shattered.some(event => event.t === 'faint' && event.slot === otherAllySlot));
+assert(shieldBeforeFaint > 0);
 
 final.rodCd = 0;
 state.field = { id: 'lava', turns: 3 };
