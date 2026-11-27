@@ -1,3 +1,5 @@
+import { MOXU_ASCENDED, MOXU_ASCENDED_SKILLS } from '../data/moxu';
+import { ensureSprite } from '../render/art';
 import { drawOracleTide, loadOracleArt } from '../render/oracle';
 import { drawGodHand } from './GodHand';
 import { DOMAINS, isDomain } from '../data/domains';
@@ -9,7 +11,7 @@ import { FORMS } from '../data/creatures';
 import { FIELDS, SKILLS, type FieldId, type StatusId } from '../data/skills';
 import { effectiveness, ELEM, RARITY, type Elem } from '../data/types';
 import {
-  active, aiChoose, aiForcedSwitch, canAfford, canRod, createBattle, finalSlots, MOXU_ULT, planAlly, startFinal, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, REDUCED_HEALING_TURN, resolveTurn, restorePulled, statusLabel, volOf,
+  active, aiChoose, aiForcedSwitch, canAfford, canRod, createBattle, finalSlots, skillFor, planAlly, startFinal, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, REDUCED_HEALING_TURN, resolveTurn, restorePulled, statusLabel, volOf,
   type Action, type BattleState, type BEvent, type ItemId, type SideId,
 } from '../game/battle';
 import { blockRate, dodgeRate, formOf, maxHp, statsOf, type Mon } from '../game/creature';
@@ -18,7 +20,7 @@ import { catchChance, rollShakes } from '../game/capture';
 import { foeMods, battleMods, boon, LANDING_BONUS, zoneOf } from '../game/run';
 import type { Encounter, RunState } from '../game/run';
 import { spriteSize } from '../render/pixel';
-import { drawFx, FX_MS, fxFrames, fxOffset, fxSkill, hasFx, loadFx } from '../render/vfx';
+import { drawFx, FX_MS, fxFrames, fxOffset, fxSkill, hasFx, loadFx, moxuFx } from '../render/vfx';
 import { auraColor, burst, elemBurst, drawBattle, drawNet, fisherCanvas, H, monSlot, view, W, type Beam, type MonView, type Particle } from '../render/scene';
 import { Tip, AbilityLines, Bar, ElemChip, Elems, Energy, IvStars, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
@@ -108,6 +110,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     if (bs.sides.some(side => side.team.some(m => m.form === 'oracle'))) void loadOracleArt().catch(() => {});
   }, [bs]);
   const [shownTurn, setShownTurn] = useState(bs.turn);
+  const [shownPhase, setShownPhase] = useState(1);
+  const changeAt = useRef(0);
   const crew = !!enc.team; // 對手船隊：多隻敵人、不能收服
   const gh = !!enc.godhand; // 神之手之戰：撐過 20 回合
   const final = !!enc.final; // 最終決戰：統領者・潮汐默旭
@@ -157,7 +161,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     if (intentRef.current?.key === key) return;
     const act = aiChoose(bs, 1);
     const foeM = active(bs, 1);
-    const sk = act.type === 'skill' ? (act.slot === -2 ? MOXU_ULT : act.slot < 0 ? null : SKILLS[foeM.skills[act.slot]]) : null;
+    const sk = act.type === 'skill' ? (act.slot === -1 ? null : skillFor(foeM, act.slot)) : null;
     const it: Intent = sk
       ? { key, act, icon: sk.power > 0 ? 'attack' : sk.fx?.heal ? 'heal' : sk.fx?.status || (sk.fx?.stat && !sk.fx.stat.self) ? 'hinder' : 'buff', name: sk.name, elem: sk.elem, atk: sk.power > 0 }
       : { key, act, icon: 'attack', name: '掙扎', elem: null, atk: true };
@@ -234,7 +238,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     }
     // 技能特效：往前播，並套用素材裡施術者／目標的抖動
     const spd = hurry.current ? 4 : fastRef.current ? 2 : 1;
-    for (const f of a.fx) f.e += (dt * 1000 * spd) / (f.code === 'oracle_tide' ? 90 : FX_MS);
+    for (const f of a.fx) f.e += (dt * 1000 * spd) / (f.code === 'oracle_tide' ? 90 : moxuFx(f.code)?.frameDurationMs ?? FX_MS);
     a.fx = a.fx.filter((f) => f.e < fxFrames(f.code));
     for (const v of a.mons) { v.ox = 0; v.oy = 0; v.castingOracle = false; }
     for (const f of a.fx) {
@@ -262,7 +266,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         const actor = (sd: number, r: { x: number; y: number; w: number }, big?: boolean) => { const sp = FORMS[a.mons[sd].form].sprite; return { rect: r, sprite: sp, facesLeft: a.mons[sd].flip, logical: spriteSize(sp) / (big ? 1.8 : 1) }; };
         const A = actor(f.from, r0, f.big), B = actor(f.to, r1), fr = Math.floor(f.e);
         // 統領者的日蝕特效：舞台背景鋪滿整個畫面（含左右延伸），維持比例、往下對齊
-        const ar = f.code.startsWith('moxu_') ? (() => { const b = view.bleed, w = W + b * 2, k = Math.max(w / 192, H / 104), aw = 192 * k, ah = 104 * k; return { x: -b - (aw - w) / 2, y: (H - ah) * 0.65, w: aw, h: ah }; })() : FX_ARENA;
+        const ar = moxuFx(f.code) ? { x: -view.bleed, y: 0, w: W + 2 * view.bleed, h: H * .72 } : f.code.startsWith('moxu_') ? (() => { const b = view.bleed, w = W + b * 2, k = Math.max(w / 192, H / 104), aw = 192 * k, ah = 104 * k; return { x: -b - (aw - w) / 2, y: (H - ah) * 0.65, w: aw, h: ah }; })() : FX_ARENA;
         if (which === 'back') drawFx(c, f.code, 'back', fr, A, B, ar);
         else { drawFx(c, f.code, 'front', fr, A, B, ar); drawFx(c, f.code, 'particles', fr, A, B, ar); }
       }
@@ -270,7 +274,18 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     // 震動、閃光慢慢消退
     const q = a.quake, fl = a.flash;
     a.quake = Math.max(0, a.quake - dt * 14); a.flash = Math.max(0, a.flash - dt * 2.2);
-    drawBattle(ctx, t, dt, a.mons, a.parts, a.beams, zoneOf(run).theme, { field: fieldRef.current, quake: q, flash: fl, flashColor: a.flashColor, fxLayer });
+    drawBattle(ctx, t, dt, a.mons, a.parts, a.beams, zoneOf(run).theme, { sunAndMoon: a.mons[1].form === MOXU_ASCENDED, field: fieldRef.current, quake: q, flash: fl, flashColor: a.flashColor, fxLayer });
+    if (changeAt.current) {
+      const progress = Math.min(1, (performance.now() - changeAt.current) / 1300);
+      ctx.save();
+      const radius = 12 + progress * 36;
+      for (const [x, color] of [[W * (.25 + progress * .25), '#ffc869'], [W * (.75 - progress * .25), '#8cdaff']] as const) {
+        ctx.globalAlpha = .65 * Math.sin(progress * Math.PI);
+        ctx.strokeStyle = color; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(x, H * .43, radius, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.restore();
+    }
     if (a.mons[1].form === 'godhand' && a.fade[1] > 0) { const c = monSlot(1, 'godhand'); drawGodHand(ctx, t, c.cx, a.mons[1].y ?? c.y, c.scale, 0, false); }
     if (net.current) { const c = monSlot(1, a.mons[1].form); const n = net.current; n.glow = Math.max(0, n.glow - dt); drawNet(ctx, c.cx, c.cy + 6, n.wob, n.glow); }
     // 1 對 2：目前選的攻擊目標腳邊有一對亮色標記
@@ -289,7 +304,11 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   };
 
   // 先把雙方隊伍會用到的技能特效圖載進來
-  useEffect(() => { for (const sd of bs.sides) for (const m of sd.team) for (const k of m.skills) loadFx(k); if (final) loadFx('moxu_daybreak'); }, []);
+  useEffect(() => { for (const sd of bs.sides) for (const m of sd.team) for (const k of m.skills) loadFx(k); if (final) {
+    loadFx('moxu_daybreak');
+    void ensureSprite(MOXU_ASCENDED);
+    for (const id of MOXU_ASCENDED_SKILLS) loadFx(id);
+  } }, []);
 
   // 開場
   useEffect(() => {
@@ -350,6 +369,20 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
             const tick = () => fx.e >= 9 ? done() : requestAnimationFrame(tick);
             requestAnimationFrame(tick);
           });
+          break;
+        }
+        const ascendedFx = moxuFx(e.skill);
+        if (ascendedFx) {
+          await loadFx(e.skill);
+          say(`默旭使用了「${SKILLS[e.skill].name}」！`);
+          sfx('enrage');
+          const animation = { code: e.skill, from, to, e: 0 };
+          a.fx.push(animation);
+          await new Promise<void>(done => {
+            const tick = () => animation.e >= ascendedFx.impactFrameIndex ? done() : requestAnimationFrame(tick);
+            requestAnimationFrame(tick);
+          });
+          jolt(3, .18, '#badffb');
           break;
         }
         if (e.skill === 'moxu_daybreak') { await playUlt(from, to); break; }
@@ -438,6 +471,16 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       case 'energy': d[vi(e)].energy = e.value; rerender(); break;
       case 'faint': {
         const v = vi(e);
+        if (final && v === 1 && a.mons[1].form === MOXU_ASCENDED) {
+          const c = center(1);
+          sfx('bossdown');
+          for (let frame = 0; frame < 22; frame++) {
+            a.fade[1] = 1 - (frame + 1) / 22;
+            if (frame % 4 === 0) burst(a.parts, c.x, c.y, 'faint', frame % 8 === 0 ? 'fire' : 'ice');
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+          break;
+        }
         if (boss && v === 1) {
           // 霸主倒下：閃爍、連續爆開、畫面劇烈震動，慢慢消失
           sfx('bossdown'); a.shakeT[1] = 1.6;
@@ -495,8 +538,26 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         await new Promise((r) => setTimeout(r, 900));
         await cutscene({ title: '第二條潮', lines: ['潮汐・默旭倒下的瞬間，四周的海水全部倒捲回祂身上……', '「……不錯。那就讓你們見識，萬潮真正的力量。」'], tone: 'blue' }, 3200);
         sfx('heal'); jolt(5, 0.7, '#ffffff'); burst(a.parts, c.x, c.y, 'heal', 'water'); burst(a.parts, c.x, c.y, 'buff', 'water');
+        setShownPhase(2);
         d[1].hp = e.hp; d[1].max = e.max; d[1].status = null; m.aura = auraColor('tide_moxu', true);
         pop(1, 'HP 全滿！', 'heal'); rerender(); await wait(700);
+        break;
+      }
+      case 'phase3': {
+        await ensureSprite(MOXU_ASCENDED);
+        changeAt.current = performance.now();
+        sfx('enrage');
+        await cutscene({ title: '日月御潮', lines: ['第二條潮斷裂，日與月同時升起。', '默旭踏入倒懸潮壁，顯現第二型態。'], tone: 'gold' }, 2500);
+        changeAt.current = 0;
+        allySlot.current = null; a.fade[2] = 0; setTarget(0);
+        fieldRef.current = null; setField(null);
+        d[0].trap = 0;
+        d[1] = { ...d[1], form: MOXU_ASCENDED, hp: e.hp, max: e.max, energy: e.energy, status: null, shield: 0, trap: 0 };
+        a.mons[1] = { ...a.mons[1], form: MOXU_ASCENDED, aura: '#b6d5ff', flash: .45 };
+        setShownPhase(3);
+        jolt(4, .25, '#f9e1a8');
+        say('日月御潮・默旭的 HP、攻擊、防禦與速度提高 10%！');
+        rerender(); await wait(660);
         break;
       }
       case 'summon': {
@@ -568,7 +629,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     if (outcome === 'win' && boss) {
       // 霸主討伐：勝利字卡（點一下可以跳過）
       introSkip.current = false;
-      sfx('fanfare'); setBossDown(true); say(`霸主「${FORMS[enc.mon.form].name}」被擊敗了！`);
+      sfx('fanfare'); setBossDown(true); say(final ? '日月御潮的默旭被擊敗了！' : `霸主「${FORMS[enc.mon.form].name}」被擊敗了！`);
       const end = Date.now() + 3400;
       while (Date.now() < end && !introSkip.current) await new Promise((r) => setTimeout(r, 40));
       onEnd({ outcome, enemy: enc.mon, participants: [...participants.current] });
@@ -683,7 +744,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const duo = !!bs.final && finalSlots(bs).length > 1; // 1 對 2：可以選攻擊目標
   const pickTarget = (i: number) => { sfx('select'); setTarget(i); };
   const openInfo = (side: SideId, idx?: number) => { setInfoIdx(idx); setInfo(side); };
-  const finalNote = bs.final ? `第 ${bs.final.phase}/2 條血・大絕招${bs.final.ultIn <= 0 ? '：下回合！' : ` ${bs.final.ultIn} 回合後`}` : undefined;
+  const finalNote = bs.final ? `第 ${shownPhase}/3 條血・大絕招${bs.final.ultIn <= 0 ? '：下回合！' : ` ${bs.final.ultIn} 回合後`}` : undefined;
   const meAffordAny = me.skills.some((_, i) => canAfford(bs, 0, i));
   const loveLock = !!bs.godhand && bs.godhand.loveTurn === bs.turn; // 無法忽視的愛：只能攻擊
   const toggleFast = () => { const v = !fast; setFast(v); try { localStorage.setItem(SPEED_KEY, v ? 'fast' : 'normal'); } catch { /* 略過 */ } };
@@ -714,7 +775,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     <GameScreen vp={vp}
       scene={<SceneCanvas draw={draw} label="戰鬥畫面" />}
       overlay={<>
-        {bossDown && <BossDown form={enc.mon.form} zone={final ? '萬潮的統領者' : zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
+        {bossDown && <BossDown form={final ? MOXU_ASCENDED : enc.mon.form} zone={final ? '萬潮的統領者' : zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
         {intro && <BossIntro phase={intro} form={enc.mon.form} lv={enc.mon.lv} zone={final ? '萬潮的統領者' : zoneOf(run).special ? `${zoneOf(run).name}的守護者` : `${zoneOf(run).name}的霸主`} onSkip={() => { introSkip.current = true; }} />}
         {!intro && <>
           {!portraitEnemies && enemyCards}
@@ -861,7 +922,7 @@ function BossDown({ form, zone, onSkip }: { form: string; zone: string; onSkip: 
       <div class="bi-card">
         <span class="bi-zone">{zone}</span>
         <b class="bi-name">討伐成功！</b>
-        <span class="bi-title">— {form === 'tide_moxu' ? '萬潮的聲音，安靜了下來' : `${FORMS[form].name} 被擊敗了，海面恢復了平靜`} —</span>
+        <span class="bi-title">— {form === MOXU_ASCENDED ? '日月分離，八域的潮聲各自歸海' : `${FORMS[form].name} 被擊敗了，海面恢復了平靜`} —</span>
       </div>
       <span class="bi-skip">點一下繼續</span>
     </div>
@@ -891,7 +952,7 @@ const InfTag = () => <span class="rar rar-inf" title="無法衡量" aria-label="
 /** 統領者的稀有度：閃著彩虹光的 UR */
 const URTag = () => <span class="rar rar-ur" title="超越傳說" aria-label="稀有度：UR">UR</span>;
 /** 依角色顯示稀有度標籤（神之手 ∞、統領者 UR） */
-const RarTag = ({ form, r }: { form: string; r?: keyof typeof RARITY }) => (form === 'godhand' ? <InfTag /> : form === 'tide_moxu' ? <URTag /> : r ? <RarityTag r={r} /> : null);
+const RarTag = ({ form, r }: { form: string; r?: keyof typeof RARITY }) => (form === 'godhand' ? <InfTag /> : (form === 'tide_moxu' || form === MOXU_ASCENDED) ? <URTag /> : r ? <RarityTag r={r} /> : null);
 
 function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent, crewLeft, warn, cls = '', note, sel }: { side: SideId; d: Disp; rarity?: keyof typeof RARITY; boss?: boolean; charged?: boolean; locked?: boolean; turns?: number; onOpen?: () => void; intent?: Intent | null; crewLeft?: number; warn?: boolean; cls?: string; note?: string; sel?: boolean }) {
   const f = FORMS[d.form];
@@ -900,7 +961,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
       <div class="hud-top">
         <b class="hud-name">{f.name}</b>{d.mutant && <span class="mutant-tag">✦</span>}
         <RarTag form={d.form} r={rarity} />
-        {boss && <span class="boss-tag">{d.form === 'tide_moxu' ? '統領者' : '霸主'}</span>}
+        {boss && <span class="boss-tag">{(d.form === 'tide_moxu' || d.form === MOXU_ASCENDED) ? '統領者' : '霸主'}</span>}
         {!!crewLeft && <span class="crew-left" title="船隊剩下的夥伴">{'●'.repeat(crewLeft)}</span>}
         {d.form !== 'godhand' && <span class="lv">Lv{d.lv}</span>}
       </div>
@@ -928,7 +989,7 @@ function InfoPanel({ bs, side, idx, boss, onClose }: { bs: BattleState; side: Si
       <div class="pick">
         <Sprite form={m.form} size={96} mutant={m.mutant} />
         <span class="grow">
-          <span class="row-gap"><b class="big-name">{m.mutant ? '✦ ' : ''}{f.name}</b>{m.form === 'godhand' || m.form === 'tide_moxu' ? <RarTag form={m.form} /> : <RarityTag r={f.rarity} />}{m.form !== 'godhand' && <><StageTag form={m.form} /><span class="num">Lv{m.lv}</span></>}</span>
+          <span class="row-gap"><b class="big-name">{m.mutant ? '✦ ' : ''}{f.name}</b>{m.form === 'godhand' || m.form === 'tide_moxu' || m.form === MOXU_ASCENDED ? <RarTag form={m.form} /> : <RarityTag r={f.rarity} />}{m.form !== 'godhand' && <><StageTag form={m.form} /><span class="num">Lv{m.lv}</span></>}</span>
           <span class="row-gap"><Elems list={f.elems} /><span class="small dim">{f.category}</span>{mine && <IvStars iv={m.iv} />}</span>
           <Bar value={m.hp} max={mx} />
           <span class="row-gap">{mine && <span class="small">{Math.max(0, m.hp)}/{mx}</span>}<Energy value={v.energy} max={MAX_ENERGY} /></span>

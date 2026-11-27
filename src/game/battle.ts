@@ -1,6 +1,7 @@
 // 回合制戰鬥引擎（純邏輯，不碰畫面）。
 // 兩邊都是「Side」，由誰操作（玩家、AI、之後的連線玩家）由外部決定。
 // 所有隨機都走 state.rng，所以同樣的初始狀態＋同樣的行動序列一定得到同樣結果。
+import { MOXU_ASCENDED, MOXU_ASCENDED_BOOST, MOXU_ASCENDED_SKILLS, MOXU_ASCENDED_ULT } from '../data/moxu';
 import { nextOracleMark } from '../data/oracle';
 import { DOMAINS, type DomainId } from '../data/domains';
 import { FIELDS, SKILLS, type FieldId, type Skill, type StatKey, type StatusId } from '../data/skills';
@@ -60,8 +61,8 @@ export interface BattleState {
   godhand?: GodHandState; // 神之手之戰：撐過 survive 回合就贏
   final?: FinalState; // 最終決戰：統領者・潮汐默旭
 }
-/** 最終決戰：兩條血、第二條血時召喚霸主變成 1 對 2、每 4 回合放一次大絕招、玩家可以用漁夫的釣竿 */
-export interface FinalState { phase: 1 | 2; ally: number | null; ultIn: number; rodCd: number; rodUses: number; summoned?: string; allyPlan?: Action }
+/** 最終決戰：兩條血、第二條血召喚霸主，第三條血變身，每 5 回合放一次大絕招 */
+export interface FinalState { phase: 1 | 2 | 3; ally: number | null; ultIn: number; rodCd: number; rodUses: number; summoned?: string; allyPlan?: Action }
 export interface GodHandState { survive: number; rewinds: number; loveTurn: number; passion: string[]; pulled: Record<string, string[]>; saved: Record<string, string[]> }
 export const isGodHand = (m: Mon) => m.form === 'godhand';
 
@@ -105,6 +106,7 @@ type BEventBase =
   | { t: 'pull'; side: SideId; skills: string[] }
   | { t: 'rewind'; turn: number }
   | { t: 'toss'; side: SideId; hits: number }
+  | { t: 'phase3'; side: 1; hp: number; max: number; energy: number }
   | { t: 'phase2'; side: SideId; hp: number; max: number }
   | { t: 'summon'; side: SideId; slot: number; form: string; lv: number; hp: number; max: number }
   | { t: 'rod'; side: SideId }
@@ -173,7 +175,7 @@ function effSpeed(s: BattleState, side: SideId): number {
 }
 
 export function skillFor(m: Mon, slot: number): Skill {
-  return slot === -2 ? MOXU_ULT : slot < 0 ? STRUGGLE : SKILLS[m.skills[slot]] ?? STRUGGLE;
+  return slot === -2 ? (m.form === MOXU_ASCENDED ? SKILLS[MOXU_ASCENDED_ULT] : MOXU_ULT) : slot < 0 ? STRUGGLE : SKILLS[m.skills[slot]] ?? STRUGGLE;
 }
 
 export function canAfford(s: BattleState, side: SideId, slot: number): boolean {
@@ -372,7 +374,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
   ev.push({ t: 'energy', side, value: v.energy });
   if (sk !== STRUGGLE) { me.style ??= { atk: 0, guard: 0 }; if (sk.power > 0) me.style.atk++; else me.style.guard++; }
   ev.push({ t: 'use', side, skill: sk.id });
-  if (sk.id !== 'oracle_tide') ev.push({ t: 'msg', text: `${myName} 使用了 ${sk.name}！` });
+  if (sk.id !== 'oracle_tide' && !MOXU_ASCENDED_SKILLS.includes(sk.id)) ev.push({ t: 'msg', text: `${myName} 使用了 ${sk.name}！` });
 
   if (sk.id.startsWith('gh_')) { godHandSkill(s, side, sk.id, ev); return; }
   const fx = sk.fx ?? {};
@@ -453,7 +455,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
   const chained = !!fx.chain && tgt.status === fx.chain.id;
   if (chained) ev.push({ t: 'msg', text: `趁對手${STATUS_NAME[fx.chain!.id]}，威力提升了！` });
   else if (fx.vsStatus && tgt.status) ev.push({ t: 'msg', text: '趁虛而入，威力提升了！' });
-  if (v.charged && sk.id !== 'oracle_tide') ev.push({ t: 'msg', text: '釋放蓄積的力量！' });
+  if (v.charged && sk.id !== 'oracle_tide' && !MOXU_ASCENDED_SKILLS.includes(sk.id)) ev.push({ t: 'msg', text: '釋放蓄積的力量！' });
   let hits = fx.multi ? int(s.rng, fx.multi[0], fx.multi[1]) + bn(s, side, 'x_chain') : 1;
   if (!fx.multi && isBasicAttack(sk.id) && bn(s, side, 'x_echo') && chance(s.rng, 0.4)) { hits = 2; ev.push({ t: 'msg', text: '回音！普攻再打了一次！' }); }
   let total = 0, landed = 0;
@@ -466,7 +468,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     if (target.status !== 'freeze' && target.status !== 'sleep' && chance(s.rng, blockRate(formOf(target)))) {
       r.dmg = Math.max(1, Math.floor(r.dmg * 0.6));
       ev.push({ t: 'block', side: foe });
-      if (sk.id !== 'oracle_tide') ev.push({ t: 'msg', text: `${nameOf(s, foe)} 擋下了一部分傷害！` });
+      if (sk.id !== 'oracle_tide' && !MOXU_ASCENDED_SKILLS.includes(sk.id)) ev.push({ t: 'msg', text: `${nameOf(s, foe)} 擋下了一部分傷害！` });
     }
     const real = dealDamage(s, foe, r.dmg, r.eff, r.crit, sk.elem, ev);
     recordOracleHit(s, foe, sk.id, ev);
@@ -658,7 +660,7 @@ function checkEnrage(s: BattleState, ev: BEvent[]) {
   if (s.over) return;
   for (const side of [0, 1] as SideId[]) {
     const sd = s.sides[side], m = active(s, side);
-    if (side === 1 && s.final && sd.active !== 0) continue;
+    if (side === 1 && s.final && (sd.active !== 0 || s.final.phase === 3)) continue;
     if (!sd.boss || sd.enraged || m.hp <= 0 || m.hp > maxHp(m) / 2) continue;
     sd.enraged = true;
     const v = volOf(s, side);
@@ -693,6 +695,7 @@ function endOfTurn(s: BattleState, ev: BEvent[], only?: SideId) {
       ev.push({ t: 'dmg', side, amount: d, hp: m.hp, eff: 1, crit: false, shield: v.shield });
       ev.push({ t: 'msg', text: `${nameOf(s, side)} 受到${what}的傷害！` });
       checkFaints(s, ev);
+      if (m.form !== f.id) return;
       if (m.hp <= 0) continue;
     }
     // 異常狀態倒數，時間到就解除
@@ -713,6 +716,7 @@ function endOfTurn(s: BattleState, ev: BEvent[], only?: SideId) {
       ev.push({ t: 'dmg', side, amount: d, hp: m.hp, eff: 1, crit: false, shield: v.shield });
       ev.push({ t: 'msg', text: lavaHurt ? `${nameOf(s, side)} 被熔岩燙傷了！` : `${nameOf(s, side)} 被暗礁割傷了！` });
       checkFaints(s, ev);
+      if (m.form !== f.id) return;
       if (m.hp <= 0 || s.over) continue;
     }
     if ((hasAb(f, 'moist') || hasAb(f, 'photosyn') || hasAb(f, 'waterveil')) && m.hp < mx) {
@@ -832,11 +836,15 @@ export function aiChoose(s: BattleState, side: SideId): Action {
   if (s.final && side === 1 && s.sides[1].active === 0 && s.final.ultIn <= 0) return { type: 'skill', slot: -2 };
   if (s.godhand && isGodHand(active(s, side))) return godHandAi(s, side);
   const me = active(s, side), foe: SideId = side === 0 ? 1 : 0, tg = active(s, foe);
+  if (s.final?.phase === 3 && side === 1 && me.form === MOXU_ASCENDED) {
+    const slot = (s.turn - 1) % (MOXU_ASCENDED_SKILLS.length - 1);
+    if (canAfford(s, side, slot)) return { type: 'skill', slot };
+  }
   const v = volOf(s, side), hpRatio = me.hp / maxHp(me), myElems = formOf(me).elems;
   let best: { slot: number; score: number } = { slot: -1, score: 1 };
   me.skills.forEach((id, slot) => {
     const sk = SKILLS[id];
-    if (!sk || !canAfford(s, side, slot)) return;
+    if (!sk || id === MOXU_ASCENDED_ULT || !canAfford(s, side, slot)) return;
     const fx = sk.fx ?? {};
     let score = 0;
     if (sk.power > 0) {
@@ -883,7 +891,7 @@ export function startFinal(s: BattleState) {
 }
 /** 對手場上的位置：0 = 統領者，ally = 被召喚的霸主 */
 export const finalSlots = (s: BattleState) => [0, ...(s.final?.ally != null ? [s.final.ally] : [])].filter((i) => s.sides[1].team[i]?.hp > 0);
-export const canRod = (s: BattleState) => !!s.final && s.final.phase === 2 && s.final.rodCd <= 0 && !s.over;
+export const canRod = (s: BattleState) => !!s.final && s.final.phase >= 2 && s.final.rodCd <= 0 && !s.over;
 
 /** 暫時把某一隻設成出場中，執行完再換回統領者（引擎裡大部分邏輯都只看「出場中」的那一隻） */
 function withSlot<T>(s: BattleState, idx: number, fn: () => T): T {
@@ -919,6 +927,17 @@ function finalFaint(s: BattleState, ev: BEvent[]) {
     ev.push({ t: 'summon', side: 1, slot: F.ally, form: id, lv: al.lv, hp: al.hp, max: maxHp(al) });
     ev.push({ t: 'msg', text: `${formOf(al).name} 回應了統領者的潮聲，加入了戰鬥！` });
     ev.push({ t: 'msg', text: '漁夫握緊了釣竿……現在可以使用「漁夫的釣竿」了！' });
+    return;
+  }
+  if (F.phase === 2) {
+    const hp = Math.round(maxHp(main) * MOXU_ASCENDED_BOOST);
+    F.phase = 3; F.ultIn = ULT_EVERY - 1;
+    if (F.ally != null) { S1.team[F.ally].hp = 0; F.ally = null; }
+    main.form = MOXU_ASCENDED; main.skills = [...MOXU_ASCENDED_SKILLS];
+    main.hpFixed = hp; main.hp = hp; main.status = null; main.statusTurns = 0;
+    s.field = null; s.traps = [0, 0];
+    S1.vol[main.uid] = freshVol();
+    ev.push({ t: 'phase3', side: 1, slot: 0, hp, max: hp, energy: S1.vol[main.uid].energy });
     return;
   }
   main.status = null;
@@ -971,6 +990,7 @@ function resolveFinal(s: BattleState, actions: [Action, Action]): BEvent[] {
   const key = acts.map((x) => ({ x, p: prio(x), sp: speed(x) * (s.domain === 'void' ? -1 : 1), r: next(s.rng) }));
   key.sort((a, b) => b.p - a.p || b.sp - a.sp || a.r - b.r);
   const start0 = active(s, 0).uid;
+  const startedAscended = F.phase === 3;
   let usedUlt = false;
   for (const { x } of key) {
     if (s.over) break;
@@ -994,13 +1014,17 @@ function resolveFinal(s: BattleState, actions: [Action, Action]): BEvent[] {
       if (x.a.type === 'skill' && active(s, 0).hp <= 0) continue;
       const a = x.a;
       withSlot(s, x.idx, () => { doAction(s, 1, a, ev); tagSlot(ev, from, x.idx); });
-      if (x.idx === 0 && a.type === 'skill' && a.slot === -2) { usedUlt = true; if (!s.over) ultStatuses(s, ev); }
+      if (x.idx === 0 && a.type === 'skill' && a.slot === -2) {
+        usedUlt = true;
+        if (!s.over && F.phase < 3) ultStatuses(s, ev);
+      }
     }
     tagSlot(ev, from, 0);
     checkFaints(s, ev);
     checkEnrage(s, ev);
+    if (!startedAscended && F.phase === 3) break;
   }
-  if (!s.over) {
+  if (!s.over && (startedAscended || F.phase < 3)) {
     let from = ev.length;
     endOfTurn(s, ev); tagSlot(ev, from, 0);
     const ai = F.ally;
@@ -1008,8 +1032,14 @@ function resolveFinal(s: BattleState, actions: [Action, Action]): BEvent[] {
     checkEnrage(s, ev);
   }
   if (!s.over) {
-    F.ultIn = usedUlt ? ULT_EVERY - 1 : F.ultIn - 1;
-    if (F.ultIn === 0) { ev.push({ t: 'ultwarn' }); ev.push({ t: 'msg', text: '海水開始往統領者身邊倒捲……下一回合是大絕招「五海歸一・默海破曉」！' }); }
+    if (startedAscended || F.phase < 3) {
+      F.ultIn = usedUlt ? ULT_EVERY - 1 : F.ultIn - 1;
+      if (F.ultIn === 0) {
+        ev.push({ t: 'ultwarn' });
+        const ult = skillFor(S1.team[0], -2);
+        ev.push({ t: 'msg', text: `海水開始往統領者身邊倒捲……下一回合是大絕招「${ult.name}」！` });
+      }
+    }
     if (F.rodCd > 0) F.rodCd--;
   }
   s.turn++;

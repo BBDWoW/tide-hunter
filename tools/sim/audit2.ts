@@ -1,8 +1,9 @@
 import { SKILLS } from '../../src/data/skills';
 import { FORMS } from '../../src/data/creatures';
 import FX from '../../src/art/vfx_skills.json';
+import MOXU_FX from '../../src/art/moxu_vfx.json';
 import fs from 'fs';
-const fx = FX as Record<string, unknown>;
+const fx = { ...FX, ...MOXU_FX } as Record<string, unknown>;
 const ids = Object.keys(SKILLS);
 console.log('skills', ids.length, 'no VFX:', ids.filter((k) => !fx[k]).join(','));
 const used = new Set<string>(); for (const f of Object.values(FORMS)) for (const [, s] of f.learn) used.add(s);

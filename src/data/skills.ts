@@ -56,6 +56,10 @@ export interface Skill {
 
 const S: Skill[] = [
   { id: 'oracle_tide', name: '三卜鎮潮', elem: 'spirit', power: 85, cost: 0, acc: 100, desc: '消耗三道刻紋，以當下的防禦代替攻擊計算傷害。', anim: 'splash' },
+  { id: 'moxu_sun_glaive', name: '曜日斷海', elem: 'fire', power: 65, cost: 0, acc: 100, desc: '金藍潮刃橫掃對手，30% 機率使其灼傷。', fx: { status: { id: 'burn', chance: 0.3 } }, anim: 'beam' },
+  { id: 'moxu_moon_prison', name: '玄月鎖潮', elem: 'ice', power: 76, cost: 1, acc: 100, desc: '七道月晶合攏，命中時降低對手速度 1 階。', fx: { stat: { key: 'spd', delta: -1, self: false } }, anim: 'beam' },
+  { id: 'moxu_eight_domains', name: '八域天潮', elem: 'water', power: 28, cost: 2, acc: 95, desc: '八域潮水疊成三重浪，連續攻擊 3 次。', fx: { multi: [3, 3] }, anim: 'splash' },
+  { id: 'moxu_convergence', name: '日月同天・萬海歸寂', elem: 'dark', power: 100, cost: 0, acc: 100, desc: '潮壁夾擊對手，命中時降低其防禦 1 階。每 5 回合施放一次。', fx: { stat: { key: 'def', delta: -1, self: false } }, anim: 'splash' },
   // 無屬性
   { id: 'tackle', name: '撞擊', elem: null, power: 40, cost: 0, acc: 100, desc: '用身體撞向對手。', anim: 'hit' },
   { id: 'harden', name: '硬化', elem: null, power: 0, cost: 1, acc: 100, desc: '提高自己的防禦。', fx: { stat: { key: 'def', delta: 1, self: true } }, anim: 'buff' },

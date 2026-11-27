@@ -445,7 +445,7 @@ function foamRing(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: num
 
 export interface MonView { omenMarks?: number[]; omenElapsed?: number; castingOracle?: boolean; form: string; x: number; y: number; flip: boolean; flash: number; shake: number; lunge: number; alpha: number; scale: number; tint?: string; aura?: string; mutant?: boolean; enter?: number; low?: boolean; ox?: number; oy?: number; base?: { x: number; y: number } }
 /** 戰鬥畫面的額外演出：場地、畫面震動、全畫面閃光 */
-export interface BattleFx { field?: string | null; quake?: number; flash?: number; flashColor?: string; fxLayer?: (ctx: CanvasRenderingContext2D, which: 'back' | 'front', rects: ({ x: number; y: number; w: number } | null)[]) => void }
+export interface BattleFx { sunAndMoon?: boolean; field?: string | null; quake?: number; flash?: number; flashColor?: string; fxLayer?: (ctx: CanvasRenderingContext2D, which: 'back' | 'front', rects: ({ x: number; y: number; w: number } | null)[]) => void }
 export interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; color: string; size: number; g?: number }
 export interface Beam { x0: number; y0: number; x1: number; y1: number; life: number; color: string }
 
@@ -470,6 +470,43 @@ export function drawBattleBg(ctx: CanvasRenderingContext2D, t: number, theme: Th
   drawTimeTint(ctx, t, THEMES[theme].horizon, true, DARK_THEMES.has(theme));
 }
 
+/** 第三條血的戰場：兩片倒懸潮壁、日月雙光源和水面的卜紋。 */
+export function drawSunMoonSea(ctx: CanvasRenderingContext2D, t: number, light = 1) {
+  const left = -view.bleed - 10, width = W + 2 * view.bleed + 20;
+  const sky = ctx.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, '#100d32'); sky.addColorStop(.46, '#41365e');
+  sky.addColorStop(.5, '#192d58'); sky.addColorStop(1, '#090e27');
+  ctx.fillStyle = sky; ctx.fillRect(left, -10, width, H + 20);
+  for (const [x, y, col] of [[W * .35, 27, '#ffcf75'], [W * .64, 34, '#b7eaff']] as const) {
+    ctx.save();
+    ctx.globalAlpha = light;
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 13, 0, 2 * Math.PI); ctx.fill();
+    ctx.globalAlpha *= .3; ctx.strokeStyle = col;
+    ctx.beginPath(); ctx.arc(x, y, 19, 0, 2 * Math.PI); ctx.stroke();
+    for (let i = 0; i < 9; i++) {
+      const ripple = (i + t * 2) % 9;
+      ctx.fillRect(Math.round(x - ripple * 2), Math.round(75 + ripple * 4), Math.round(ripple * 4 + 1), 1);
+    }
+    ctx.restore();
+  }
+  for (let x = left; x < left + width; x += 4) {
+    const edge = Math.max(0, Math.abs(x - W / 2) - 64);
+    if (edge <= 0) continue;
+    const y = Math.max(8, 82 - edge * 1.1 + Math.sin(t * 2 + x / 8) * 6);
+    ctx.fillStyle = x < W / 2 ? '#1d4367' : '#292f65';
+    ctx.fillRect(x, y, 4, 81 - Math.min(81, y));
+    ctx.fillStyle = x < W / 2 ? '#639ba9' : '#6779bf'; ctx.fillRect(x, y, 4, 1);
+  }
+  ctx.save(); ctx.globalAlpha = .55 * light; ctx.lineWidth = 1;
+  for (const [x,y,rx,ry,color] of [[BATTLE.enemy.x,BATTLE.enemy.y,36,9,'#91ddff'],[BATTLE.player.x,BATTLE.player.y,53,13,'#e8bf86']] as const) {
+    ctx.strokeStyle = color;
+    for (let i = 0; i < 2; i++) {
+      ctx.beginPath(); ctx.ellipse(x, y, rx - i * 5, ry - i * 2, 0, t * .3 + i, t * .3 + i + Math.PI * 1.8); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 function shadow(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: number) {
   ctx.fillStyle = 'rgba(20,30,50,0.32)';
   for (let y = -2; y <= 2; y++) { const hw = Math.round(w * Math.sqrt(1 - (y * y) / 6.5)); ctx.fillRect(cx - hw, cy + y, hw * 2, 1); }
@@ -480,7 +517,8 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
   const q = fx.reduce ? 0 : bfx.quake ?? 0;
   ctx.save();
   if (q > 0) ctx.translate(Math.round((Math.random() - 0.5) * q * 2), Math.round((Math.random() - 0.5) * q * 2));
-  drawBattleBg(ctx, t, theme);
+  if (bfx.sunAndMoon) drawSunMoonSea(ctx, t);
+  else drawBattleBg(ctx, t, theme);
   if (bfx.field) drawFieldBack(ctx, t, bfx.field);
   // 先算出每隻角色這一格實際畫在哪裡，技能特效用同一個矩形定位
   const pos = mons.map((m, i) => {

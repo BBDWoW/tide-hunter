@@ -1,0 +1,66 @@
+{
+  "moxu_sun_glaive": {
+    "frameWidth": 384,
+    "frameHeight": 208,
+    "frameCount": 20,
+    "atlasColumns": 4,
+    "frameDurationMs": 65,
+    "impactFrameIndex": 10,
+    "sourcePx": [
+      105,
+      111
+    ],
+    "targetPx": [
+      290,
+      127
+    ]
+  },
+  "moxu_moon_prison": {
+    "frameWidth": 384,
+    "frameHeight": 208,
+    "frameCount": 24,
+    "atlasColumns": 4,
+    "frameDurationMs": 65,
+    "impactFrameIndex": 14,
+    "sourcePx": [
+      105,
+      111
+    ],
+    "targetPx": [
+      290,
+      127
+    ]
+  },
+  "moxu_eight_domains": {
+    "frameWidth": 384,
+    "frameHeight": 208,
+    "frameCount": 28,
+    "atlasColumns": 4,
+    "frameDurationMs": 65,
+    "impactFrameIndex": 18,
+    "sourcePx": [
+      105,
+      111
+    ],
+    "targetPx": [
+      290,
+      127
+    ]
+  },
+  "moxu_convergence": {
+    "frameWidth": 384,
+    "frameHeight": 208,
+    "frameCount": 36,
+    "atlasColumns": 4,
+    "frameDurationMs": 65,
+    "impactFrameIndex": 24,
+    "sourcePx": [
+      105,
+      111
+    ],
+    "targetPx": [
+      290,
+      127
+    ]
+  }
+}

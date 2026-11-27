@@ -1,6 +1,7 @@
 // 生物實例：等級、經驗、HP、技能
 import { FORMS, hasAb, type Form, type Stats } from '../data/creatures';
 import { RARITY, STAGE_SLOTS } from '../data/types';
+import { MOXU_ASCENDED, MOXU_ASCENDED_BOOST } from '../data/moxu';
 import { SKILLS, type StatusId } from '../data/skills';
 
 import type { HeldId } from '../data/held';
@@ -70,9 +71,10 @@ export function statsOf(m: Mon): Stats {
   const s = (b: number, i: number) => Math.floor(((b * 2 * L) / 50 + 5) * mult * iv(i));
   let hp = Math.floor(((f.base.hp * 2 * L) / 50 + L + 10) * mult * iv(0));
   if (hasAb(f, 'colossal')) hp = Math.floor(hp * 1.6);
-  if (m.hpFixed) hp = m.hpFixed;
+  const formBoost = m.form === MOXU_ASCENDED ? MOXU_ASCENDED_BOOST : 1;
+  hp = m.hpFixed ?? Math.round(hp * formBoost);
   const blessings = m.oracleBlessings ?? 0;
-  return { hp: Math.round(hp * (1 + blessings * 0.1)), atk: s(f.base.atk, 1), def: Math.round(s(f.base.def, 2) * (1 + blessings * 0.2)), spd: s(f.base.spd, 3) };
+  return { hp: Math.round(hp * (1 + blessings * 0.1)), atk: Math.round(s(f.base.atk, 1) * formBoost), def: Math.round(s(f.base.def, 2) * formBoost * (1 + blessings * 0.2)), spd: Math.round(s(f.base.spd, 3) * formBoost) };
 }
 export const maxHp = (m: Mon) => statsOf(m).hp;
 
@@ -161,7 +163,7 @@ export function evolve(m: Mon, to: string): string[] {
 export const skillSlots = (m: Mon) => STAGE_SLOTS[formOf(m).stage];
 
 // ── 普攻：不耗能量的攻擊技，固定在第 1 格、不能被忘記 ──
-export const isBasicAttack = (id: string) => id !== 'oracle_tide' && !!SKILLS[id] && SKILLS[id].cost === 0 && SKILLS[id].power > 0;
+export const isBasicAttack = (id: string) => id !== 'oracle_tide' && id !== 'moxu_convergence' && !!SKILLS[id] && SKILLS[id].cost === 0 && SKILLS[id].power > 0;
 /** 這隻生物的普攻：優先選本系的不耗能攻擊，都沒有就是「撞擊」 */
 export function pickBasic(formId: string, known: string[]): string {
   const elems = FORMS[formId].elems;

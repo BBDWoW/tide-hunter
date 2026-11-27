@@ -1,6 +1,7 @@
 // 技能特效：每招三張圖集（back 畫在角色後面，front／particles 畫在角色前面），單格 192×104、4×3 共 12 格、每格 100ms。
 // 位置每一格都從角色目前的繪製矩形重新計算（會跟著衝刺、浮動、鏡像一起動）。
 import { oracleImpact } from '../data/oracle';
+import MOXU_FX from '../art/moxu_vfx.json';
 import SKILL_FX from '../art/vfx_skills.json';
 import { spriteSockets } from './art';
 
@@ -9,6 +10,8 @@ import { spriteSockets } from './art';
 export interface FxSkill { style: string; socket: string; co: [number, number][]; to: [number, number][]; fc?: number; r?: 'eclipse'; src?: string; hue?: number }
 const FX = SKILL_FX as unknown as Record<string, FxSkill>;
 export const FX_FRAMES = 12, FX_MS = 100;
+type MoxuFx = (typeof MOXU_FX)[keyof typeof MOXU_FX];
+export const moxuFx = (code: string): MoxuFx | undefined => (MOXU_FX as Record<string, MoxuFx>)[code];
 const FW = 192, FH = 104;
 type Layer = 'back' | 'front' | 'particles';
 const LAYERS: Layer[] = ['back', 'front', 'particles'];
@@ -17,21 +20,26 @@ const URLS = import.meta.glob('../art/vfx/*/*.png', { eager: true, query: '?url'
 type Atlas = HTMLImageElement | HTMLCanvasElement;
 const imgs = new Map<string, Partial<Record<Layer, Atlas>>>();
 
-export const hasFx = (code: string) => !!FX[code];
+export const hasFx = (code: string) => !!FX[code] || !!moxuFx(code);
 /** 這招的特效有幾格 */
-export const fxFrames = (code: string) => FX[code]?.fc ?? FX_FRAMES;
+export const fxFrames = (code: string) => moxuFx(code)?.frameCount ?? FX[code]?.fc ?? FX_FRAMES;
 export const fxSkill = (code: string) => FX[code];
 /** 先把招式的圖集載進來（用到時才載） */
+const loading = new Map<string, Promise<void>>();
 export function loadFx(code: string) {
-  if (!FX[code] || imgs.has(code)) return;
+  if (!hasFx(code)) return;
+  if (loading.has(code)) return loading.get(code);
   const set: Partial<Record<Layer, Atlas>> = {};
   imgs.set(code, set);
-  const src = FX[code].src ?? code, hue = FX[code].hue;
-  for (const l of LAYERS) {
+  const src = FX[code]?.src ?? code, hue = FX[code]?.hue;
+  const ready = Promise.all(LAYERS.map(async l => {
     const url = URLS[`../art/vfx/${src}/${l}.png`];
-    if (!url) continue;
-    const im = new Image(); im.onload = () => { set[l] = hue ? hueShift(im, hue) : im; }; im.src = url;
-  }
+    if (!url) return;
+    const im = new Image(); im.src = url;
+    try { await im.decode(); set[l] = hue ? hueShift(im, hue) : im; } catch { /* 保留戰鬥流程 */ }
+  })).then(() => {});
+  loading.set(code, ready);
+  return ready;
 }
 
 /** 把整張圖的色相轉 deg 度（亮度、飽和度不變，像素不會糊掉） */
@@ -76,7 +84,13 @@ const RETURNING = new Set(['soulsip', 'bloodtide', 'engulf', 'energydrain', 'see
 /** 畫一層特效（照包內附的定位程式改寫） */
 export function drawFx(ctx: CanvasRenderingContext2D, code: string, layer: Layer, frame: number, caster: Actor, target: Actor, arena: { x: number; y: number; w: number; h: number }) {
   const s = FX[code], image = imgs.get(code)?.[layer];
-  if (!s || !image || frame < 0 || frame >= fxFrames(code)) return;
+  if (!image || frame < 0 || frame >= fxFrames(code)) return;
+  const ascended = moxuFx(code);
+  if (ascended) {
+    drawAscended(ctx, image, ascended, layer, frame, caster, target, arena);
+    return;
+  }
+  if (!s) return;
   if (s.r === 'eclipse') { drawEclipse(ctx, image, s, layer, frame, caster, target, arena); return; }
   const source = actorPoint(caster, sock(caster, s.socket)), body = actorPoint(caster, sock(caster, 'body')), hit = actorPoint(target, target.sprite === 'oracle' ? oracleImpact(code).map(n => n / 128) as [number, number] : sock(target, 'body'));
   const scale = caster.rect.w / caster.logical;
@@ -139,6 +153,38 @@ function drawEclipse(ctx: CanvasRenderingContext2D, image: Atlas, s: FxSkill, la
       const u = Math.min(1, Math.max(0, (src - 55) / 90));
       const y = Math.round(source.y + (hit.y - source.y) * u - 55 * scale);
       ctx.drawImage(image, sx + Math.floor(src), sy, 1, FH, dst, y, 1, Math.round(FH * scale));
+    }
+  }
+  ctx.restore();
+}
+
+// 日月御潮圖集的前景依施術點和命中點定位，背景可延伸至寬螢幕邊緣。
+function drawAscended(ctx: CanvasRenderingContext2D, image: Atlas, skill: MoxuFx, layer: Layer, frame: number, caster: Actor, target: Actor, arena: Rect & { h: number }) {
+  const { frameWidth: w, frameHeight: h, atlasColumns: cols, sourcePx, targetPx } = skill;
+  const sx = (frame % cols) * w, sy = Math.floor(frame / cols) * h;
+  const source = actorPoint(caster, sock(caster, 'weapon'));
+  const hit = actorPoint(target, sock(target, 'body'));
+  const direction = hit.x >= source.x ? 1 : -1;
+  const scale = Math.min(arena.w / w, arena.h / h);
+  const [sourceX, sourceY] = sourcePx, [targetX, targetY] = targetPx;
+  ctx.save(); ctx.imageSmoothingEnabled = false;
+  ctx.beginPath(); ctx.rect(arena.x, arena.y, arena.w, arena.h); ctx.clip();
+  if (layer === 'back') {
+    ctx.translate(direction < 0 ? arena.x + arena.w : arena.x, arena.y);
+    ctx.scale(direction, 1);
+    ctx.drawImage(image, sx, sy, w, h, 0, 0, arena.w, arena.h);
+  } else if (layer === 'particles') {
+    ctx.translate(hit.x, hit.y); ctx.scale(direction * scale, scale);
+    ctx.drawImage(image, sx, sy, w, h, -targetX, -targetY, w, h);
+  } else {
+    const distance = Math.max(1, Math.abs(hit.x - source.x));
+    for (let x = Math.floor(arena.x); x < Math.ceil(arena.x + arena.w); x++) {
+      const along = (x - source.x) * direction;
+      const progress = Math.min(1, Math.max(0, along / distance));
+      const refX = sourceX + (targetX - sourceX) * progress + (along - progress * distance) / scale;
+      if (refX < 0 || refX >= w) continue;
+      const y = source.y + progress * (hit.y - source.y) - scale * (sourceY + progress * (targetY - sourceY));
+      ctx.drawImage(image, sx + Math.floor(refX), sy, 1, h, x, Math.round(y), 1, Math.round(h * scale));
     }
   }
   ctx.restore();

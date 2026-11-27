@@ -1,11 +1,13 @@
 // 最終大Boss：統領者・潮汐默旭的登場劇情、打倒後的結局劇情
+import { ensureSprite } from '../render/art';
+import { MOXU_ASCENDED } from '../data/moxu';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { sfx } from '../audio/engine';
 import { FORMS, recolorOf } from '../data/creatures';
 import { FINAL_BOSS, zoneOf, type RunState } from '../game/run';
 import { formOf } from '../game/creature';
 import { animFrame, drawSprite, PAL, spriteSize } from '../render/pixel';
-import { drawSea, drawTitle, type ThemeId } from '../render/scene';
+import { drawSea, drawSunMoonSea, drawTitle, type ThemeId } from '../render/scene';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
 import { MenuItem } from './Screens';
 import arrivalUrl from '../art/story/arrival.png';
@@ -18,11 +20,11 @@ const ease = (x: number) => 1 - Math.pow(1 - clamp(x), 3);
 const rnd = (i: number) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
 
 /** 畫統領者：置中、底部對齊 y；dark = 0..1 變成黑色剪影的程度 */
-function moxu(c: Ctx, t: number, cx: number, by: number, scale: number, alpha = 1, dark = 0) {
-  const f = FORMS[FINAL_BOSS], n = spriteSize(f.sprite) * scale;
+function moxu(c: Ctx, t: number, cx: number, by: number, scale: number, alpha = 1, dark = 0, form = FINAL_BOSS) {
+  const f = FORMS[form], n = spriteSize(f.sprite) * scale;
   const x = Math.round(cx - n / 2), y = Math.round(by - n + Math.sin(t * 1.6) * 2);
   const fr = animFrame(f.sprite, t, 0);
-  if (dark < 1) drawSprite(c, f.sprite, PAL[f.pal], x, y, { f: fr, flip: true, scale, alpha: alpha * (1 - dark), recolor: recolorOf(FINAL_BOSS, false) });
+  if (dark < 1) drawSprite(c, f.sprite, PAL[f.pal], x, y, { f: fr, flip: true, scale, alpha: alpha * (1 - dark), recolor: recolorOf(form, false) });
   if (dark > 0) drawSprite(c, f.sprite, PAL[f.pal], x, y, { f: fr, flip: true, scale, alpha: alpha * dark, tint: '#04060f' });
 }
 /** 整個畫面蓋一層顏色 */
@@ -68,8 +70,15 @@ const INTRO: Page[] = [
 
 const ZONE_ORBS = ['#7fe3ff', '#d8f4ff', '#ff8a3a', '#5ff1ff', '#9a7aff'];
 const ENDING: Page[] = [
-  { sound: 'reveal', lines: ['統領者巨大的身體，慢慢沉進了海裡。', '水牆一層一層地落下，化成溫柔的雨。'],
-    art: (c, t) => { c.fillStyle = '#081a3a'; c.fillRect(-200, 0, W + 400, H); waterWall(c, t, 1 - t / 3); moxu(c, t, W / 2, 92 + ease(t / 3) * 30, 1.5, 1 - clamp(t / 4) * 0.4); motes(c, t, 50, '#bdf2ff'); } },
+  { sound: 'reveal', lines: ['日月從默旭身後分離，兩座潮壁落回海面。', '日月御潮之姿隨著金色與銀藍的光退去。'],
+    art: (c, t) => {
+      const fade = ease(t / 2.8);
+      drawSunMoonSea(c, t, 1 - fade);
+      veil(c, '#06142e', fade * .55);
+      moxu(c, t, W / 2, 92 + fade * 14, 1.45, 1 - fade, 0, MOXU_ASCENDED);
+      moxu(c, t, W / 2, 92, 1.4, fade);
+      motes(c, t, 24, '#ffdda0'); motes(c, -t - 8, 24, '#a9ddff');
+    } },
   { speaker: '潮汐・默旭', lines: ['「……打了這麼久，你和你的夥伴，沒有一次丟下彼此。」', '「那就夠了。」'],
     art: (c, t) => { drawSea(c, t * 0.3, 'abyss'); veil(c, '#0a1b3a', 0.35); moxu(c, t, W / 2, 92, 1.4, 0.75); motes(c, t, 30, '#ffe7a0'); } },
   { speaker: '潮汐・默旭', lines: ['「潮汐從來不屬於任何人。我只是替大海看守它，等一個能和大海並肩的人。」', '「從今天起，這片海就交給你們了——潮汐獵手。」'],
@@ -101,6 +110,10 @@ const ENDING: Page[] = [
 
 /** 劇情：一頁一頁播，點一下或按「繼續」換頁 */
 export function Finale({ vp, run, mode, onDone }: { vp: Viewport; run: RunState; mode: 'intro' | 'ending'; onDone: () => void }) {
+  useEffect(() => {
+    void ensureSprite(FINAL_BOSS);
+    if (mode === 'ending') void ensureSprite(MOXU_ASCENDED);
+  }, [mode]);
   const pages = mode === 'intro' ? INTRO : ENDING;
   const [i, setI] = useState(0);
   const start = useRef(-1), page = pages[i];
