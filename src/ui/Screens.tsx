@@ -9,7 +9,7 @@ import { FORMS, STARTERS } from '../data/creatures';
 import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/types';
 import { ITEMS, statusLabel, type ItemId } from '../game/battle';
 import { ancestryOf, blockRate, dodgeRate, formOf, maxHp, xpToNext, type Mon } from '../game/creature';
-import { bringBackSlots, releaseValue, achStats, ACHIEVEMENTS, bayCap, bringBack, buyUpgrade, claimable, claimAchievement, loadMeta, saveMeta, titleOf, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
+import { bringBackSlots, releaseValue, achStats, ACHIEVEMENTS, bayCap, bringBack, buyUpgrade, claimable, claimAchievement, claimDexReward, dexCaughtCount, DEX_REWARDS, loadMeta, saveMeta, titleOf, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
 import { dailyRule, dailyRuleInfo, timeOfDay, TOD_INFO, MAX_STAR, STAR_RULES, todayKey, campHealMul, heldPrice, campSearch, campTrain, buyHeld, equipHeld, refreshCost, refreshShop, shopHeld, canUseOutside, enterSpecial, FINAL_ZONE, FINAL_PEARLS, ZONE_CHOICES, healParty, loadDex, loadRun, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
 import { APP_VERSION, CHANGELOG, hasUnreadNews, markNewsRead } from '../game/version';
@@ -628,6 +628,20 @@ function LegendPage({ won, legend }: { won: boolean; legend?: { met: boolean; wi
 
 export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
   const dex = loadDex();
+  const [meta, setMeta] = useState(loadMeta);
+  const [showRewards, setShowRewards] = useState(false);
+  const [rewardMessage, setRewardMessage] = useState('');
+  const caughtCount = dexCaughtCount(dex.caught);
+  const readyRewards = DEX_REWARDS.filter(({ count }) => count <= caughtCount && !meta.dexRewards?.includes(count)).length;
+  const collectReward = (count: number, pearls: number) => {
+    if (claimDexReward(count, loadDex().caught)) {
+      sfx('coin');
+      setRewardMessage(`獲得 ${pearls} 珍珠`);
+    } else {
+      setRewardMessage('目前無法領取，請再確認領取狀態。');
+    }
+    setMeta(loadMeta());
+  };
   const legend = dex.legend, legendWon = (legend?.wins ?? 0) > 0;
   const all = Object.values(FORMS).filter((f) => !f.secret).sort((a, b) => RARITY_ORDER.indexOf(a.rarity) - RARITY_ORDER.indexOf(b.rarity));
   const [sel, setSel] = useState<string | null>(() => all.find((x) => dex.seen.includes(x.id))?.id ?? null);
@@ -653,10 +667,36 @@ export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
       panel={
         <Win class="big-panel dex-panel">
           <div class="dex-head">
-            <b>潮靈觀察手冊</b><span class="small dim">見過 {dex.seen.length}・收服 {dex.caught.length}・共 {all.length}</span>
-            <button class="chip-btn dex-close" onClick={onBack}>✕ 返回</button>
+            <b>潮靈觀察手冊</b><span class="small dim">見過 {dex.seen.length}・收服 {caughtCount}・共 {all.length}</span>
+            <div class="row-gap dex-actions">
+              <button class={`chip-btn ${showRewards ? 'on' : ''}`} aria-pressed={showRewards} onClick={() => { setRewardMessage(''); setShowRewards(!showRewards); }}>解鎖獎勵{readyRewards > 0 ? `・${readyRewards} 可領` : ''}</button>
+              <button class="chip-btn dex-close" onClick={onBack}>✕ 返回</button>
+            </div>
           </div>
-          <div class="dex-split">
+          {showRewards ? (
+            <div class="dex-rewards">
+              <div class="row-gap dex-rewards-summary">
+                <span>收服 <b>{caughtCount}</b> 種</span>
+                <span><Icon name="pearl" /> 珍珠 {meta.pearls}</span>
+                <span class="small accent" role="status">{rewardMessage}</span>
+              </div>
+              {DEX_REWARDS.map(({ count, pearls }) => {
+                const claimed = meta.dexRewards?.includes(count);
+                const ready = caughtCount >= count;
+                return (
+                  <div class={`ach-row ${claimed ? 'got' : ready ? 'ready' : ''}`} key={count}>
+                    <span class="grow">
+                      <b>收服 {count} 種潮靈</b>
+                      <span class="small dim">{Math.min(caughtCount, count)} / {count}</span>
+                    </span>
+                    {claimed ? <span class="small dim">已領取 ◆ {pearls}</span> : (
+                      <button class="chip-btn" disabled={!ready} onClick={() => collectReward(count, pearls)}>{ready ? `領取 ◆ ${pearls}` : `◆ ${pearls}`}</button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : <div class="dex-split">
             <div class="dex-list">
               {legend?.met && (
                 <button class={`dex-cell legend ${legendWon ? 'caught' : ''} ${sel === 'tide_moxu' ? 'on' : ''}`} onClick={() => setSel('tide_moxu')} aria-label={legendWon ? '傳說：潮汐・默旭' : '傳說：還沒打倒'}>
@@ -707,7 +747,7 @@ export function Dex({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
                 )}
               </> : <p class="small dim">還沒有見過任何生物。</p>}
             </div>
-          </div>
+          </div>}
         </Win>
       } />
   );

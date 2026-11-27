@@ -71,6 +71,7 @@ export interface Meta {
   bay: BayMon[];
   runs: number;
   selected?: string; // 棲息灣裡「出航夥伴」的 id
+  dexRewards?: number[]; // 已領取的圖鑑收服里程碑
   achieved?: string[]; // 已經領取獎勵的成就
   godHand?: boolean; // 撐過了神之手
   title?: string; // 目前顯示的稱號（成就 id）
@@ -88,7 +89,10 @@ export function loadMeta(): Meta {
   } catch { /* 略過 */ }
   return { version: 1, pearls: 0, totalPearls: 0, upgrades: {}, recruits: [], bay: [], runs: 0 };
 }
-export function saveMeta(m: Meta) { try { localStorage.setItem(KEY, JSON.stringify(m)); } catch { /* 略過 */ } }
+export function saveMeta(m: Meta): boolean {
+  try { localStorage.setItem(KEY, JSON.stringify(m)); return true; }
+  catch { return false; }
+}
 export const upLv = (m: Meta, id: UpgradeId) => m.upgrades[id] ?? 0;
 export const bayCap = (m: Meta) => 10 + upLv(m, 'bay') * 5;
 
@@ -235,6 +239,31 @@ export function returnFromRun(m: Meta, party: Mon[]) {
     b.evoMemory = [...new Set([...b.evoMemory, ...chain.filter((id) => FORMS[id].stage > FORMS[b.root].stage)])];
   }
   saveMeta(m);
+}
+
+export const DEX_REWARDS = [
+  { count: 5, pearls: 10 },
+  { count: 20, pearls: 30 },
+  { count: 50, pearls: 60 },
+  { count: 80, pearls: 100 },
+  { count: 120, pearls: 160 },
+] as const;
+
+export function dexCaughtCount(caught: readonly string[]): number {
+  return new Set(caught.filter((id) => FORMS[id] && !FORMS[id].secret)).size;
+}
+
+export function claimDexReward(count: number, caught: readonly string[]): boolean {
+  const reward = DEX_REWARDS.find((entry) => entry.count === count);
+  if (!reward || dexCaughtCount(caught) < count) return false;
+  const meta = loadMeta();
+  if (meta.dexRewards?.includes(count)) return false;
+  return saveMeta({
+    ...meta,
+    dexRewards: [...(meta.dexRewards ?? []), count],
+    pearls: meta.pearls + reward.pearls,
+    totalPearls: meta.totalPearls + reward.pearls,
+  });
 }
 
 // ── 成就與稱號 ──

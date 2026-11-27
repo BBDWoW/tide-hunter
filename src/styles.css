@@ -410,6 +410,9 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .dex-panel { width: min(100%, calc(var(--u) * 232)); height: 100%; max-height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 .dex-head { display: flex; align-items: center; gap: 0.8em; flex: none; }
 .dex-head b { color: var(--amber); }
+.dex-actions { margin-left: auto; }
+.dex-rewards { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; margin-top: calc(var(--u) * 2); }
+.dex-rewards-summary { padding: 0.35em 0.5em; }
 .dex-close { margin-left: auto; font-size: 1em; padding: 0.25em 0.9em; }
 .dex-split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: calc(var(--u) * 3); margin-top: calc(var(--u) * 2); }
 .dex-list { overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--u) * 22), 1fr)); gap: calc(var(--u) * 1.2); align-content: start; padding-right: calc(var(--u) * 1); scrollbar-width: thin; }
