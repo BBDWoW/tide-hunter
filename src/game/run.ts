@@ -194,11 +194,11 @@ export const PARTY_MAX = 6;
 // ── 潮位（難度）：通關後解鎖下一級，效果會累加 ──
 export const MAX_STAR = 5;
 export const STAR_RULES = [
-  '野生潮靈與對手的能力 +10%',
+  '野生潮靈與對手的攻防再提高',
   '商店價格 +25%',
   '開局少 1 個捕捉餌和 1 個海藻藥膏',
   '霸主等級 +2',
-  '營地休息的回復量減半，對手能力再 +10%',
+  '營地休息的回復量減半，對手攻防再提高',
 ];
 export const starOf = (run: RunState) => run.star ?? 0;
 /** 越後面的海域越難：第二片海域對手能力 +10%，第三片（含最終大Boss）+20%；神秘區域再額外 +10% */
@@ -212,7 +212,7 @@ export function makeFinalBoss(run: RunState): Mon {
 }
 /** 對手的能力加成（潮位 1、5，以及海域） */
 export function foeMods(run: RunState) {
-  const k = 1 + (starOf(run) >= 1 ? 0.1 : 0) + (starOf(run) >= 5 ? 0.1 : 0) + zoneBoost(run);
+  const k = (1 + (starOf(run) >= 1 ? 0.1 : 0) + (starOf(run) >= 5 ? 0.1 : 0) + zoneBoost(run)) * 1.1;
   const re = run.dailyRule?.id === 'element' ? run.dailyRule.elem : undefined;
   return { atk: k, def: k, energy: 0, crit: 0, reso: re ? { [re]: 0.3 } : undefined };
 }

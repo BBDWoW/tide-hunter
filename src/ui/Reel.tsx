@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { RARITY, type Rarity } from '../data/types';
 import { useHold } from './input';
 
-export function reelZoneWidth(rarity: Rarity, hpRatio: number, hasStatus: boolean) {
-  return Math.max(0.1, Math.min(0.5, 0.15 + 0.34 * (1 - hpRatio) + (hasStatus ? 0.06 : 0) - RARITY[rarity].reel * 0.25));
+export function reelZoneWidth(rarity: Rarity, hpRatio: number, hasStatus: boolean, zoneBonus = 0) {
+  const base = Math.max(0.1, Math.min(0.5, 0.15 + 0.34 * (1 - hpRatio) + (hasStatus ? 0.06 : 0) - RARITY[rarity].reel * 0.25));
+  return Math.min(0.6, base * (1 + zoneBonus)) * 0.8;
 }
 
 // onDone(ok, quality)：quality 0–1，收線過程中張力越低越高，會影響之後晃動的成功率
@@ -13,7 +14,7 @@ export function Reel({ rarity, hpRatio, hasStatus, name, zoneBonus = 0, onDone }
   const progRef = useRef<HTMLElement>(null), tenRef = useRef<HTMLElement>(null);
   const [phase, setPhase] = useState<'ready' | 'go' | 'ok' | 'fail'>('ready');
   const hold = useHold(true);
-  const w = Math.min(0.6, reelZoneWidth(rarity, hpRatio, hasStatus) * (1 + zoneBonus));
+  const w = reelZoneWidth(rarity, hpRatio, hasStatus, zoneBonus);
 
   useEffect(() => {
     const reel = RARITY[rarity].reel;
