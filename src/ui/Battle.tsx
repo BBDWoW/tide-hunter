@@ -8,7 +8,7 @@ import { FORMS } from '../data/creatures';
 import { FIELDS, SKILLS, type FieldId, type StatusId } from '../data/skills';
 import { effectiveness, ELEM, RARITY, type Elem } from '../data/types';
 import {
-  active, aiChoose, aiForcedSwitch, canAfford, canRod, createBattle, finalSlots, MOXU_ULT, planAlly, startFinal, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, resolveTurn, restorePulled, statusLabel, volOf,
+  active, aiChoose, aiForcedSwitch, canAfford, canRod, createBattle, finalSlots, MOXU_ULT, planAlly, startFinal, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, REDUCED_HEALING_TURN, resolveTurn, restorePulled, statusLabel, volOf,
   type Action, type BattleState, type BEvent, type ItemId, type SideId,
 } from '../game/battle';
 import { blockRate, dodgeRate, formOf, maxHp, statsOf, type Mon } from '../game/creature';
@@ -103,6 +103,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     }
   }
   const bs = bsRef.current;
+  const [shownTurn, setShownTurn] = useState(bs.turn);
   const crew = !!enc.team; // 對手船隊：多隻敵人、不能收服
   const gh = !!enc.godhand; // 神之手之戰：撐過 20 回合
   const final = !!enc.final; // 最終決戰：統領者・潮汐默旭
@@ -526,6 +527,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
 
   async function afterTurn() {
     if (bs.over) return finish();
+    setShownTurn(bs.turn);
     if (bs.needSwitch[1]) { await play(forcedSwitch(bs, 1, aiForcedSwitch(bs, 1))); }
     if (bs.needSwitch[0]) { say('要派誰上場？'); setMode('force'); return; }
     setMode('main');
@@ -558,6 +560,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     setMode('busy');
     run.lifeStones = (run.lifeStones ?? 0) - 1;
     lifeStoneRevive(bs, 0);
+    setShownTurn(bs.turn);
     const a = anim.current, c = center(0);
     a.fade[0] = 1; a.enter[0] = 0;
     disp.current[0] = snap(0);
@@ -694,7 +697,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           const top = Math.max(p.side === 1 ? 15 : 49, c.cy - 30);
           return <span key={p.id} class={`pop ${p.cls}`} style={{ left: `${((c.cx + p.dx) / W) * 100}%`, top: `${(top / H) * 100}%` }}>{p.label && <small>{p.label}</small>}{p.text}</span>;
         })}
-        {bs.godhand && <div class="gh-counter"><Icon name="heart" /> 陪神之手玩：第 <b>{Math.min(bs.turn, bs.godhand.survive)}</b> / {bs.godhand.survive} 回合{bs.godhand.rewinds > 0 && <span>（被倒退 {bs.godhand.rewinds} 次）</span>}{loveLock && <em>只能攻擊！</em>}</div>}
+        {bs.godhand && (bs.godhand.rewinds > 0 || loveLock) && <div class="gh-counter"><Icon name="heart" />{bs.godhand.rewinds > 0 && <span>（被倒退 {bs.godhand.rewinds} 次）</span>}{loveLock && <em>只能攻擊！</em>}</div>}
         {cut && <div class={`final-cut ${cut.tone ?? ''}`} onClick={() => { introSkip.current = true; }} role="button" aria-label="跳過劇情"><i class="bi-bar top" /><i class="bi-bar bottom" /><div class="fc-card"><b class="fc-title">{cut.title}</b>{cut.lines.map((l, i) => <p key={i} style={{ animationDelay: `${0.3 + i * 0.9}s` }}>{l}</p>)}</div><span class="bi-skip">點一下跳過</span></div>}
         {pulls && <div class="gh-pulls" key={pulls.id}>{pulls.names.map((n, i) => <span key={i} style={{ animationDelay: `${i * 0.18}s` }}>{n}</span>)}</div>}
         {rewind !== 0 && <div class="gh-rewind" key={rewind}>⟲ 時間倒退了</div>}
@@ -702,7 +705,12 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           {bs.domain && <div class="domain-chip" style={{ borderColor: DOMAINS[bs.domain].color, color: DOMAINS[bs.domain].color }} title={DOMAINS[bs.domain].desc}><Icon name="sparkle" /> 領域・{DOMAINS[bs.domain].name}<span>{DOMAINS[bs.domain].short}</span></div>}
           {field && <div class="field-chip" style={{ borderColor: FIELDS[field.id].color }} title={FIELDS[field.id].desc}><i style={{ background: FIELDS[field.id].color }} />{FIELDS[field.id].name}<span>剩 {field.turns} 回合</span></div>}
         </div>}
-        <button class="speed" onClick={toggleFast} aria-pressed={fast}>{fast ? '▶▶ 快速' : '▶ 一般'}</button>
+        <div class="battle-clock">
+          <div class="turn-count">第 {shownTurn}{bs.godhand && ` / ${bs.godhand.survive}`} 回合
+            {!gh && shownTurn >= REDUCED_HEALING_TURN && <small>我方回復減半</small>}
+          </div>
+          <button class="speed" onClick={toggleFast} aria-pressed={fast}>{fast ? '▶▶ 快速' : '▶ 一般'}</button>
+        </div>
         {mode === 'reel' && !vp.portrait && reel}
         {toast && <div class="item-toast" key={toast.id}><Sprite form={toast.form} size={48} /><span class="grow"><b><Icon name="heal" /> {toast.text}</b><Bar value={toast.hp} max={toast.max} /><span class="num small">HP {toast.from} → {toast.hp}/{toast.max}</span></span></div>}
 

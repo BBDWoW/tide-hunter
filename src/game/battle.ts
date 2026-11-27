@@ -245,7 +245,7 @@ export function switchIn(s: BattleState, side: SideId, to: number, ev: BEvent[])
   const sd = s.sides[side], out = active(s, side);
   if (out.hp > 0) {
     if (hasAb(formOf(out), 'regen')) {
-      const amt = Math.min(maxHp(out) - out.hp, Math.floor(maxHp(out) / 4));
+      const amt = healingAmount(s, side, out, Math.floor(maxHp(out) / 4));
       out.hp += amt;
     }
     ev.push({ t: 'msg', text: `${formOf(out).name}，回來吧！` });
@@ -291,7 +291,7 @@ function useItem(s: BattleState, side: SideId, item: ItemId, target: number, ev:
     ev.push({ t: 'msg', text: `${formOf(active(s, side)).name} 充滿了能量！` });
     return;
   }
-  const amt = item === 'potion' ? Math.min(mx - m.hp, Math.floor(mx / 2)) : mx - m.hp;
+  const amt = healingAmount(s, side, m, item === 'potion' ? Math.floor(mx / 2) : mx);
   m.hp += amt;
   if (item === 'superpotion') m.status = null;
   if (isActive) {
@@ -376,8 +376,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
       ev.push({ t: 'msg', text: `${myName} 的異常狀態治好了！` });
     }
     if (fx.heal) {
-      // 每次都回復固定比例（拖延戰鬥由第 20 回合起的漩渦處理）
-      const mx = maxHp(me), amt = Math.min(mx - me.hp, Math.floor(mx * fx.heal));
+      const mx = maxHp(me), amt = healingAmount(s, side, me, Math.floor(mx * fx.heal));
       me.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: me.hp });
       ev.push({ t: 'msg', text: amt > 0 ? `${myName} 回復了 ${amt} HP！` : `${myName} 的 HP 已經是滿的。` });
     }
@@ -428,7 +427,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
   // 蓄水：水屬性攻擊改為回復
   const tgt = active(s, foe);
   if (sk.elem === 'water' && hasAb(formOf(tgt), 'waterabsorb')) {
-    const mx = maxHp(tgt), amt = Math.min(mx - tgt.hp, Math.floor(mx / 4));
+    const mx = maxHp(tgt), amt = healingAmount(s, foe, tgt, Math.floor(mx / 4));
     tgt.hp += amt;
     ev.push({ t: 'heal', side: foe, amount: amt, hp: tgt.hp });
     ev.push({ t: 'msg', text: `${nameOf(s, foe)} 的蓄水吸收了攻擊${amt > 0 ? `，回復 ${amt} HP！` : '！'}` });
@@ -475,7 +474,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
   if (hits > 1) ev.push({ t: 'msg', text: `擊中了 ${landed} 次！` });
   const drain = (fx.drain ?? 0) + (held(me, 'leechcoral') ? 0.15 : 0);
   if (drain && total > 0 && me.hp > 0) {
-    const amt = Math.min(maxHp(me) - me.hp, Math.floor(total * drain));
+    const amt = healingAmount(s, side, me, Math.floor(total * drain));
     if (amt > 0) { me.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: me.hp }); ev.push({ t: 'msg', text: `${myName} 吸取了 ${amt} HP！` }); }
   }
   if (fx.recoil && total > 0 && me.hp > 0) {
@@ -658,10 +657,15 @@ function checkEnrage(s: BattleState, ev: BEvent[]) {
   }
 }
 
-export const VORTEX_TURN = 20;
+export const REDUCED_HEALING_TURN = 20;
+
+function healingAmount(s: BattleState, side: SideId, m: Mon, amount: number) {
+  const reduced = side === 0 && !s.godhand && s.turn >= REDUCED_HEALING_TURN;
+  const effective = reduced && amount > 0 ? Math.max(1, Math.floor(amount / 2)) : amount;
+  return Math.min(maxHp(m) - m.hp, effective);
+}
 
 function endOfTurn(s: BattleState, ev: BEvent[], only?: SideId) {
-  if (s.turn === VORTEX_TURN && only === undefined) ev.push({ t: 'msg', text: '海面開始捲起漩渦！每回合雙方都會受到傷害。' });
   for (const side of (only === undefined ? [0, 1] : [only]) as SideId[]) {
     if (s.over) return;
     const m = active(s, side), v = volOf(s, side), f = formOf(m);
@@ -698,24 +702,17 @@ function endOfTurn(s: BattleState, ev: BEvent[], only?: SideId) {
       checkFaints(s, ev);
       if (m.hp <= 0 || s.over) continue;
     }
-    if (s.turn >= VORTEX_TURN && !s.godhand) {
-      const d = Math.max(1, Math.floor((mx * (s.turn - VORTEX_TURN + 1)) / 12));
-      m.hp = Math.max(0, m.hp - d);
-      ev.push({ t: 'dmg', side, amount: d, hp: m.hp, eff: 1, crit: false, shield: v.shield });
-      checkFaints(s, ev);
-      if (m.hp <= 0 || s.over) continue;
-    }
-    if ((hasAb(f, 'moist') || hasAb(f, 'photosyn') || hasAb(f, 'waterveil')) && m.hp < mx && s.turn < VORTEX_TURN) {
-      const amt = Math.min(mx - m.hp, Math.max(1, Math.floor(mx / 16)));
+    if ((hasAb(f, 'moist') || hasAb(f, 'photosyn') || hasAb(f, 'waterveil')) && m.hp < mx) {
+      const amt = healingAmount(s, side, m, Math.max(1, Math.floor(mx / 16)));
       m.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: m.hp });
     }
-    if (s.field?.id === 'grove' && m.hp < mx && s.turn < VORTEX_TURN) {
-      const amt = Math.min(mx - m.hp, Math.max(1, Math.floor(mx / (fe.includes('grass') ? 8 : 16))));
+    if (s.field?.id === 'grove' && m.hp < mx) {
+      const amt = healingAmount(s, side, m, Math.max(1, Math.floor(mx / (fe.includes('grass') ? 8 : 16))));
       m.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: m.hp });
     }
-    if (s.domain === 'forest' && m.hp < mx && s.turn < VORTEX_TURN) { // 領域效果：敵我雙方都有
+    if (s.domain === 'forest' && m.hp < mx) { // 領域效果：敵我雙方都有
       // 敵人也會回復，但量比較少（霸主、守護者 HP 很多，回復太多會打不完）
-      const amt = Math.min(mx - m.hp, Math.max(1, Math.floor(mx / (side === 1 ? 24 : fe.includes('grass') ? 10 : 16))));
+      const amt = healingAmount(s, side, m, Math.max(1, Math.floor(mx / (side === 1 ? 24 : fe.includes('grass') ? 10 : 16))));
       m.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: m.hp });
     }
     v.turnsIn++;
