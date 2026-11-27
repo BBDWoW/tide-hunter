@@ -78,6 +78,15 @@ export function statsOf(m: Mon): Stats {
 }
 export const maxHp = (m: Mon) => statsOf(m).hp;
 
+/** 調整敵方生命上限，保留遭遇時的剩餘生命比例。 */
+export function scaleEnemyHp(m: Mon, multiplier: number): Mon {
+  const before = maxHp(m);
+  const blessing = 1 + (m.oracleBlessings ?? 0) * 0.1;
+  const hpFixed = Math.round((m.hpFixed ?? before / blessing) * multiplier);
+  const hp = Math.round(m.hp * Math.round(hpFixed * blessing) / before);
+  return { ...m, hpFixed, hp: m.hp > 0 ? Math.max(1, hp) : 0 };
+}
+
 // 往回找祖先形態，取得完整的技能學習表
 export function ancestryOf(formId: string): Form[] {
   const chain: Form[] = [FORMS[formId]];
@@ -91,7 +100,7 @@ export function ancestryOf(formId: string): Form[] {
   return chain;
 }
 
-export function makeMon(formId: string, lv: number, boss = false, wild = false, rnd?: () => number): Mon {
+function startingSkills(formId: string, lv: number, boss: boolean): string[] {
   const f = FORMS[formId];
   // 依學會的等級排序（同等級維持原本順序），最後幾招就是最近學會的
   const learned: [number, string][] = [];
@@ -102,10 +111,22 @@ export function makeMon(formId: string, lv: number, boss = false, wild = false, 
   // 霸主例外：用設計好的 4 招招式組
   // 靈龜初始保留招牌大招，高等級加入的夥伴可以在隊伍面板換上已解鎖的招式。
   const loadout = formId === 'oracle' ? f.learn.filter(([level]) => level === 1).map(([, id]) => id) : known;
-  const picked = boss ? known.slice(-STAGE_SLOTS[f.stage]) : [basic, ...loadout.filter((id) => id !== basic).slice(-(STAGE_SLOTS[f.stage] - 1))];
-  const m: Mon = { uid: newUid(), form: formId, lv, xp: 0, hp: 0, skills: picked, status: null, boss, wild, iv: boss ? [0, 0, 0, 0] : rollIv(rnd) };
+  return boss ? known.slice(-STAGE_SLOTS[f.stage]) : [basic, ...loadout.filter((id) => id !== basic).slice(-(STAGE_SLOTS[f.stage] - 1))];
+}
+
+export function makeMon(formId: string, lv: number, boss = false, wild = false, rnd?: () => number): Mon {
+  const m: Mon = { uid: newUid(), form: formId, lv, xp: 0, hp: 0, skills: startingSkills(formId, lv, boss), status: null, boss, wild, iv: boss ? [0, 0, 0, 0] : rollIv(rnd) };
   m.hp = maxHp(m);
   return m;
+}
+
+/** 依收服後的等級配置技能，保留個體值、異變與剩餘生命比例。 */
+export function recruitCaughtMon(enemy: Mon): Mon {
+  const lv = Math.max(1, enemy.lv - 3);
+  const mon: Mon = { ...enemy, lv, wild: false, status: null, statusTurns: undefined, hpFixed: undefined,
+    skills: startingSkills(enemy.form, lv, false) };
+  mon.hp = Math.max(1, Math.round(maxHp(mon) * enemy.hp / maxHp(enemy)));
+  return mon;
 }
 
 /** 閃避率、格擋率：看種族的速度與防禦（2%～15%） */

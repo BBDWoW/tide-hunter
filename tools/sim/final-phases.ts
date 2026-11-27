@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
-import { aiChoose, battleStats, canRod, clearConvergence, createBattle, finalSlots, hitChance, lifeStoneRevive, resolveTurn, skillFor, startFinal, volOf } from '../../src/game/battle';
-import { makeMon, statsOf } from '../../src/game/creature';
+import { aiChoose, battleEffectiveness, battleStats, calcDamage, canRod, clearConvergence, createBattle, finalSlots, hitChance, lifeStoneRevive, resolveTurn, skillFor, startFinal, volOf } from '../../src/game/battle';
+import { makeMon, maxHp, recruitCaughtMon, statsOf } from '../../src/game/creature';
 import { foeMods, newRun } from '../../src/game/run';
 import { makeRng } from '../../src/game/rng';
+import { ELEM, type Elem } from '../../src/data/types';
 import { MOXU_ASCENDED, MOXU_ASCENDED_SKILLS } from '../../src/data/moxu';
 
 const player = makeMon('water1', 28);
@@ -21,7 +22,9 @@ const kill = () => { boss.hp = 0; return resolveTurn(state, [pass, pass]); };
 
 assert.equal(final.phase, 1);
 assert.equal(canRod(state), false);
-assert(kill().some(event => event.t === 'summon'));
+const summon = kill();
+assert(summon.some(event => event.t === 'summon'));
+assert(summon.some(event => event.t === 'summonShield' && event.amount === first.hp * 5));
 assert.equal(final.phase, 2);
 assert.equal(boss.hp, first.hp);
 assert.deepEqual(boss.skills, originalSkills);
@@ -29,7 +32,35 @@ assert.equal(skillFor(boss, -2).id, 'moxu_daybreak');
 assert.equal(finalSlots(state).length, 2);
 assert.equal(canRod(state), true);
 
+const ally = state.sides[1].team[final.ally!];
+assert.equal(maxHp(ally), 2 * maxHp(makeMon(ally.form, ally.lv, true, true)));
+final.allyPlan = pass;
+const hitShield = resolveTurn(state, [{ type: 'skill', slot: 0, target: 0 }, pass]);
+assert.equal(boss.hp, first.hp);
+assert(!hitShield.some(event => event.t === 'summonShield'));
+
 boss.hp = 1;
+boss.status = 'poison';
+boss.statusTurns = 2;
+final.allyPlan = pass;
+const allyHp = ally.hp;
+const protectedTurn = resolveTurn(state, [{ type: 'rod' }, pass]);
+assert.equal(boss.hp, 1);
+assert(ally.hp < allyHp);
+assert(!protectedTurn.some(event => event.t === 'phase3' || event.t === 'summonShield'));
+
+ally.hp = 1;
+boss.status = null;
+final.rodCd = 0;
+final.allyPlan = pass;
+const breakShield = resolveTurn(state, [{ type: 'rod' }, pass]);
+assert(breakShield.some(event => event.t === 'faint' && event.slot === 1));
+assert(breakShield.some(event => event.t === 'summonShield' && event.amount === 0));
+assert.equal(boss.hp, 1);
+assert.equal(final.phase, 2);
+assert.deepEqual(finalSlots(state), [0]);
+
+final.rodCd = 0;
 state.field = { id: 'lava', turns: 3 };
 state.traps = [0, 2];
 const shift = resolveTurn(state, [{ type: 'rod' }, aiChoose(state, 1)]);
@@ -42,7 +73,12 @@ assert.equal(state.field, null);
 assert.equal(boss.form, MOXU_ASCENDED);
 assert.deepEqual(boss.skills, MOXU_ASCENDED_SKILLS);
 const ascended = statsOf(boss);
-for (const stat of ['hp', 'atk', 'def', 'spd'] as const) assert.equal(ascended[stat], Math.round(first[stat] * 1.1));
+assert.equal(ascended.hp, Math.round(first.hp * 1.1) * 2);
+for (const stat of ['atk', 'def', 'spd'] as const) assert.equal(ascended[stat], Math.round(first[stat] * 1.1));
+for (const elem of Object.keys(ELEM) as Elem[]) {
+  assert.equal(battleEffectiveness(MOXU_ASCENDED, 'fire', [elem]), 2);
+}
+assert.equal(calcDamage(state, 1, 0, skillFor(boss, 0)).eff, 2);
 assert.equal(boss.hp, ascended.hp);
 assert.equal(volOf(state, 1).energy, 2);
 const casts = new Set<string>();
@@ -105,3 +141,24 @@ lifeStoneRevive(state, 0);
 assert.equal(player.hp, 2250);
 assert(kill().some(event => event.t === 'end' && event.winner === 0));
 console.log('統領者三條血、召喚、釣竿、變身能力、四招、萬海歸寂削弱疊加與勝利判定通過');
+
+const wild = makeMon('water1', 10, false, true, () => 0.9);
+wild.hp = Math.floor(maxHp(wild) * 0.6);
+const baseline = foeMods(run);
+for (let star = 1; star <= 5; star++) {
+  const mods = foeMods({ ...run, star });
+  assert.equal(mods.damage, 1.15 ** star);
+  assert.equal(mods.def, baseline.def * mods.damage);
+  const encounter = createBattle(makeRng(7), { name: '玩家', team: [player] },
+    { name: '野生潮靈', team: [wild], mods }, true);
+  const enemy = encounter.sides[1].team[0];
+  assert.equal(maxHp(enemy), Math.round(maxHp(wild) * mods.damage));
+  const caught = recruitCaughtMon(enemy);
+  assert.equal(caught.lv, 7);
+  assert.deepEqual(caught.iv, wild.iv);
+  assert.deepEqual(caught.skills, makeMon(wild.form, 7).skills);
+  assert.equal(caught.hp, Math.round(maxHp(caught) * enemy.hp / maxHp(enemy)));
+  assert.equal(caught.hpFixed, undefined);
+}
+assert.equal(recruitCaughtMon(makeMon('water1', 3, false, true)).lv, 1);
+console.log('潮位倍率、敵方生命與收服後等級、個體值和技能檢查通過');

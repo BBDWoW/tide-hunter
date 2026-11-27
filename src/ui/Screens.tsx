@@ -88,7 +88,7 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
             ))}
           </div>
           <ul class="star-rules">
-            {star === 0 ? <li class="dim">標準難度。</li> : STAR_RULES.slice(0, star).map((t, i) => <li key={i}>★{i + 1}　{t}</li>)}
+            {star === 0 ? <li class="dim">標準難度。</li> : STAR_RULES.slice(0, star).map((t, i) => <li key={i}>★{i + 1}　敵方傷害、防禦、生命各再提高 15%{t && `・${t}`}</li>)}
           </ul>
           <p class="small accent">結算珍珠 +{star * 20}%{maxStar < MAX_STAR ? `　・用 ★${maxStar} 通關可以解鎖 ★${maxStar + 1}` : ''}</p>
           <MenuItem onClick={begin} hot>出航！</MenuItem>

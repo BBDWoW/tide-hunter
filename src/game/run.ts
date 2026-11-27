@@ -3,7 +3,7 @@ import { HELD, HELD_IDS, resonance, type HeldId } from '../data/held';
 import { ABYSS_POOL, CORE_POOL, CYBER_POOL, FOREST_POOL, FORMS, ICE_POOL, LAVA_POOL, VOID_POOL, ZONE1_POOL } from '../data/creatures';
 import type { EggZone } from './eggs';
 import { effectiveness, ELEM, RARITY_ORDER, type Elem, type Rarity } from '../data/types';
-import { formOf, makeMon, makeMutant, maxHp, MUTANT_CHANCE, type Mon } from './creature';
+import { formOf, makeMon, makeMutant, maxHp, scaleEnemyHp, MUTANT_CHANCE, type Mon } from './creature';
 import { int, makeRng, newSeed, next, weighted, type Rng } from './rng';
 import type { ItemId } from './battle';
 import { BOON_LIST, BOON_TIER, BOONS, type LureId } from '../data/boons';
@@ -194,11 +194,11 @@ export const PARTY_MAX = 6;
 // ── 潮位（難度）：通關後解鎖下一級，效果會累加 ──
 export const MAX_STAR = 5;
 export const STAR_RULES = [
-  '野生潮靈與對手的攻防再提高',
+  '',
   '商店價格 +25%',
   '開局少 1 個捕捉餌和 1 個海藻藥膏',
   '霸主等級 +2',
-  '營地休息的回復量減半，對手攻防再提高',
+  '營地休息的回復量減半',
 ];
 export const starOf = (run: RunState) => run.star ?? 0;
 /** 越後面的海域越難：第二片海域對手能力 +10%，第三片（含最終大Boss）+20%；神秘區域再額外 +10% */
@@ -210,11 +210,12 @@ export const FINAL_PEARLS = 300;
 export function makeFinalBoss(run: RunState): Mon {
   return makeMon(FINAL_BOSS, ZONES.cyber.bossLv + 3 + (starOf(run) >= 4 ? 2 : 0), true, true);
 }
-/** 對手的能力加成（潮位 1、5，以及海域） */
+/** 海域攻防加成，以及逐級累乘的潮位加成。 */
 export function foeMods(run: RunState) {
-  const k = (1 + (starOf(run) >= 1 ? 0.1 : 0) + (starOf(run) >= 5 ? 0.1 : 0) + zoneBoost(run)) * 1.1;
+  const tide = 1.15 ** starOf(run);
+  const k = (1 + zoneBoost(run)) * 1.1;
   const re = run.dailyRule?.id === 'element' ? run.dailyRule.elem : undefined;
-  return { atk: k, def: k, energy: 0, crit: 0, reso: re ? { [re]: 0.3 } : undefined };
+  return { atk: k, def: k * tide, damage: tide, hp: tide, energy: 0, crit: 0, reso: re ? { [re]: 0.3 } : undefined };
 }
 export const priceMul = (run: RunState) => (1 - (run.perks?.discount ?? 0)) * (starOf(run) >= 2 ? 1.25 : 1) * (run.dailyRule?.id === 'treasure' ? 1.5 : 1) * (boon(run, 'L_midas') ? 0.7 : 1);
 export const campHealMul = (run: RunState) => (starOf(run) >= 5 ? 0.5 : 1);
@@ -417,7 +418,7 @@ export function rollCrew(run: RunState): Encounter {
 export function rollEncounter(run: RunState, q: number, shadow: Shadow): Encounter {
   if (isBoss(run)) {
     const z = zoneOf(run), mon = makeMon(z.boss, (z.special ? (run.specialLv ?? 10) + 3 : z.bossLv) + (starOf(run) >= 4 ? 2 : 0), true, true);
-    return { mon, rarity: FORMS[z.boss].rarity };
+    return { mon: scaleEnemyHp(mon, 2), rarity: FORMS[z.boss].rarity };
   }
   let rarity = shadow.rarity;
   if (q >= perfectAt(run) && (rarity === 'N' || rarity === 'B')) rarity = RARITY_ORDER[RARITY_ORDER.indexOf(rarity) + 1];

@@ -11,7 +11,7 @@ import { FORMS } from '../data/creatures';
 import { FIELDS, SKILLS, type FieldId, type StatusId } from '../data/skills';
 import { effectiveness, ELEM, RARITY, type Elem } from '../data/types';
 import {
-  active, aiChoose, aiForcedSwitch, canAfford, canRod, createBattle, battleStats, battleMaxHp, clearConvergence, finalSlots, skillFor, planAlly, startFinal, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, REDUCED_HEALING_TURN, resolveTurn, restorePulled, statusLabel, volOf,
+  active, aiChoose, battleEffectiveness, aiForcedSwitch, canAfford, canRod, createBattle, battleStats, battleMaxHp, clearConvergence, finalSlots, skillFor, planAlly, startFinal, effPower, forcedSwitch, hitChance, ITEMS, lifeStoneRevive, MAX_ENERGY, REDUCED_HEALING_TURN, resolveTurn, restorePulled, statusLabel, volOf,
   type Action, type BattleState, type BEvent, type ItemId, type SideId,
 } from '../game/battle';
 import { blockRate, dodgeRate, formOf, maxHp, type Mon } from '../game/creature';
@@ -33,7 +33,7 @@ export interface BattleResult { outcome: 'win' | 'lose' | 'caught' | 'fled'; ene
 interface Intent { key: string; act: Action; icon: string; name: string; elem: Elem | null; atk: boolean }
 
 type Mode = 'busy' | 'main' | 'skills' | 'switch' | 'force' | 'items' | 'itemTarget' | 'reel' | 'lifestone';
-interface Disp { form: string; lv: number; hp: number; max: number; energy: number; status: StatusId | null; shield: number; trap?: number; convergenceLoss?: number; mutant?: boolean }
+interface Disp { form: string; lv: number; hp: number; max: number; energy: number; status: StatusId | null; shield: number; summonShield?: number; trap?: number; convergenceLoss?: number; mutant?: boolean }
 interface Popup { id: number; side: number; text: string; cls: string; label?: string; dx: number } // side：畫面上的角色（0 我方、1 對手、2 被召喚的霸主）
 
 const SPEED_KEY = 'tidehunter.speed';
@@ -472,6 +472,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         if (e.amount > 0) { sfx('heal'); burst(a.parts, c.x, c.y, 'heal', null); pop(v, `+${e.amount}`, 'heal'); }
         rerender(); await wait(300); break;
       }
+      case 'summonShield': d[1].summonShield = e.amount; rerender(); break;
       case 'shield': d[vi(e)].shield = e.amount; rerender(); break;
       case 'status': if (e.status) sfx('status'); d[vi(e)].status = e.status; rerender(); break;
       case 'stat': { const v = vi(e); sfx(e.delta > 0 ? 'buff' : 'debuff'); const c = center(v); if (e.delta > 0) burst(a.parts, c.x, c.y, 'buff', null); else a.shakeT[v] = 0.2; pop(v, e.delta > 0 ? '▲' : '▼', e.delta > 0 ? 'heal' : 'weak'); break; }
@@ -498,8 +499,6 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           await new Promise((r) => setTimeout(r, 1100));
           burst(a.parts, c.x, c.y, 'faint', null); burst(a.parts, c.x, c.y, 'faint', null); jolt(6, 0.7);
           for (let i = 0; i < 20; i++) { a.fade[1] = 1 - (i + 1) / 20; await new Promise((r) => setTimeout(r, 45)); }
-          // 被召喚的霸主也跟著沉回海裡
-          if (a.fade[2] > 0) for (let i = 0; i < 10; i++) { a.fade[2] = 1 - (i + 1) / 10; await wait(30); }
           break;
         }
         sfx(v === 2 ? 'bossdown' : 'faint'); const c = center(v); burst(a.parts, c.x, c.y, 'faint', null);
@@ -559,11 +558,11 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         allySlot.current = null; a.fade[2] = 0; setTarget(0);
         fieldRef.current = null; setField(null);
         d[0].trap = 0;
-        d[1] = { ...d[1], form: MOXU_ASCENDED, hp: e.hp, max: e.max, energy: e.energy, status: null, shield: 0, trap: 0 };
+        d[1] = { ...d[1], form: MOXU_ASCENDED, hp: e.hp, max: e.max, energy: e.energy, status: null, shield: 0, summonShield: 0, trap: 0 };
         a.mons[1] = { ...a.mons[1], form: MOXU_ASCENDED, aura: '#b6d5ff', flash: .45 };
         setShownPhase(3);
         jolt(4, .25, '#f9e1a8');
-        say('日月御潮・默旭的 HP、攻擊、防禦與速度提高 10%！');
+        say('日月御潮・默旭的生命翻倍，有屬性攻擊剋制所有屬性！');
         rerender(); await wait(660);
         break;
       }
@@ -651,7 +650,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     }
     await wait(1100);
     clearConvergence(bs, 0);
-    onEnd({ outcome, enemy: crew ? active(bs, 1) : enc.mon, participants: [...participants.current], team: enc.team });
+    onEnd({ outcome, enemy: caught || crew ? active(bs, 1) : enc.mon, participants: [...participants.current], team: enc.team });
   }
 
   async function useLifeStone() {
@@ -777,7 +776,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
 
   const portraitEnemies = vp.portrait && allySlot.current != null && anim.current.fade[2] > 0;
   const enemyCards = (<>
-        <HudBox onOpen={() => (duo && target !== 0 ? pickTarget(0) : openInfo(1, 0))} sel={duo && target === 0} note={finalNote} side={1} d={de} rarity={crew ? undefined : FORMS[de.form].rarity} boss={boss} intent={mode === 'main' || mode === 'skills' ? intent : null} warn={!!intent?.atk && effectiveness(intent.elem, formOf(active(bs, 0)).elems) >= 2} crewLeft={crew ? bs.sides[1].team.filter((m) => m.hp > 0).length : 0} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
+        <HudBox onOpen={() => (duo && target !== 0 ? pickTarget(0) : openInfo(1, 0))} sel={duo && target === 0} note={finalNote} side={1} d={de} rarity={crew ? undefined : FORMS[de.form].rarity} boss={boss} intent={mode === 'main' || mode === 'skills' ? intent : null} warn={!!intent?.atk && battleEffectiveness(de.form, intent.elem, formOf(active(bs, 0)).elems) >= 2} crewLeft={crew ? bs.sides[1].team.filter((m) => m.hp > 0).length : 0} charged={volOf(bs, 1).charged} locked={volOf(bs, 1).lockOn} turns={active(bs, 1).statusTurns} />
         {allySlot.current != null && disp.current[2] && anim.current.fade[2] > 0 && <HudBox cls="hud-ally" onOpen={() => (duo && target !== allySlot.current ? pickTarget(allySlot.current!) : openInfo(1, allySlot.current!))} sel={duo && target === allySlot.current} side={1} d={disp.current[2]} rarity={FORMS[disp.current[2].form].rarity} boss intent={mode === 'main' || mode === 'skills' ? allyIntent : null} warn={!!allyIntent?.atk && effectiveness(allyIntent.elem, formOf(active(bs, 0)).elems) >= 2} />}
   </>);
   return (
@@ -889,7 +888,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
                   <button class="act-btn" disabled={loveLock} onClick={() => setMode('switch')}><Icon name="swap" /> 換人</button>
                   <button class="act-btn" disabled={loveLock} onClick={() => { setHover(0); setMode('items'); }}><Icon name="bag" /> 道具</button>
                   {!boss && !gh && <button class="act-btn" onClick={() => submit({ type: 'run' })}><Icon name="flee" /> 逃跑</button>}
-                  {final && <button class={`act-btn rod-btn ${canRod(bs) ? 'ready' : ''}`} disabled={!canRod(bs)} onClick={() => submit({ type: 'rod' })} title="漁夫跳出來甩竿橫掃全場：每隻對手受到最大 HP 10% 的傷害，攻擊、防禦各降低 10%"><Icon name="rod" /> 漁夫的釣竿<small>{bs.final!.phase < 2 ? '第二條血時解鎖' : bs.final!.rodCd > 0 ? `${bs.final!.rodCd} 回合後` : '可以用！'}</small></button>}
+                  {final && <button class={`act-btn rod-btn ${canRod(bs) ? 'ready' : ''}`} disabled={!canRod(bs)} onClick={() => submit({ type: 'rod' })} title="漁夫跳出來甩竿橫掃全場：造成最大 HP 10% 的傷害，攻擊、防禦各降低 10%（召喚護盾會擋下傷害）"><Icon name="rod" /> 漁夫的釣竿<small>{bs.final!.phase < 2 ? '第二條血時解鎖' : bs.final!.rodCd > 0 ? `${bs.final!.rodCd} 回合後` : '可以用！'}</small></button>}
                 </div>
               </div>
             )}
@@ -975,7 +974,7 @@ function HudBox({ side, d, rarity, boss, charged, locked, turns, onOpen, intent,
         {!!crewLeft && <span class="crew-left" title="船隊剩下的夥伴">{'●'.repeat(crewLeft)}</span>}
         {d.form !== 'godhand' && <span class="lv">Lv{d.lv}</span>}
       </div>
-      <div class="hud-sub"><Elems list={f.elems} />{f.id === 'godhand' && <span class="st st-shield">無屬性・異常無效</span>}{d.status && <span class={`st st-${d.status}`}>{statusLabel(d.status)}{turns ? ` ${turns >= 90 ? '∞' : turns}` : ''}</span>}{d.shield > 0 && <span class="st st-shield">護盾 {d.shield}</span>}{(d.trap ?? 0) > 0 && <span class="st st-trap">暗礁 {d.trap}</span>}{charged && <span class="st st-charge">蓄力</span>}{locked && <span class="st st-lock">鎖定</span>}</div>
+      <div class="hud-sub"><Elems list={f.elems} />{f.id === 'godhand' && <span class="st st-shield">無屬性・異常無效</span>}{d.status && <span class={`st st-${d.status}`}>{statusLabel(d.status)}{turns ? ` ${turns >= 90 ? '∞' : turns}` : ''}</span>}{!!d.summonShield && <span class="st st-shield">召喚護盾 {d.summonShield}・先打倒霸主</span>}{d.shield > 0 && <span class="st st-shield">護盾 {d.shield}</span>}{(d.trap ?? 0) > 0 && <span class="st st-trap">暗礁 {d.trap}</span>}{charged && <span class="st st-charge">蓄力</span>}{locked && <span class="st st-lock">鎖定</span>}</div>
       <Bar value={d.hp} max={d.max} />
       <div class="hud-foot">
         <Energy value={d.energy} max={MAX_ENERGY} />

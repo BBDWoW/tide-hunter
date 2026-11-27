@@ -6,7 +6,7 @@ import { nextOracleMark } from '../data/oracle';
 import { DOMAINS, type DomainId } from '../data/domains';
 import { FIELDS, SKILLS, type FieldId, type Skill, type StatKey, type StatusId } from '../data/skills';
 import { effectiveness, ELEM } from '../data/types';
-import { blockRate, dodgeRate, formOf, isBasicAttack, makeMon, maxHp, statsOf, type Mon } from './creature';
+import { blockRate, dodgeRate, formOf, isBasicAttack, makeMon, maxHp, scaleEnemyHp, statsOf, type Mon } from './creature';
 import { hasAb } from '../data/creatures';
 import type { HeldId } from '../data/held';
 import type { Elem } from '../data/types';
@@ -32,7 +32,7 @@ export interface Volatile {
   relay?: number; // 接力：下一招的威力倍率
 }
 
-export interface SideMods { atk: number; def: number; energy: number; crit: number; reso?: Partial<Record<Elem, number>>; bn?: Record<string, number> }
+export interface SideMods { atk: number; def: number; energy: number; crit: number; hp?: number; damage?: number; reso?: Partial<Record<Elem, number>>; bn?: Record<string, number> }
 /** 這一方擁有的能力卡層數 */
 const bn = (s: BattleState, side: SideId, id: string) => s.sides[side].mods?.bn?.[id] ?? 0;
 const NO_MODS: SideMods = { atk: 1, def: 1, energy: 0, crit: 0 };
@@ -62,7 +62,7 @@ export interface BattleState {
   godhand?: GodHandState; // 神之手之戰：撐過 survive 回合就贏
   final?: FinalState; // 最終決戰：統領者・潮汐默旭
 }
-/** 最終決戰：兩條血、第二條血召喚霸主，第三條血變身，每 5 回合放一次大絕招 */
+/** 最終決戰：第二階段召喚霸主並獲得護盾，第三階段變身，每 5 回合放一次大絕招 */
 export interface FinalState { phase: 1 | 2 | 3; ally: number | null; ultIn: number; rodCd: number; rodUses: number; summoned?: string; allyPlan?: Action }
 export interface GodHandState { survive: number; rewinds: number; loveTurn: number; passion: string[]; pulled: Record<string, string[]>; saved: Record<string, string[]> }
 export const isGodHand = (m: Mon) => m.form === 'godhand';
@@ -94,6 +94,7 @@ type BEventBase =
   | { t: 'dmg'; side: SideId; elem?: Elem | null; amount: number; hp: number; eff: number; crit: boolean; shield: number }
   | { t: 'heal'; side: SideId; amount: number; hp: number }
   | { t: 'shield'; side: SideId; amount: number }
+  | { t: 'summonShield'; side: 1; amount: number }
   | { t: 'status'; side: SideId; status: StatusId | null }
   | { t: 'stat'; side: SideId; key: StatKey; delta: number }
   | { t: 'energy'; side: SideId; value: number }
@@ -119,7 +120,7 @@ type BEventBase =
 export const MOXU_ULT: Skill = { id: 'moxu_daybreak', name: '五海歸一・默海破曉', elem: 'water', power: 55, cost: 0, acc: 100, desc: '把五片海域的潮水全部召喚過來，一口氣砸下去。打中後，你隊伍裡每一隻夥伴都會各中一種不同的異常狀態。', anim: 'beam' };
 export const ULT_EVERY = 5, ROD_CD = 3, ROD_DMG = 0.1, ROD_WEAKEN = 0.9;
 /** 平衡用：每條血是原本 HP 的幾倍、召喚的霸主比統領者低幾級 */
-export const FINAL_TUNE = { barHp: 0.7, summonDrop: 3 };
+export const FINAL_TUNE = { barHp: 0.7, summonDrop: 3, summonShield: 5, ascendedHp: 2 };
 /** 第二條血時會被召喚出來的霸主 */
 export const FINAL_SUMMONS = ['whale', 'frostking', 'lavadragon', 'mainframe_leviathan', 'nether_whale'];
 export const STRUGGLE: Skill = { id: 'struggle', name: '掙扎', elem: null, power: 35, cost: 0, acc: 100, desc: '能量不足時使用。', anim: 'hit' };
@@ -178,8 +179,10 @@ type SideInit = { team: Mon[]; name: string; mods?: SideMods; boss?: boolean };
 export function createBattle(rng: Rng, a: SideInit, b: SideInit, wild: boolean, domain?: DomainId, godhand = false): BattleState {
   const mk = (x: SideInit): Side => {
     const vol: Record<string, Volatile> = {};
-    x.team.forEach((m) => { vol[m.uid] = freshVol(); vol[m.uid].energy += (x.mods?.energy ?? 0) + (held(m, 'sparkcell') ? 1 : 0); });
-    return { team: x.team, active: Math.max(0, x.team.findIndex((m) => m.hp > 0)), vol, name: x.name, mods: x.mods, boss: x.boss };
+    const hpMultiplier = x.mods?.hp ?? 1;
+    const team = hpMultiplier === 1 ? x.team : x.team.map((m) => scaleEnemyHp(m, hpMultiplier));
+    team.forEach((m) => { vol[m.uid] = freshVol(); vol[m.uid].energy += (x.mods?.energy ?? 0) + (held(m, 'sparkcell') ? 1 : 0); });
+    return { team, active: Math.max(0, team.findIndex((m) => m.hp > 0)), vol, name: x.name, mods: x.mods, boss: x.boss };
   };
   const st: BattleState = { rng, turn: 1, sides: [mk(a), mk(b)], wild, over: null, needSwitch: [false, false], field: null, traps: [0, 0], domain, godhand: godhand ? { survive: 20, rewinds: 0, loveTurn: 0, passion: [], pulled: {}, saved: {} } : undefined };
   for (const side of [0, 1] as SideId[]) bubble(st, side);
@@ -515,7 +518,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     afterHitAbilities(s, side, foe, ev);
     // 反擊架勢：把傷害反彈回去
     const fv = volOf(s, foe);
-    if (fv.counter && real > 0 && me.hp > 0) {
+    if (fv.counter && real > 0 && me.hp > 0 && !summonShieldActive(s, side)) {
       const back = Math.max(1, Math.floor(real * fv.counter));
       me.hp = Math.max(0, me.hp - back);
       ev.push({ t: 'dmg', side, amount: back, hp: me.hp, eff: 1, crit: false, shield: v.shield });
@@ -529,7 +532,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     const amt = healingAmount(s, side, me, Math.floor(total * drain));
     if (amt > 0) { me.hp += amt; ev.push({ t: 'heal', side, amount: amt, hp: me.hp }); ev.push({ t: 'msg', text: `${myName} 吸取了 ${amt} HP！` }); }
   }
-  if (fx.recoil && total > 0 && me.hp > 0) {
+  if (fx.recoil && total > 0 && me.hp > 0 && !summonShieldActive(s, side)) {
     const d = Math.max(1, Math.floor(total * fx.recoil));
     me.hp = Math.max(0, me.hp - d);
     ev.push({ t: 'dmg', side, amount: d, hp: me.hp, eff: 1, crit: false, shield: v.shield });
@@ -551,7 +554,7 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     if (fx.stat && !fx.stat.self && chance(s.rng, fx.stat.chance ?? 1)) changeStat(s, foe, fx.stat.key, fx.stat.delta, ev);
   }
   if (fx.stat?.self && me.hp > 0) changeStat(s, side, fx.stat.key, fx.stat.delta, ev);
-  if (fx.selfKO && me.hp > 0) selfKO(s, side, ev);
+  if (fx.selfKO && me.hp > 0 && !summonShieldActive(s, side)) selfKO(s, side, ev);
 }
 
 function selfKO(s: BattleState, side: SideId, ev: BEvent[]) {
@@ -598,6 +601,11 @@ export function effPower(s: BattleState, side: SideId, foe: SideId, sk: Skill): 
   return p;
 }
 
+/** 日月御潮的有屬性攻擊對所有目標都以兩倍剋制計算。 */
+export function battleEffectiveness(attackerForm: string, elem: Elem | null, defenderElems: Elem[]): number {
+  return attackerForm === MOXU_ASCENDED && elem ? 2 : effectiveness(elem, defenderElems);
+}
+
 export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill, hit = 0) {
   const me = active(s, side), tg = active(s, foe);
   const fm = formOf(me), ft = formOf(tg);
@@ -613,7 +621,7 @@ export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill,
   D *= 1 + (vt.omenMarks?.length ?? 0) * 0.05;
   if (sk.id === 'oracle_tide') A = battleStats(s, side).def * stageMult(vm.stages.def) * ma.def * 1.15 * (held(me, 'berserkscale') ? 0.8 : 1);
   const base = (((2 * me.lv) / 5 + 2) * effPower(s, side, foe, sk) * A) / D / 50 + 2;
-  const eff = effectiveness(sk.elem, ft.elems);
+  const eff = battleEffectiveness(me.form, sk.elem, ft.elems);
   const forced = vm.lockOn || (!!sk.fx?.chain?.crit && tg.status === sk.fx.chain.id);
   const exe = bn(s, side, 'L_execute');
   const crit = forced || chance(s.rng, 0.0625 + ma.crit + (held(me, 'scope') ? 0.12 : 0) + (exe ? 0.1 : 0));
@@ -628,11 +636,19 @@ export function calcDamage(s: BattleState, side: SideId, foe: SideId, sk: Skill,
   if ((hasAb(fm, 'tidegod') || hasAb(fm, 'oceanpower')) && sk.elem === 'water') mod *= 1.3;
   if (hasAb(ft, 'hardshell')) mod *= 0.85;
   if (hasAb(ft, 'thickfat') && (sk.elem === 'fire' || sk.elem === 'ice')) mod *= 0.5;
-  return { dmg: Math.max(1, Math.floor(base * mod)), eff, crit };
+  return { dmg: Math.max(1, Math.floor(base * mod * (ma.damage ?? 1))), eff, crit };
+}
+
+function summonShieldActive(s: BattleState, side: SideId): boolean {
+  return side === 1 && s.sides[1].active === 0 && s.final?.phase === 2 && s.final.ally != null;
 }
 
 function dealDamage(s: BattleState, side: SideId, dmg: number, eff: number, crit: boolean, elem: Elem | null, ev: BEvent[]): number {
   const m = active(s, side), v = volOf(s, side);
+  if (summonShieldActive(s, side)) {
+    ev.push({ t: 'msg', text: '召喚護盾擋下了攻擊！先打倒協戰霸主。' });
+    return 0;
+  }
   let absorbed = 0;
   if (v.shield > 0) { absorbed = Math.min(v.shield, dmg); v.shield -= absorbed; dmg -= absorbed; }
   let real = Math.min(m.hp, dmg);
@@ -646,7 +662,7 @@ function dealDamage(s: BattleState, side: SideId, dmg: number, eff: number, crit
   ev.push({ t: 'dmg', side, elem, amount: real, hp: m.hp, eff, crit, shield: v.shield });
   if (absorbed) ev.push({ t: 'msg', text: `護盾擋下了 ${absorbed} 點傷害！` });
   const att: SideId = side === 0 ? 1 : 0, am = active(s, att);
-  if (absorbed && bn(s, side, 'x_thorns') && am.hp > 0) {
+  if (absorbed && bn(s, side, 'x_thorns') && am.hp > 0 && !summonShieldActive(s, att)) {
     const back = Math.max(1, Math.floor(absorbed * 0.5));
     am.hp = Math.max(0, am.hp - back);
     ev.push({ t: 'dmg', side: att, amount: back, hp: am.hp, eff: 1, crit: false, shield: volOf(s, att).shield });
@@ -728,7 +744,7 @@ function endOfTurn(s: BattleState, ev: BEvent[], only?: SideId) {
     if (m.hp <= 0) continue;
     const mx = battleMaxHp(s, side, m);
     v.counter = 0;
-    if (m.status === 'burn' || m.status === 'poison' || m.status === 'bleed') {
+    if (!summonShieldActive(s, side) && (m.status === 'burn' || m.status === 'poison' || m.status === 'bleed')) {
       const passion = m.status === 'burn' && !!s.godhand?.passion.includes(m.uid);
       const d = passion ? 2 : Math.max(1, Math.floor(mx / (m.status === 'burn' ? 16 : m.status === 'bleed' ? 12 : 10))) * (m.status === 'burn' && bn(s, side === 0 ? 1 : 0, 'x_wildfire') ? 2 : 1);
       const what = passion ? '熱情的火焰' : { burn: '灼傷', poison: '毒', bleed: '流血' }[m.status];
@@ -751,7 +767,7 @@ function endOfTurn(s: BattleState, ev: BEvent[], only?: SideId) {
     const fe = f.elems;
     const lavaHurt = s.field?.id === 'lava' && !fe.includes('fire') && !fe.includes('rock');
     const reef = (s.traps?.[side] ?? 0) > 0;
-    if (lavaHurt || reef) {
+    if ((lavaHurt || reef) && !summonShieldActive(s, side)) {
       const d = Math.max(1, Math.floor(mx / 16));
       m.hp = Math.max(0, m.hp - d);
       ev.push({ t: 'dmg', side, amount: d, hp: m.hp, eff: 1, crit: false, shield: v.shield });
@@ -891,7 +907,7 @@ export function aiChoose(s: BattleState, side: SideId): Action {
     const fx = sk.fx ?? {};
     let score = 0;
     if (sk.power > 0) {
-      const eff = effectiveness(sk.elem, formOf(tg).elems);
+      const eff = battleEffectiveness(me.form, sk.elem, formOf(tg).elems);
       const stab = sk.elem && myElems.includes(sk.elem) ? 1.3 : 1;
       const hits = fx.multi ? (fx.multi[0] + fx.multi[1]) / 2 : 1;
       score = effPower(s, side, foe, sk) * hits * eff * stab * Math.min(1, hitChance(s, side, sk));
@@ -955,9 +971,11 @@ function finalFaint(s: BattleState, ev: BEvent[]) {
       ev.push({ t: 'faint', side: 1, slot: F.ally });
       ev.push({ t: 'msg', text: `${formOf(al).name} 倒下了，沉回了海裡！` });
       F.ally = null;
+      ev.push({ t: 'summonShield', side: 1, slot: 0, amount: 0 });
+      ev.push({ t: 'msg', text: '統領者的召喚護盾消失了！' });
     }
   }
-  if (main.hp > 0 || s.over) return;
+  if (main.hp > 0 || F.ally != null || s.over) return;
   if (F.phase === 1) {
     // 第一條血沒了：第二條血補滿，召喚一隻霸主
     F.phase = 2; main.hp = maxHp(main); main.status = null; S1.enraged = false;
@@ -965,17 +983,18 @@ function finalFaint(s: BattleState, ev: BEvent[]) {
     ev.push({ t: 'msg', text: '潮汐・默旭：「……不錯。那就讓你們見識，萬潮真正的力量。」' });
     ev.push({ t: 'phase2', side: 1, slot: 0, hp: main.hp, max: main.hp });
     const id = FINAL_SUMMONS[Math.floor(next(s.rng) * FINAL_SUMMONS.length)];
-    const al = makeMon(id, Math.max(1, main.lv - FINAL_TUNE.summonDrop), true, true);
+    const al = scaleEnemyHp(makeMon(id, Math.max(1, main.lv - FINAL_TUNE.summonDrop), true, true), 2 * (S1.mods?.hp ?? 1));
     S1.team.push(al); S1.vol[al.uid] = freshVol(); F.ally = S1.team.length - 1; F.summoned = id;
     ev.push({ t: 'summon', side: 1, slot: F.ally, form: id, lv: al.lv, hp: al.hp, max: maxHp(al) });
     ev.push({ t: 'msg', text: `${formOf(al).name} 回應了統領者的潮聲，加入了戰鬥！` });
+    ev.push({ t: 'summonShield', side: 1, slot: 0, amount: main.hp * FINAL_TUNE.summonShield });
+    ev.push({ t: 'msg', text: '統領者獲得相當於最大生命 500% 的護盾！打倒協戰霸主才能解除。' });
     ev.push({ t: 'msg', text: '漁夫握緊了釣竿……現在可以使用「漁夫的釣竿」了！' });
     return;
   }
   if (F.phase === 2) {
-    const hp = Math.round(maxHp(main) * MOXU_ASCENDED_BOOST);
+    const hp = Math.round(maxHp(main) * MOXU_ASCENDED_BOOST) * FINAL_TUNE.ascendedHp;
     F.phase = 3; F.ultIn = ULT_EVERY - 1;
-    if (F.ally != null) { S1.team[F.ally].hp = 0; F.ally = null; }
     main.form = MOXU_ASCENDED; main.skills = [...MOXU_ASCENDED_SKILLS];
     main.hpFixed = hp; main.hp = hp; main.status = null; main.statusTurns = 0;
     s.field = null; s.traps = [0, 0];
@@ -998,6 +1017,10 @@ function doRod(s: BattleState, ev: BEvent[]) {
   ev.push({ t: 'msg', text: '漁夫跳了出來，甩起釣竿——魚線和魚鉤橫掃整片海面！' });
   const targets = finalSlots(s);
   for (const i of targets) {
+    if (i === 0 && summonShieldActive(s, 1)) {
+      ev.push({ t: 'msg', text: '召喚護盾擋下了釣竿對統領者的傷害！' });
+      continue;
+    }
     const m = S1.team[i], d = Math.max(1, Math.floor(maxHp(m) * ROD_DMG));
     m.hp = Math.max(0, m.hp - d);
     ev.push({ t: 'dmg', side: 1, slot: i, amount: d, hp: m.hp, eff: 1, crit: false, shield: S1.vol[m.uid].shield });

@@ -4,7 +4,7 @@ import { next } from '../game/rng';
 import { FORMS } from '../data/creatures';
 import { SKILLS } from '../data/skills';
 import { RARITY, STAGE_NAME } from '../data/types';
-import { evolve, evolveTarget, formOf, gainXp, maxHp, skillSlots, xpReward, xpToNext, type Mon } from '../game/creature';
+import { evolve, evolveTarget, formOf, gainXp, maxHp, recruitCaughtMon, skillSlots, xpReward, xpToNext, type Mon } from '../game/creature';
 import { EGG_DROP, EGG_INFO } from '../game/eggs';
 import { eggZoneOf, FINAL_ZONE, saveRun, applyBoon, giveHeld, boon, isBoss, loadDex, markCaught, updateDex, nodeOf, PARTY_MAX, rollBoons, ZONES, type RunState, type ZoneId } from '../game/run';
 import { BOON_STYLE, BOON_TIER, BOONS } from '../data/boons';
@@ -42,18 +42,15 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
     const out: Line[] = [], q: Task[] = [];
     const enemy = result.enemy;
     if (result.outcome === 'caught') {
-      // 收服的個體：恢復正常能力值，並保留目前 HP 比例
-      const ratio = enemy.hp / maxHp(enemy);
-      enemy.wild = false; enemy.status = null;
-      enemy.hp = Math.max(1, Math.round(maxHp(enemy) * ratio));
-      caughtMon.current = enemy;
+      const mon = recruitCaughtMon(enemy);
+      caughtMon.current = mon;
       markCaught(enemy.form, run.zone);
       if (enemy.mutant) updateDex((d) => { d.mutants = (d.mutants ?? 0) + 1; });
       run.caught++;
       if (boon(run, 'x_thrift') && next(run.rng) < 0.5) { run.catchBait++; out.push({ uid: '_bait', text: '回收網：捕捉餌拿回來了！' }); }
       if (boon(run, 'x_hunter')) out.push({ uid: '_hunter', text: `獵人之心：全隊攻擊 +${run.caught * 4}%` });
-      if (run.party.length < PARTY_MAX) { run.party.push(enemy); out.push({ uid: enemy.uid, text: `${formOf(enemy).name} 加入了隊伍！` }); }
-      else q.push({ k: 'full', mon: enemy });
+      if (run.party.length < PARTY_MAX) { run.party.push(mon); out.push({ uid: mon.uid, text: `${formOf(mon).name} 加入了隊伍！` }); }
+      else q.push({ k: 'full', mon });
     }
     if (result.outcome === 'win' || result.outcome === 'caught') {
       run.battlesWon++;
@@ -74,7 +71,7 @@ export function AfterBattle({ vp, run, result, onDone }: { vp: Viewport; run: Ru
       }
       if (!bossWin && (result.team || (nodeOf(run).kind === 'elite' && next(run.rng) < 0.5))) { const h = giveHeld(run); out.push({ uid: '_held', text: `${result.team ? "船隊留下" : "菁英掉落"}了攜帶道具「${HELD[h].name}」！` }); }
       for (const m of run.party) {
-        if (m.hp <= 0 || m === enemy) continue;
+        if (m.hp <= 0 || m === caughtMon.current) continue;
         const bondMul = 1 + Math.min(10, m.bond ?? 0) * 0.05; // 羈絆經驗加成
         const share = Math.floor((result.participants.includes(m.uid) ? reward : reward / 2) * bondMul);
         const r = gainXp(m, share, run.zone);
