@@ -1,23 +1,11 @@
 // 淺灘的連擊、防禦與狀態技能。碰撞或成形的畫格由戰鬥事件同步。
-import { direction, pixel, tile, travel, type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
+import { direction, pixel, pixelArc, tile, travel, type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
 import { waterBubble } from './starter-fx';
 
 const AQUA = {
   outline: '#31517d', shadow: '#4d97c9', light: '#a9f0ee', white: '#f0ffff', violet: '#b7a3ea',
 };
 const ORBIT = [[-1, -.6], [-.30, -1], [.55, -.86], [1, -.25], [.83, .55], [.26, .95], [-.62, .78], [-1, .18]] as const;
-
-function arc(ctx: CanvasRenderingContext2D, center: FxPoint, rx: number, ry: number, start: number, span: number, color: string, width: number) {
-  const count = Math.ceil(Math.max(rx, ry) * Math.abs(span));
-  ctx.beginPath();
-  for (let i = 0; i <= count; i++) {
-    const t = start + span * i / count;
-    const x = Math.round(center.x + Math.cos(t) * rx), y = Math.round(center.y + Math.sin(t) * ry);
-    ctx.rect(x, y, width, width);
-  }
-  ctx.fillStyle = color;
-  ctx.fill();
-}
 
 const BARRAGE_HIT = 5;
 function drawBarrage(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: number, source: FxPoint, target: FxPoint, missed: boolean) {
@@ -64,18 +52,18 @@ function drawBubbleguard(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: n
   if (layer === 'back') {
     ctx.fillStyle = '#7cdded30';
     ctx.beginPath(); ctx.ellipse(c.x + 1, c.y + 1, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
-    arc(ctx, c, rx, ry, 0, Math.PI * 2, AQUA.outline, 2);
-    arc(ctx, c, rx - 1, ry - 1, Math.PI * 1.02, Math.PI * .95, AQUA.shadow, 2);
+    pixelArc(ctx, c, rx, ry, 0, Math.PI * 2, AQUA.outline, 2);
+    pixelArc(ctx, c, rx - 1, ry - 1, Math.PI * 1.02, Math.PI * .95, AQUA.shadow, 2);
   } else if (layer === 'front') {
     if (hit < -1) {
       waterBubble(ctx, dir * rx * .65, 5 - frame * 3, dir, .74);
       waterBubble(ctx, -dir * rx * .72, 1 - frame, dir, .5);
     }
-    arc(ctx, c, rx, ry, face - 1.14, 2.28, AQUA.shadow, 3);
-    arc(ctx, c, rx - 1, ry - 1, face - 1, 1.83, AQUA.light, 2);
-    arc(ctx, c, rx - 3, ry - 4, Math.PI * 1.18, Math.PI * .42, AQUA.white, hit >= 0 && hit <= 2 ? 2 : 1);
+    pixelArc(ctx, c, rx, ry, face - 1.14, 2.28, AQUA.shadow, 3);
+    pixelArc(ctx, c, rx - 1, ry - 1, face - 1, 1.83, AQUA.light, 2);
+    pixelArc(ctx, c, rx - 3, ry - 4, Math.PI * 1.18, Math.PI * .42, AQUA.white, hit >= 0 && hit <= 2 ? 2 : 1);
     if (hit >= 0 && hit <= 4) {
-      arc(ctx, { x: c.x, y: c.y - 2 }, rx - 4, ry - 4, face - .55, 1.15, AQUA.violet, 1);
+      pixelArc(ctx, { x: c.x, y: c.y - 2 }, rx - 4, ry - 4, face - .55, 1.15, AQUA.violet, 1);
       pixel(ctx, AQUA.white, dir * (rx - 1), c.y - 1, 2, 4);
     }
   } else if (hit >= 0) {
@@ -105,7 +93,7 @@ function drawHarden(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: number
   if (hit > 3) ctx.globalAlpha *= [1, .76, .52, .34, .21][hit - 3];
   if (layer === 'back' && frame >= 1) {
     const width = frame < HARDEN_HIT ? 29 - frame : 24 + Math.max(0, hit - 2);
-    arc(ctx, { x: center.x, y: center.y + 13 }, width, 7, Math.PI, Math.PI * 2, '#726e81', 2);
+    pixelArc(ctx, { x: center.x, y: center.y + 13 }, width, 7, Math.PI, Math.PI * 2, '#726e81', 2);
   } else if (layer === 'front') {
     const radius = [39, 34, 30, 27, 24, 21, 20, 21, 21, 21, 22, 23, 24][frame];
     for (const [i, [x, y]] of [[-.96, .38], [-.61, -.78], [.25, -.91], [.91, -.36], [.86, .57]].entries()) {
@@ -187,21 +175,21 @@ function drawParalywave(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: nu
       ctx.save();
       ctx.globalAlpha *= [.95, .78, .58][i] * (hit >= 0 ? .64 : 1);
       const height = Math.min(15, 6 + frame * 1.2) - i;
-      arc(ctx, center, 8 - i * 1.3, height, face - 1.32, 2.64, PULSE.outline, 3);
-      arc(ctx, center, 8 - i * 1.3, height, face - 1.15, 2.22, PULSE.gold, 2);
-      arc(ctx, center, 8 - i * 1.3, height, face - 1, .78, PULSE.light, 1);
+      pixelArc(ctx, center, 8 - i * 1.3, height, face - 1.32, 2.64, PULSE.outline, 3);
+      pixelArc(ctx, center, 8 - i * 1.3, height, face - 1.15, 2.22, PULSE.gold, 2);
+      pixelArc(ctx, center, 8 - i * 1.3, height, face - 1, .78, PULSE.light, 1);
       ctx.restore();
     }
   } else if (hit >= 0 && !missed) {
     if (layer === 'back' && hit <= 4) {
       ctx.globalAlpha *= [.61, .65, .53, .39, .24][hit];
-      arc(ctx, target, 14 + 3 * hit, 17 + 2 * hit, 0, Math.PI * 2, PULSE.outline, 2);
+      pixelArc(ctx, target, 14 + 3 * hit, 17 + 2 * hit, 0, Math.PI * 2, PULSE.outline, 2);
     } else if (layer === 'front' && hit <= 4) {
       ctx.globalAlpha *= [1, .89, .72, .5, .25][hit];
       const c = { x: target.x + dir * (2 + hit * 3), y: target.y };
-      arc(ctx, c, 14 + hit * 2, 17 + hit, face - 1.42, 2.84, PULSE.outline, 3);
-      arc(ctx, c, 14 + hit * 2, 17 + hit, face - 1.28, 2.52, PULSE.glow, 2);
-      arc(ctx, c, 14 + hit * 2, 17 + hit, face - 1, 1.83, PULSE.light, 1);
+      pixelArc(ctx, c, 14 + hit * 2, 17 + hit, face - 1.42, 2.84, PULSE.outline, 3);
+      pixelArc(ctx, c, 14 + hit * 2, 17 + hit, face - 1.28, 2.52, PULSE.glow, 2);
+      pixelArc(ctx, c, 14 + hit * 2, 17 + hit, face - 1, 1.83, PULSE.light, 1);
       if (hit < 2) {
         pixel(ctx, PULSE.glow, target.x + dir * 7, target.y - 4, 2, 9);
         pixel(ctx, PULSE.light, target.x + dir * 7 - 2, target.y, 6, 2);

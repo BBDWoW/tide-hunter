@@ -1,5 +1,5 @@
 // 碧藍淺灘常見技能的像素特效。
-import { dashProgress, direction, pixel, tile, travel, type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
+import { dashProgress, direction, pixel, pixelStroke, tile, travel, type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
 
 const ROCK_COLORS = { d: '#424050', s: '#68616a', m: '#918786', l: '#b5a392', h: '#e3cfab' };
 const stone = tile([
@@ -242,35 +242,9 @@ function drawGust(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: number, 
   }
 }
 
-// 沿折線的長軸逐階繪製，將同一列的像素合併，保持折角銳利。
-function strokeBolt(ctx: CanvasRenderingContext2D, points: FxPoint[], color: string, width: number) {
-  const inset = Math.floor(width / 2);
-  ctx.beginPath();
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i], b = points[i + 1], x = Math.round(a.x), y = Math.round(a.y);
-    const dx = Math.round(b.x) - x, dy = Math.round(b.y) - y;
-    const steep = Math.abs(dy) > Math.abs(dx);
-    const major = steep ? dy : dx, minor = steep ? dx : dy;
-    const length = Math.abs(major), sign = Math.sign(major);
-    let start = 0, row = 0;
-    for (let step = 1; step <= length + 1; step++) {
-      const next = Math.round(step * minor / Math.max(1, length));
-      if (step <= length && next === row) continue;
-      const run = Math.min(start * sign, (step - 1) * sign) - inset;
-      const span = step - start + width - 1;
-      if (steep) ctx.rect(x + row - inset, y + run, width, span);
-      else ctx.rect(x + run, y + row - inset, span, width);
-      start = step;
-      row = next;
-    }
-  }
-  ctx.fillStyle = color;
-  ctx.fill();
-}
-
 function bolt(ctx: CanvasRenderingContext2D, points: FxPoint[], primary = false) {
-  strokeBolt(ctx, points, SPARK_COLORS.d, primary ? 4 : 3);
-  strokeBolt(ctx, points, primary ? SPARK_COLORS.w : SPARK_COLORS.g, primary ? 2 : 1);
+  pixelStroke(ctx, points, SPARK_COLORS.d, primary ? 4 : 3);
+  pixelStroke(ctx, points, primary ? SPARK_COLORS.w : SPARK_COLORS.g, primary ? 2 : 1);
 }
 
 const ZAP_HIT = 5;
