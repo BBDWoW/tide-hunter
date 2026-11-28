@@ -64,7 +64,8 @@ assert.equal(loadMeta().pearls, pearls + 5);
 for (const [i, day] of ['2026-11-28', '2026-11-28'].entries()) {
   const daily = newRun(makeMon('water1', 5), undefined, { daily: day });
   daily.station = i + 2;
-  daily.settlement = { id: `daily-${i}`, win: false, kept: [] };
+  daily.settlement = { id: `daily-${i}`, win: true, kept: [] };
+  daily.finale = i === 0 ? 'lost' : 'won';
   const prior = loadMeta();
   assert.equal(settlementPearls(daily, prior) === 0, i === 1);
   saveRun(daily);
@@ -72,5 +73,7 @@ for (const [i, day] of ['2026-11-28', '2026-11-28'].entries()) {
   assert.equal(loadMeta().bay.length, prior.bay.length);
   assert.equal(loadMeta().pearls, prior.pearls + settlementPearls(daily, prior));
   assert.equal(loadMeta().daily?.best, i + 3);
+  assert.equal(loadMeta().daily?.win, true);
+  assert.equal(loadMeta().daily?.finalWon, i === 1);
 }
 console.log('回港結算：珍珠、蛋、羈絆、保留與放生夥伴、每日獎勵，以及三種儲存失敗重試均通過');

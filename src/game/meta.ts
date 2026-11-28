@@ -78,7 +78,7 @@ export interface Meta {
   title?: string; // 目前顯示的稱號（成就 id）
   maxStar?: number; // 已解鎖的最高潮位
   star?: number; // 上次選的潮位
-  daily?: { day: string; best: number; win: boolean; paid: boolean }; // 每日挑戰紀錄
+  daily?: { day: string; best: number; win: boolean; finalWon?: boolean; paid: boolean }; // 每日挑戰紀錄
   eggs?: Egg[]; // 棲息灣裡的潮汐卵
 }
 
@@ -286,8 +286,8 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'deep', title: '深海終結者', desc: '打倒主機海皇與冥海巨鯨', reward: 90, check: (s) => has(s.bosses, 'mainframe_leviathan', 'nether_whale') },
   { id: 'moxu', title: '萬潮的繼承者', desc: '打倒統領者・潮汐默旭', reward: 200, check: (s) => has(s.bosses, 'tide_moxu') },
   { id: 'guardians', title: '秘境探索家', desc: '打倒三個特殊區域的守護者', reward: 70, check: (s) => has(s.bosses, 'vine_antler_deer', 'void_star_dragon', 'domain_realm_core') },
-  { id: 'clear1', title: '潮汐獵手', desc: '第一次通關', reward: 60, check: (s) => s.clears >= 1 },
-  { id: 'clear5', title: '傳奇船長', desc: '通關 5 次', reward: 120, check: (s) => s.clears >= 5 },
+  { id: 'clear1', title: '潮汐獵手', desc: '第一次完成三片海域', reward: 60, check: (s) => s.clears >= 1 },
+  { id: 'clear5', title: '傳奇船長', desc: '完成三片海域 5 次', reward: 120, check: (s) => s.clears >= 5 },
   { id: 'far', title: '遠洋航海士', desc: '一局航行到第 30 站', reward: 50, check: (s) => s.bestStation >= 30 },
   { id: 'ssr', title: '傳說的邂逅', desc: '收服任何一隻傳說級（SSR）', reward: 50, check: (s) => s.caught.some((id) => FORMS[id]?.rarity === 'SSR') },
   { id: 'mutant', title: '異色收藏家', desc: '收服一隻 ✦ 異變個體', reward: 40, check: (s) => s.mutants >= 1 },

@@ -11,6 +11,13 @@ export function next(r: Rng): number {
   t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
+/** 提供小遊戲獨立的亂數序列，避免畫面重繪影響航程亂數。 */
+export function randomSource(seed?: number): () => number {
+  if (seed === undefined) return Math.random;
+  const rng = makeRng(seed);
+  return () => next(rng);
+}
+
 export const chance = (r: Rng, p: number) => next(r) < p;
 export const range = (r: Rng, a: number, b: number) => a + next(r) * (b - a);
 export const int = (r: Rng, a: number, b: number) => Math.floor(range(r, a, b + 1));

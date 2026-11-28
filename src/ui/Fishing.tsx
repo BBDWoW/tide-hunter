@@ -3,6 +3,7 @@ import { Icon } from './Icon';
 // 釣魚：選魚餌 → 對準海面的漣漪拋竿（力量條）→ 等待（小心假咬鉤）→ 咬鉤時點擊 → 上鉤後揭曉種類
 import { useRef, useState } from 'preact/hooks';
 import { LURES, type LureId } from '../data/boons';
+import { randomSource } from '../game/rng';
 import { castTarget, judgeLanding, landingZones, nodeOf, rollShadows, rollTreasure, spotName, zoneOf, type Landing, type Loot, type RunState, type Shadow } from '../game/run';
 import { drawFishing, type FishPhase, type FishView } from '../render/scene';
 import { useTap } from './input';
@@ -18,18 +19,19 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
   const spot = nodeOf(run).spot;
   const hasLures = run.lures.star > 0 || run.lures.legend > 0;
   const meter = useRef<HTMLElement>(null);
+  const [random] = useState(() => randomSource(run.daily ? run.rng.s ^ 0x2e8a27c3 : undefined));
   // 魚影大小由釣點決定；用了特殊魚餌會引來大魚
   const roll = (l: LureId, fishOnly = false) => {
     const sh = rollShadows(run, l, fishOnly);
     const big = sh.findIndex((x) => x.size === 3);
-    const i = boss ? 0 : l !== 'normal' && big >= 0 ? big : Math.floor(Math.random() * sh.length);
-    return { sh, i, x: Math.max(120, Math.min(220, sh[i].x + (Math.random() - 0.5) * 20)) };
+    const i = boss ? 0 : l !== 'normal' && big >= 0 ? big : Math.floor(random() * sh.length);
+    return { sh, i, x: Math.max(120, Math.min(220, sh[i].x + (random() - 0.5) * 20)) };
   };
-  const first = useRef(boss || !hasLures ? roll('normal') : null);
-  const [shadows, setShadows] = useState<Shadow[]>(() => first.current?.sh ?? []);
+  const [first] = useState(() => boss || !hasLures ? roll('normal') : null);
+  const [shadows, setShadows] = useState<Shadow[]>(() => first?.sh ?? []);
   const [phase, setPhase] = useState<FishPhase | 'lure' | 'loot'>(boss || !hasLures ? 'choose' : 'lure');
-  const [sel, setSel] = useState(first.current?.i ?? 0);
-  const spotX = useRef(first.current?.x ?? 170);
+  const [sel, setSel] = useState(first?.i ?? 0);
+  const spotX = useRef(first?.x ?? 170);
   const [loot, setLoot] = useState<Loot | null>(null);
   const [opened, setOpened] = useState(false);
   const [msg, setMsg] = useState(boss ? '海面異常平靜……霸主就在這片水域。' : `${spotName(run, spot).name}：${spotName(run, spot).desc}`);
@@ -62,7 +64,10 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
     setMsg('換個位置再拋一次！');
     setP('choose');
   };
-  const startCast = () => { sfx('select'); st.current.t = Math.random() * 2; setP('cast'); setMsg('點一下定力道，瞄準兩道刻痕之間。'); };
+  const startCast = () => {
+    if (st.current.view.phase !== 'choose') return;
+    sfx('select'); st.current.t = random() * 2; setP('cast'); setMsg('點一下定力道，瞄準兩道刻痕之間。');
+  };
 
   const draw = (ctx: CanvasRenderingContext2D, t: number, dt: number) => {
     const s = st.current, v = s.view; s.t += dt;
@@ -76,7 +81,7 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
         setP('wait');
         // 甩太偏，魚會被嚇到：等比較久、假咬鉤比較多
         const spook = s.land === 'far' ? 2 : s.land === 'miss' ? 1 : 0;
-        s.wait = 1 + Math.random() * 1.6 + spook * 0.8; s.nibbles = boss ? 0 : Math.floor(Math.random() * 3) + spook;
+        s.wait = 1 + random() * 1.6 + spook * 0.8; s.nibbles = boss ? 0 : Math.floor(random() * 3) + spook;
         setMsg(s.land === 'perfect' && shadows[sel]?.kind === 'fish' ? '完美落點！對手開場 HP 降低。' : s.land === 'far' ? '魚被嚇到了……' : '等浮標整顆沉下再收竿。');
       }
     } else if (v.phase === 'wait') {
@@ -87,10 +92,10 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
       }
     } else if (v.phase === 'nibble') {
       s.nib -= dt;
-      if (s.nib <= 0) { setP('wait'); s.wait = 0.6 + Math.random() * 1.2; }
+      if (s.nib <= 0) { setP('wait'); s.wait = 0.6 + random() * 1.2; }
     } else if (v.phase === 'bite') {
       s.bite -= dt;
-      if (s.bite <= 0) { setP('wait'); s.wait = 1.2 + Math.random() * 1.6; s.nibbles = Math.floor(Math.random() * 2); setMsg('太慢了，魚把餌吐掉了……'); }
+      if (s.bite <= 0) { setP('wait'); s.wait = 1.2 + random() * 1.6; s.nibbles = Math.floor(random() * 2); setMsg('太慢了，魚把餌吐掉了……'); }
     }
     drawFishing(ctx, t, dt, v);
   };
@@ -109,7 +114,7 @@ export function Fishing({ vp, run, boss, onHook, onDone }: { vp: Viewport; run: 
       setP('flying');
       setMsg(s.land === 'perfect' ? '★ 完美落點！' : s.land === 'good' ? '不錯的落點！' : s.land === 'miss' ? '甩偏了……' : '甩太偏了！');
     } else if (v.phase === 'wait' || v.phase === 'nibble') {
-      s.wait = 1.6 + Math.random(); s.nibbles = Math.floor(Math.random() * 2); setP('wait');
+      s.wait = 1.6 + random(); s.nibbles = Math.floor(random() * 2); setP('wait');
       setMsg(v.phase === 'nibble' ? '那只是試探！' : '太早了！');
     } else if (v.phase === 'bite') {
       s.done = true; setP('hooked'); sfx('splash'); sfx('confirm');

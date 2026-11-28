@@ -768,8 +768,13 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       ))}
     </div>
   );
-  const reel = <Reel rarity={FORMS[foe.form].rarity} hpRatio={foe.hp / maxHp(foe)} hasStatus={!!foe.status} name={FORMS[foe.form].name} zoneBonus={boon(run, 'reelzone') * 0.15 + (run.perks?.reel ?? 0)} onDone={onReel} />;
-  const startReel = () => { if (enc.oracle || run.catchBait <= 0) return; sfx('cast'); run.catchBait--; setMode('reel'); };
+  const reelSeed = useRef<number>();
+  const reel = <Reel seed={reelSeed.current} rarity={FORMS[foe.form].rarity} hpRatio={foe.hp / maxHp(foe)} hasStatus={!!foe.status} name={FORMS[foe.form].name} zoneBonus={boon(run, 'reelzone') * 0.15 + (run.perks?.reel ?? 0)} onDone={onReel} />;
+  const startReel = () => {
+    if (enc.oracle || run.catchBait <= 0) return;
+    reelSeed.current = run.daily ? (next(bs.rng) * 2 ** 32) >>> 0 : undefined;
+    sfx('cast'); run.catchBait--; setMode('reel');
+  };
   const picking = mode === 'switch' || mode === 'force' || mode === 'itemTarget';
   const hs = (mode === 'main' || mode === 'skills') && peek >= 0 ? SKILLS[me.skills[peek]] : null;
   const hi = mode === 'items' ? (Object.keys(ITEMS) as ItemId[])[hover] : null;

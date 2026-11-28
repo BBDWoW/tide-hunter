@@ -25,7 +25,7 @@ const leave: EventOption = { label: '離開', act: () => '你決定不多管閒�
 function zoneMon(r: RunState, rarities: string[]) {
   const pool = zoneOf(r).pool.filter((id) => rarities.includes(FORMS[id].rarity));
   const id = pool[Math.floor(roll(r) * pool.length)] ?? zoneOf(r).pool[0];
-  return makeMon(id, Math.max(3, zoneOf(r).lvBase + r.station));
+  return makeMon(id, Math.max(3, zoneOf(r).lvBase + r.station), false, false, r.daily ? () => next(r.rng) : undefined);
 }
 /** 事件引發戰鬥：從這片海域挑一隻，打完會回到航線 */
 function fight(r: RunState, rarities: string[], lvBonus = 0, form?: string): void {

@@ -35,9 +35,10 @@ function commitSettlement(id: string): boolean {
       if (!saveRun(run)) return false;
     }
     if (run.daily) {
-      const daily = meta.daily?.day === run.daily ? meta.daily : { day: run.daily, best: 0, win: false, paid: false };
+      const daily = meta.daily?.day === run.daily ? meta.daily : { day: run.daily, best: 0, win: false, finalWon: false, paid: false };
       daily.best = Math.max(daily.best, totalStation(run));
       daily.win ||= settlement.win;
+      if (run.finale === 'won') daily.finalWon = true;
       daily.paid = true;
       meta.daily = daily;
     } else if (settlement.win && (run.star ?? 0) >= (meta.maxStar ?? 0) && (meta.maxStar ?? 0) < MAX_STAR) {

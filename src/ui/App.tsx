@@ -151,7 +151,7 @@ export function App() {
   };
   /** 陪神之手玩：建立神之手的對手 */
   const godHandFight = (r: RunState) => {
-    const gh = r.godHand!, hand = makeMon('godhand', gh.lv);
+    const gh = r.godHand!, hand = makeMon('godhand', gh.lv, false, false, r.daily ? () => next(r.rng) : undefined);
     hand.skills = ['gh_toss', 'gh_love', 'gh_fire', 'gh_stay', 'gh_pull'];
     hand.hpFixed = 1000 * Math.max(...r.party.map(maxHp)); hand.hp = hand.hpFixed;
     markSeen('godhand', r.zone);

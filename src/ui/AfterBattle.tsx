@@ -362,18 +362,21 @@ function FullPrompt({ run, mon, onDone }: { run: RunState; mon: Mon; onDone: (t:
 }
 
 function BoonPick({ ids, onPick, run }: { ids: string[]; onPick: (id: string) => void; run?: RunState }) {
-  // 同流派已經有幾張（提示可以組成流派）
-  const owned = (style?: string) => (run && style ? Object.entries(run.boons ?? {}).filter(([k, n]) => n > 0 && BOONS[k]?.style === style).length : 0);
+  const owned = Object.entries(run?.boons ?? {}).filter(([, count]) => count > 0);
   return (
     <div class="boon-pick">
       <div class="boon-row">
         {ids.map((id) => {
-          const b = BOONS[id], tier = BOON_TIER[b.tier], st = b.style ? BOON_STYLE[b.style] : null, have = owned(b.style);
+          const b = BOONS[id], tier = BOON_TIER[b.tier], st = b.style ? BOON_STYLE[b.style] : null;
+          const matches = st ? owned.filter(([key]) => BOONS[key]?.style === b.style) : [];
           return (
             <button class={`boon-card ${b.tier === 'legend' ? 'legend' : ''}`} key={id} style={{ '--tier': tier.color }} onClick={() => onPick(id)}>
               <span class="boon-tier">{tier.name} · {b.cat}{b.tier === 'legend' ? ' · 一局一張' : ''}</span>
               <b class="boon-name">{b.name}</b>
-              {st && <span class="boon-style" style={{ color: st.color, borderColor: st.color }}>{st.name}{have ? `（已有 ${have} 張）` : ''}</span>}
+              {st && <span class="boon-style" style={{ color: st.color, borderColor: st.color }}>{st.name}</span>}
+              {matches.length > 0 && <span class="small boon-match">
+                同流派已有 {matches.map(([key, count]) => `${BOONS[key].name}${count > 1 ? ` ×${count}` : ''}`).join('、')}
+              </span>}
               <span class="small">{b.desc}</span>
             </button>
           );

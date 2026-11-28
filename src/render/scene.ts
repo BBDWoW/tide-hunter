@@ -1067,7 +1067,7 @@ function drawFog(ctx: CanvasRenderingContext2D, t: number, fx: number, theme = '
 }
 
 /** 海圖動畫：sail = 小船正在開往下一站（0→1）；reveal = 剛到新的一站，霧散開、島浮出來（0→1） */
-export interface ChartAnim { sail?: { from: [number, number]; to: [number, number]; p: number }; reveal?: number }
+export interface ChartAnim { sail?: { from: [number, number]; to: [number, number]; p: number }; reveal?: number; preview?: number | null }
 const easeOut = (x: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
 function flag(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, t: number) {
   if (h <= 0) return;
@@ -1111,11 +1111,12 @@ export function drawChart(ctx: CanvasRenderingContext2D, t: number, route: Chart
     ctx.globalAlpha = 1;
     if (rise < 1) { const rr = 4 + rise * 10; ctx.fillStyle = `rgba(232,251,255,${1 - rise})`; for (let k = 0; k < 16; k++) { const an = (k / 16) * Math.PI * 2; ctx.fillRect(Math.round(x + Math.cos(an) * rr), Math.round(y - 2 + Math.sin(an) * rr * 0.4), 1, 1); } }
     if (i === station && (picked === null || picked === j)) {
+      const edgeColor = picked === null && anim.preview === j ? '#ffc54a' : '#fff7bc';
       const cy = Math.round(y + (1 - rise) * 10) - 8;
       for (const dx of [-1, 1]) for (const dy of [-1, 1]) {
         const edge = x + dx * 9, top = cy + dy * 7;
-        pxLine(ctx, edge, top, edge - dx * 3, top, '#fff7bc');
-        pxLine(ctx, edge, top, edge, top - dy * 3, '#fff7bc');
+        pxLine(ctx, edge, top, edge - dx * 3, top, edgeColor);
+        pxLine(ctx, edge, top, edge, top - dy * 3, edgeColor);
       }
     }
   }));

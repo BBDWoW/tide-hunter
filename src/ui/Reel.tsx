@@ -1,6 +1,7 @@
 // 收線捕捉小遊戲：按住讓捕捉區往右，放開往左；讓魚待在區內，進度條滿就成功，張力條滿就斷線。
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { RARITY, type Rarity } from '../data/types';
+import { randomSource } from '../game/rng';
 import { useHold } from './input';
 
 export function reelZoneWidth(rarity: Rarity, hpRatio: number, hasStatus: boolean, zoneBonus = 0) {
@@ -9,7 +10,7 @@ export function reelZoneWidth(rarity: Rarity, hpRatio: number, hasStatus: boolea
 }
 
 // onDone(ok, quality)：quality 0–1，收線過程中張力越低越高，會影響之後晃動的成功率
-export function Reel({ rarity, hpRatio, hasStatus, name, zoneBonus = 0, onDone }: { rarity: Rarity; hpRatio: number; hasStatus: boolean; name: string; zoneBonus?: number; onDone: (ok: boolean, quality: number) => void }) {
+export function Reel({ rarity, hpRatio, hasStatus, name, zoneBonus = 0, seed, onDone }: { rarity: Rarity; hpRatio: number; hasStatus: boolean; name: string; zoneBonus?: number; seed?: number; onDone: (ok: boolean, quality: number) => void }) {
   const zoneRef = useRef<HTMLDivElement>(null), fishRef = useRef<HTMLDivElement>(null);
   const progRef = useRef<HTMLElement>(null), tenRef = useRef<HTMLElement>(null);
   const [phase, setPhase] = useState<'ready' | 'go' | 'ok' | 'fail'>('ready');
@@ -18,6 +19,7 @@ export function Reel({ rarity, hpRatio, hasStatus, name, zoneBonus = 0, onDone }
 
   useEffect(() => {
     const reel = RARITY[rarity].reel;
+    const random = randomSource(seed);
     const st = { zx: 0.5, zv: 0, fx: 0.5, ft: 0.5, timer: 0, prog: 25, ten: 0, t: 0 };
     let raf = 0, last = performance.now(), ended = false;
     let tenSum = 0, tenT = 0;
@@ -30,7 +32,7 @@ export function Reel({ rarity, hpRatio, hasStatus, name, zoneBonus = 0, onDone }
         const lo = w / 2, hi = 1 - w / 2;
         if (st.zx < lo) { st.zx = lo; st.zv *= -0.3; } if (st.zx > hi) { st.zx = hi; st.zv *= -0.3; }
         st.timer -= dt;
-        if (st.timer <= 0) { st.ft = 0.05 + Math.random() * 0.9; st.timer = (0.4 + Math.random() * 0.9) / (1 + reel * 2); }
+        if (st.timer <= 0) { st.ft = 0.05 + random() * 0.9; st.timer = (0.4 + random() * 0.9) / (1 + reel * 2); }
         st.fx += (st.ft - st.fx) * Math.min(1, dt * (1.6 + reel * 5));
         const inZ = Math.abs(st.fx - st.zx) < w / 2;
         if (inZ) { st.prog += 24 * dt; st.ten = Math.max(0, st.ten - 30 * dt); }

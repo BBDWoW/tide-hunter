@@ -11,16 +11,16 @@ import { ensureBasic, gainXp, xpToNext } from './creature';
 import { upLv, type Meta, type UpgradeId } from './meta';
 
 export type NodeKind = 'fish' | 'elite' | 'treasure' | 'camp' | 'shop' | 'event' | 'portal' | 'boss' | 'crew';
-export const NODE_INFO: Record<NodeKind, { name: string; desc: string }> = {
-  fish: { name: '釣點', desc: '普通的釣點，水面下有東西在游動。' },
-  elite: { name: '精英釣點', desc: '強大的潮靈盤據在這裡。更難打，但戰後的能力卡更好。' },
-  treasure: { name: '寶藏點', desc: '海面閃閃發光，這裡只會釣到寶箱。' },
-  camp: { name: '營地', desc: '可以紮營休息的小島。' },
-  shop: { name: '漂流商店', desc: '一艘賣漁具的小船，可以用貝殼幣買東西。' },
-  event: { name: '神秘事件', desc: '海面上好像發生了什麼事……' },
-  portal: { name: '神秘入口', desc: '海面裂開了一道發光的縫隙，不知道通往哪裡……' },
-  boss: { name: '霸主', desc: '這片海域的霸主就在前方。' },
-  crew: { name: '馴潮船隊', desc: '一支馴潮師船隊攔住了去路。2–3 隻夥伴輪番上陣，不能收服，但獎勵很豐厚。' },
+export const NODE_INFO: Record<NodeKind, { name: string; preview: string; desc: string }> = {
+  fish: { name: '釣點', preview: '尋找野生潮靈', desc: '普通的釣點，水面下有東西在游動。' },
+  elite: { name: '精英釣點', preview: '較好的能力卡', desc: '強大的潮靈盤據在這裡。更難打，但戰後的能力卡更好。' },
+  treasure: { name: '寶藏點', preview: '只會釣到寶箱', desc: '海面閃閃發光，這裡只會釣到寶箱。' },
+  camp: { name: '營地', preview: '休息／特訓／探索', desc: '可以紮營休息的小島。' },
+  shop: { name: '漂流商店', preview: '購買補給', desc: '一艘賣漁具的小船，可以用貝殼幣買東西。' },
+  event: { name: '神秘事件', preview: '看看發生什麼', desc: '海面上好像發生了什麼事……' },
+  portal: { name: '神秘入口', preview: '前往特殊區域', desc: '海面裂開了一道發光的縫隙，不知道通往哪裡……' },
+  boss: { name: '霸主', preview: '挑戰海域霸主', desc: '這片海域的霸主就在前方。' },
+  crew: { name: '馴潮船隊', preview: '獎勵多・不能捕捉', desc: '一支馴潮師船隊攔住了去路。2–3 隻夥伴輪番上陣，不能收服，但獎勵很豐厚。' },
 };
 export interface RouteNode { kind: NodeKind; spot: SpotKind; target?: ZoneId }
 export const ROUTE_LEN = 10;
@@ -402,7 +402,11 @@ export function rollShadows(run: RunState, lure: LureId, fishOnly = false): Shad
   for (let i = 0; i < n; i++) sizes.push(weighted(r, [[1, 45 - luck * 8], [2, 40], [3, 15 + luck * 8]] as [1 | 2 | 3, number][]));
   if (lure !== 'normal' && !sizes.includes(3)) sizes[Math.floor(next(r) * n)] = 3;
   if (firstStop(run)) sizes.fill(1).splice(0, 1, 2);
-  const xs = [118, 168, 218].sort(() => next(r) - 0.5);
+  const xs = [118, 168, 218];
+  for (let i = xs.length - 1; i > 0; i--) {
+    const j = int(r, 0, i);
+    [xs[i], xs[j]] = [xs[j], xs[i]];
+  }
   return sizes.map((size, i) => {
     let kind: ShadowKind = 'fish', rarity: Rarity = 'N';
     if (size === 1) {

@@ -71,9 +71,13 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
       onPanelClose={sound || news || stars || confirm || dailyInfo ? () => { setSound(false); setNews(false); setStars(false); setConfirm(null); setDailyInfo(false); } : undefined}
       panel={dailyInfo ? (
         <Win class="big-panel confirm-panel" title={`每日挑戰　${today}`} onClose={() => setDailyInfo(false)}>
-          <p class="small dim">今天大家都用同一隻夥伴、同一條航線出發，比誰走得最遠。珍珠只有今天第一次結算時拿得到。</p>
+          <p class="small dim">同一天使用相同的起始夥伴、航線與亂數種子。珍珠只在當天第一次結算時發放。</p>
           <div class="daily-rule"><span class="small dim">今日特殊規則</span><b><Icon name="sparkle" /> {todayRule.name}</b><span>{todayRule.desc}</span></div>
-          {daily && <p class="small accent">今日最佳：{daily.best} 站{daily.win ? '・已通關' : ''}</p>}
+          {daily && <div class="end-stats small">
+            <span>今日最佳</span><b>{daily.best} 站</b>
+            <span>完成三片海域</span><b>{daily.win ? '已完成' : '未完成'}</b>
+            <span>擊倒統領者</span><b>{daily.finalWon ? '已擊倒' : daily.win && daily.finalWon === undefined ? '未記錄' : '未擊倒'}</b>
+          </div>}
           <MenuItem onClick={() => { setDailyInfo(false); guard('daily', onDaily)(); }} hot>出發</MenuItem>
         </Win>
       ) : confirm ? (
@@ -95,7 +99,7 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
           <ul class="star-rules">
             {star === 0 ? <li class="dim">標準難度。</li> : STAR_RULES.slice(0, star).map((t, i) => <li key={i}>★{i + 1}　敵方傷害、防禦、生命各再提高 15%{t && `・${t}`}</li>)}
           </ul>
-          <p class="small accent">結算珍珠 +{star * 20}%{maxStar < MAX_STAR ? `　・用 ★${maxStar} 通關可以解鎖 ★${maxStar + 1}` : ''}</p>
+          <p class="small accent">結算珍珠 +{star * 20}%{maxStar < MAX_STAR ? `　・用 ★${maxStar} 完成三片海域可解鎖 ★${maxStar + 1}` : ''}</p>
           <MenuItem onClick={begin} hot>出航！</MenuItem>
         </Win>
       ) : sound ? (
@@ -229,6 +233,10 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
           )}
           {tab === 'ach' && (
             <div class="item-list">
+              <div class="end-stats small">
+                <span>完成三片海域</span><b>{dex.clears} 次</b>
+                <span>擊倒統領者</span><b>{dex.legend?.wins ?? 0} 次</b>
+              </div>
               <p class="small dim">完成成就可以領取珍珠，也會解鎖稱號，顯示在主畫面上。{titleOf(meta) ? `目前稱號：「${titleOf(meta)}」` : ''}</p>
               {ACHIEVEMENTS.filter((a) => !a.secret || meta.achieved?.includes(a.id)).map((a) => {
                 const got = meta.achieved?.includes(a.id), done = a.check(st);
@@ -267,9 +275,9 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
     if (confirmSave && dialog && !dialog.open) dialog.showModal();
   }, [confirmSave]);
   const [cut, setCut] = useState<DomainId | null>(null); // 進入特殊區域的過場動畫
-  const [hover, setHover] = useState(0);
+  const [preview, setPreview] = useState<number | null>(null);
   const [, force] = useState(0);
-  // 點路線：釣點、精英、寶藏、事件、船隊直接出發；營地、商店、入口要先看選項
+  // 先預覽並確認航線，到站後才進入遭遇或顯示營地等選項。
   // 海圖動畫：剛到這一站時霧散開、島浮出來；選好航線後小船先開過去再出發
   const revealT0 = useRef(revealSeen === `${run.seed}-${run.zone}-${run.zoneNo}-${run.station}` ? -1e9 : performance.now());
   revealSeen = `${run.seed}-${run.zone}-${run.zoneNo}-${run.station}`;
@@ -293,7 +301,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
   };
   const chartAnim = (): ChartAnim => {
     const now = performance.now(), sp = sail.current;
-    return { reveal: Math.min(1, (now - revealT0.current) / REVEAL_MS), sail: sp ? { from: sp.from, to: sp.to, p: Math.min(1, (now - sp.t0) / SAIL_MS) } : undefined };
+    return { preview, reveal: Math.min(1, (now - revealT0.current) / REVEAL_MS), sail: sp ? { from: sp.from, to: sp.to, p: Math.min(1, (now - sp.t0) / SAIL_MS) } : undefined };
   };
 
   const node = run.picked !== null ? opts[run.picked] : null;
@@ -308,7 +316,7 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
     else if (node.kind === 'portal' && node.target) {
       const tz = ZONES[node.target];
       const dm = isDomain(node.target) ? DOMAINS[node.target] : null;
-      action = { text: `海面裂開了一道發光的縫隙，裡面隱約看得到「${tz.name}」。${tz.desc}${dm ? `裡面有領域效果「${dm.name}」（${dm.short}）。` : ''}打倒守護者可以挑一樣特別的謝禮，之後回到這條航線。要進去嗎？`, btn: '進入', fn: () => { const t = node.target!; enterSpecial(run, t); saveRun(run); if (isDomain(t)) setCut(t); force((n) => n + 1); },
+      action = { text: `海面裂開了一道發光的縫隙，裡面隱約看得到「${tz.name}」。${tz.desc}${dm ? `裡面有領域效果「${dm.name}」（${dm.short}）。` : ''}打倒守護者可以挑一樣特別的謝禮，之後回到這條航線。要進去嗎？`, btn: '進入', fn: () => { const t = node.target!; enterSpecial(run, t); setPreview(null); saveRun(run); if (isDomain(t)) setCut(t); force((n) => n + 1); },
         alt: { btn: '不進入', fn: onNext } };
     }
     else if (node.kind === 'event') action = { text: '海面上好像發生了什麼事……要過去看看嗎？', btn: '前往查看', fn: onGo };
@@ -327,7 +335,24 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
           ] };
     }
   }
-  const hv = opts[hover] ?? opts[0];
+  const routes = opts.map(route => {
+    const { name, desc, preview } = NODE_INFO[route.kind];
+    const spot = route.kind === 'fish' || route.kind === 'elite' ? spotName(run, route.spot).name : null;
+    const target = route.kind === 'portal' && route.target ? ZONES[route.target].name : null;
+    return { name, desc, detail: [spot ?? target, preview].filter(Boolean).join('・') };
+  });
+
+  const partyStrip = (
+    <div class="party-strip">
+      {run.party.map((m) => (
+        <div class={`slot ${m.hp <= 0 ? 'ko' : ''}`} key={m.uid} title={formOf(m).name}>
+          <Sprite form={m.form} size={48} mutant={m.mutant} />
+          <Bar value={m.hp} max={maxHp(m)} />
+          <span class="slot-lv">Lv{m.lv}</span>
+        </div>
+      ))}
+    </div>
+  );
 
   return (<>
     <GameScreen vp={vp}
@@ -340,9 +365,10 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
           <button class={`tool-btn ${panel === 'items' ? 'on' : ''}`} onClick={() => setPanel(panel === 'items' ? null : 'items')}><Icon name="bag" /> 背包</button>
           <button class="tool-btn" disabled={!!sail.current} onClick={() => { setSaveFailed(false); setConfirmSave(true); }}><Icon name="save" /> 存檔</button>
         </div>
-        {run.picked === null && opts.map((o, j) => {
+        {run.picked === null && opts.map((_, j) => {
           const [x, y] = chartPos(run.station, j, opts.length);
-          return <button key={j} class="hit" aria-label={NODE_INFO[o.kind].name} onMouseEnter={() => setHover(j)} onClick={() => choose(j)}
+          return <button key={j} class="hit" aria-label={`海圖・${routes[j].name}・${routes[j].detail}`} aria-pressed={preview === j}
+            disabled={!!sail.current} onClick={() => { sfx('select'); setPreview(j); }}
             style={{ left: `${((x - 10) / 256) * 100}%`, top: `${((y - 18) / 144) * 100}%`, width: `${(20 / 256) * 100}%`, height: `${(20 / 144) * 100}%` }} />;
         })}
       </>}
@@ -357,26 +383,35 @@ export function Voyage({ vp, run, onGo, onNext, onQuit }: { vp: Viewport; run: R
       dock={
         <div class="dock-split">
           <Win class="msg">
-            {run.picked === null && !panel && <Tip inline id="voyage">點四角亮起的站點選擇航線。紅旗是走過的島。</Tip>}
-            {run.picked === null && !panel && timeOfDay(run) !== 'day' && <Tip inline id={`tod-${timeOfDay(run)}`}>{TOD_INFO[timeOfDay(run)].desc}</Tip>}
             {notice && <p class="accent">{notice}</p>}
-            {node && action ? <p>{action.text}</p> : <p><b>選擇航線：</b>{NODE_INFO[hv.kind].name}{hv.kind === 'fish' || hv.kind === 'elite' ? `（${spotName(run, hv.spot).name}）` : ''}——{NODE_INFO[hv.kind].desc}</p>}
-            <div class="party-strip">
-              {run.party.map((m) => (
-                <div class={`slot ${m.hp <= 0 ? 'ko' : ''}`} key={m.uid} title={formOf(m).name}>
-                  <Sprite form={m.form} size={48} mutant={m.mutant} />
-                  <Bar value={m.hp} max={maxHp(m)} />
-                  <span class="slot-lv">Lv{m.lv}</span>
-                </div>
-              ))}
-            </div>
+            {run.picked === null ? (
+              <div class="voy-options" role="group" aria-label="航點預覽">
+                {routes.map((route, j) => (
+                  <button key={j} class="voy-option" aria-pressed={preview === j} disabled={!!sail.current} title={route.desc}
+                    onClick={() => { sfx('select'); setPreview(j); }}>
+                    <b>{route.name}</b><span>{route.detail}</span>
+                  </button>
+                ))}
+              </div>
+            ) : <>
+              {node && action && <p>{action.text}</p>}
+              {partyStrip}
+            </>}
           </Win>
           <Win class="cmd">
-            <div class="cmd-grid">
-              {node && action ? <><MenuItem onClick={() => { run.notice = undefined; action!.fn(); }} hot>{action.btn}</MenuItem>{action.alt && <MenuItem onClick={action.alt.fn}>{action.alt.btn}</MenuItem>}{action.more?.map((m, i) => <MenuItem key={i} onClick={m.fn}>{m.btn}</MenuItem>)}</>
-                : opts.map((o, j) => <MenuItem key={j} hot={j === hover} onHover={() => setHover(j)} onClick={() => choose(j)}>{NODE_INFO[o.kind].name}{o.kind === 'fish' || o.kind === 'elite' ? `・${spotName(run, o.spot).name}` : ''}</MenuItem>)}
-
-            </div>
+            {node && action ? (
+              <div class="cmd-grid">
+                <MenuItem onClick={() => { run.notice = undefined; action!.fn(); }} hot>{action.btn}</MenuItem>
+                {action.alt && <MenuItem onClick={action.alt.fn}>{action.alt.btn}</MenuItem>}
+                {action.more?.map((m, i) => <MenuItem key={i} onClick={m.fn}>{m.btn}</MenuItem>)}
+              </div>
+            ) : <>
+              <MenuItem disabled={preview === null || !!sail.current} hot={preview !== null} onClick={() => { if (preview !== null) choose(preview); }}>
+                {sail.current ? '航行中…' : preview === null ? '選擇航點後出發' : `前往${routes[preview].name}`}
+              </MenuItem>
+              {!panel && timeOfDay(run) !== 'day' && <Tip inline id={`tod-${timeOfDay(run)}`}>{TOD_INFO[timeOfDay(run)].desc}</Tip>}
+              {partyStrip}
+            </>}
           </Win>
         </div>
       } />
@@ -783,7 +818,7 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
           <h3>能力卡的流派</h3>
           <p class="small">有些能力卡屬於某個<b>流派</b>（灼燒流、護盾流、連擊流、捕捉流、共鳴流），同流派的卡會互相加乘，越收越強。偶爾還會出現粉紅色的<b>傳說能力卡</b>，效果非常強大，但一局只能拿一張；打贏精英和船隊之後比較容易出現。</p>
           <h3>潮位與每日挑戰</h3>
-          <p class="small">通關後可以解鎖更高的<b>潮位</b>（★1～★5），對手更強、物價更高，但結算珍珠每顆星 +20%。<b>每日挑戰</b>每天一個固定的航線與夥伴，還有一條每天輪換的「今日特殊規則」（例如永夜之海、玻璃大砲、異色之日），珍珠只有當天第一次結算時拿得到。</p>
+          <p class="small">完成三片海域後可以解鎖更高的<b>潮位</b>（★1～★5），對手更強、物價更高，但結算珍珠每顆星 +20%。<b>每日挑戰</b>每天一個固定的航線與夥伴，還有一條每天輪換的「今日特殊規則」（例如永夜之海、玻璃大砲、異色之日），珍珠只有當天第一次結算時拿得到。</p>
           <h3>技能數量</h3>
           <p>每隻夥伴都有 4 個技能槽，技能要升級才學得到。第 1 格固定是<b>普攻</b>（不耗能量的攻擊），學新技能時不能把它忘掉。</p>
           <h3>棲息灣與招募</h3>
@@ -889,7 +924,7 @@ export function End({ vp, run, onTitle }: { vp: Viewport; run: RunState; onTitle
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={win ? drawTitle : drawDeep} />}
       panel={
-        <Win class="big-panel end" title={run.finale === 'won' ? '統領者・潮汐默旭已被擊敗！' : win ? `${zoneOf(run).name}的霸主已被擊敗！` : '航程結束'}>
+        <Win class="big-panel end" title={run.finale === 'won' ? '統領者・潮汐默旭已被擊敗！' : win ? '完成三片海域！' : '航程結束'}>
           <p>{run.finale === 'won' ? '你和夥伴們得到了統領者的認可，成為真正的潮汐獵手！' : run.finale === 'lost' ? '三片海域都闖過了，但統領者・潮汐默旭還在最深的海裡等你。下次再來挑戰祂吧！' : win ? '恭喜通關！帶著收穫回到港口吧。' : '隊伍全部倒下了。回港口整頓一下，再出海一次吧。'}</p>
           {run.finale === 'won' && <p class="small accent">打倒統領者的獎勵：珍珠額外 +{FINAL_PEARLS}{(run.star ?? 0) > 0 ? '（再乘上潮位加成）' : ''}，到港口的「成就」領取稱號「萬潮的繼承者」。</p>}
           {(run.eggs?.length ?? 0) > 0 && <p class="small accent"><Icon name="egg" /> 帶回 {run.eggs!.length} 顆潮汐卵。回港時放進巢，巢滿則換成珍珠。</p>}
@@ -897,7 +932,9 @@ export function End({ vp, run, onTitle }: { vp: Viewport; run: RunState; onTitle
           {!run.daily && (run.star ?? 0) > 0 && <p class="small accent">潮位 {'★'.repeat(run.star ?? 0)}：珍珠 +{(run.star ?? 0) * 20}%{win && (run.star ?? 0) >= (meta.maxStar ?? 0) && (run.star ?? 0) < MAX_STAR ? `・回港後解鎖 ★${(run.star ?? 0) + 1}！` : ''}</p>}
           <div class="end-stats">
             <span>抵達</span><b class="num">{zoneOf(run).name} 第 {run.station + 1} 站（共 {totalStation(run)} 站）</b>
-            <span>勝利</span><b class="num">{run.battlesWon} 場</b>
+            <span>完成三片海域</span><b>{win ? '已完成' : '未完成'}</b>
+            <span>擊倒統領者</span><b>{run.finale === 'won' ? '已擊倒' : '未擊倒'}</b>
+            <span>戰鬥勝利</span><b class="num">{run.battlesWon} 場</b>
             <span>收服</span><b class="num">{run.caught} 隻</b>
             <span>獲得珍珠</span><b class="num accent">◆ {pearls}</b>
           </div>
