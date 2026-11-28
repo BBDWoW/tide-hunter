@@ -66,6 +66,7 @@ export interface Meta {
   version: 1;
   pearls: number;
   totalPearls: number;
+  lastSettlementId?: string;
   upgrades: Partial<Record<UpgradeId, number>>;
   recruits: string[];
   bay: BayMon[];
@@ -194,7 +195,7 @@ export function pearlsFor(s: RunSummary) {
 const rootOf = (form: string) => ancestryOf(form)[0].id;
 
 // 把一隻夥伴帶回棲息灣（如果牠本來就是從棲息灣出來的，就更新原本那一筆）
-export function bringBack(m: Meta, mon: Mon, replaceId?: string): BayMon {
+export function addBayMon(m: Meta, mon: Mon, replaceId?: string): BayMon {
   const chain = ancestryOf(mon.form).map((f) => f.id);
   const reached = chain.filter((id) => FORMS[id].stage > FORMS[chain[0]].stage);
   const rootLearn = new Set(ancestryOf(rootOf(mon.form))[0].learn.map(([, s]) => s));
@@ -208,6 +209,11 @@ export function bringBack(m: Meta, mon: Mon, replaceId?: string): BayMon {
   rec.evoMemory = [...new Set([...rec.evoMemory, ...reached])];
   if (replaceId) m.bay = m.bay.filter((b) => b.id !== replaceId);
   m.bay.push(rec);
+  return rec;
+}
+
+export function bringBack(m: Meta, mon: Mon, replaceId?: string): BayMon {
+  const rec = addBayMon(m, mon, replaceId);
   saveMeta(m);
   return rec;
 }
@@ -238,7 +244,6 @@ export function returnFromRun(m: Meta, party: Mon[]) {
     const chain = ancestryOf(mon.form).map((f) => f.id);
     b.evoMemory = [...new Set([...b.evoMemory, ...chain.filter((id) => FORMS[id].stage > FORMS[b.root].stage)])];
   }
-  saveMeta(m);
 }
 
 export const DEX_REWARDS = [

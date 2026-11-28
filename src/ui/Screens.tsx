@@ -9,9 +9,10 @@ import { FORMS, STARTERS } from '../data/creatures';
 import { ELEM, effectiveness, RARITY, RARITY_ORDER, type Elem } from '../data/types';
 import { ITEMS, statusLabel, type ItemId } from '../game/battle';
 import { ancestryOf, blockRate, dodgeRate, formOf, maxHp, xpToNext, type Mon } from '../game/creature';
-import { bringBackSlots, releaseValue, achStats, ACHIEVEMENTS, bayCap, bringBack, buyUpgrade, claimable, claimAchievement, claimDexReward, dexCaughtCount, DEX_REWARDS, loadMeta, saveMeta, titleOf, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
-import { dailyRule, dailyRuleInfo, timeOfDay, TOD_INFO, MAX_STAR, STAR_RULES, todayKey, campHealMul, heldPrice, campSearch, campTrain, buyHeld, equipHeld, refreshCost, refreshShop, shopHeld, canUseOutside, enterSpecial, FINAL_ZONE, FINAL_PEARLS, ZONE_CHOICES, healParty, loadDex, loadRun, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type RunState, type ZoneId } from '../game/run';
+import { bringBackSlots, releaseValue, achStats, ACHIEVEMENTS, bayCap, buyUpgrade, claimable, claimAchievement, claimDexReward, dexCaughtCount, DEX_REWARDS, loadMeta, saveMeta, titleOf, UPGRADES, upLv, type BayMon, type UpgradeId } from '../game/meta';
+import { dailyRule, dailyRuleInfo, timeOfDay, TOD_INFO, MAX_STAR, STAR_RULES, todayKey, campHealMul, heldPrice, campSearch, campTrain, buyHeld, equipHeld, refreshCost, refreshShop, shopHeld, canUseOutside, enterSpecial, FINAL_ZONE, FINAL_PEARLS, ZONE_CHOICES, healParty, loadDex, loadRun, markCaught, NODE_INFO, priceOf, saveRun, SHOP, spotName, totalStation, applyItemOutside, ZONES, zoneOf, type EventResult, type RunSettlement, type RunState, type ZoneId } from '../game/run';
 import type { GameEvent } from '../game/events';
+import { settlementCandidates, settlementPearls } from '../game/settlement';
 import { APP_VERSION, CHANGELOG, hasUnreadNews, markNewsRead } from '../game/version';
 import { loadSound, saveSound, sfx, type SoundSettings } from '../audio/engine';
 import { fx, setReduceFx } from '../render/fx';
@@ -36,8 +37,12 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
   const [dailyInfo, setDailyInfo] = useState(false);
   // 有進行中的冒險時，開新局前先確認
   const [confirm, setConfirm] = useState<null | { k: 'new' | 'daily'; go: () => void }>(null);
-  const guard = (k: 'new' | 'daily', go: () => void) => () => (hasSave ? setConfirm({ k, go }) : go());
   const saved = hasSave ? loadRun() : null;
+  const guard = (k: 'new' | 'daily', go: () => void) => () => {
+    if (saved?.settlement) onContinue();
+    else if (hasSave) setConfirm({ k, go });
+    else go();
+  };
   const [star, setStar] = useState(meta.star ?? 0);
   const maxStar = meta.maxStar ?? 0;
   const today = todayKey(), daily = meta.daily?.day === today ? meta.daily : null;
@@ -118,7 +123,7 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
       dock={
         <div class="dock-center">
           <Win class="title-menu">
-            {hasSave && <MenuItem onClick={onContinue} hot>繼續冒險</MenuItem>}
+            {hasSave && <MenuItem onClick={onContinue} hot>{saved?.settlement ? '繼續結算' : '繼續冒險'}</MenuItem>}
             <MenuItem onClick={guard('new', openNew)} hot={!hasSave} sub={maxStar > 0 && (meta.star ?? 0) > 0 ? '★'.repeat(meta.star ?? 0) : undefined}>新的冒險</MenuItem>
             {meta.runs > 0 && <MenuItem onClick={() => setDailyInfo(true)} sub={todayRule.name}>每日挑戰</MenuItem>}
             {meta.bay.length > 0 && <MenuItem onClick={onBay} sub={(meta.eggs ?? []).some((e) => e.left <= 0) ? '● 蛋要孵化了' : `${meta.bay.length}/${bayCap(meta)}`}>棲息灣</MenuItem>}
@@ -824,22 +829,62 @@ export function Help({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
 }
 
 // ── 結算：珍珠＋帶夥伴回棲息灣 ──
-export function End({ vp, run, win, pearls, onTitle }: { vp: Viewport; run: RunState; win: boolean; pearls: number; onTitle: () => void }) {
-  const [meta, setMeta] = useState(loadMeta);
-  const [picked, setPicked] = useState<Mon | null>(null);
-  const [kept, setKept] = useState<string[]>([]);
-  const [done, setDone] = useState<string | null>(null);
-  const all = run.daily ? [] : run.party.filter((m) => !m.bayId);
-  const candidates = all.filter((m) => !kept.includes(m.uid));
+export function End({ vp, run, onTitle }: { vp: Viewport; run: RunState; onTitle: () => Promise<boolean> }) {
+  const [settlement, setSettlement] = useState(run.settlement!);
+  const checkpointed = useRef(loadRun()?.settlement?.id === run.settlement!.id);
+  const [error, setError] = useState(!checkpointed.current);
+  const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
+  const meta = loadMeta();
+  const all = settlementCandidates(run);
+  const { win, kept } = settlement;
+  const picked = all.find(mon => mon.uid === settlement.picked);
+  const candidates = all.filter(mon => !kept.some(choice => choice.uid === mon.uid));
   const slots = bringBackSlots(meta), left = slots - kept.length;
-  const full = meta.bay.length >= bayCap(meta);
-  const keep = (m: Mon, replaceId?: string) => { bringBack(meta, m, replaceId); setMeta(loadMeta()); setKept((k) => [...k, m.uid]); setDone(`${formOf(m).name} 住進了棲息灣！下次出海可以帶牠一起走。`); setPicked(null); };
-  // 沒帶回去的新夥伴回到大海，留下一些珍珠
+  const residents = meta.bay.filter(resident => !kept.some(choice => choice.replaceId === resident.id));
+  const full = residents.length + kept.length >= bayCap(meta);
   const released = candidates;
-  const releasePearls = released.reduce((a, m) => a + releaseValue(m), 0);
-  const leave = () => {
-    if (releasePearls > 0) { const m = loadMeta(); m.pearls += releasePearls; m.totalPearls += releasePearls; saveMeta(m); }
-    onTitle();
+  const releasePearls = released.reduce((sum, mon) => sum + releaseValue(mon), 0);
+  const pearls = settlementPearls(run, meta);
+  const persist = (next: RunSettlement) => {
+    const saved = loadRun()?.settlement;
+    if (checkpointed.current && (saved?.id !== settlement.id || saved.submitted)) {
+      if (saved?.id === settlement.id) { run.settlement = saved; setSettlement(saved); }
+      setError(true);
+      return;
+    }
+    const previous = run.settlement;
+    run.settlement = next;
+    if (!saveRun(run)) {
+      run.settlement = previous;
+      setError(true);
+      return;
+    }
+    checkpointed.current = true;
+    setSettlement(next);
+    setError(false);
+  };
+  const keep = (mon: Mon, replaceId?: string) => {
+    persist({ ...settlement, picked: undefined, kept: [...kept, { uid: mon.uid, replaceId }] });
+  };
+  const leave = async () => {
+    if (submitting.current) return;
+    submitting.current = true;
+    setBusy(true);
+    try {
+      if (!checkpointed.current) {
+        if (!saveRun(run)) { setError(true); return; }
+        checkpointed.current = true;
+      }
+      if (await onTitle()) return;
+    } catch { /* 儲存中斷時保留結算，讓玩家重試。 */ }
+    finally {
+      submitting.current = false;
+      setBusy(false);
+    }
+    const saved = loadRun()?.settlement;
+    if (saved?.id === settlement.id) { run.settlement = saved; setSettlement(saved); }
+    setError(true);
   };
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={win ? drawTitle : drawDeep} />}
@@ -847,22 +892,25 @@ export function End({ vp, run, win, pearls, onTitle }: { vp: Viewport; run: RunS
         <Win class="big-panel end" title={run.finale === 'won' ? '統領者・潮汐默旭已被擊敗！' : win ? `${zoneOf(run).name}的霸主已被擊敗！` : '航程結束'}>
           <p>{run.finale === 'won' ? '你和夥伴們得到了統領者的認可，成為真正的潮汐獵手！' : run.finale === 'lost' ? '三片海域都闖過了，但統領者・潮汐默旭還在最深的海裡等你。下次再來挑戰祂吧！' : win ? '恭喜通關！帶著收穫回到港口吧。' : '隊伍全部倒下了。回港口整頓一下，再出海一次吧。'}</p>
           {run.finale === 'won' && <p class="small accent">打倒統領者的獎勵：珍珠額外 +{FINAL_PEARLS}{(run.star ?? 0) > 0 ? '（再乘上潮位加成）' : ''}，到港口的「成就」領取稱號「萬潮的繼承者」。</p>}
-          {(run.eggs?.length ?? 0) > 0 && <p class="small accent"><Icon name="egg" /> 帶回了 {run.eggs!.length} 顆潮汐卵，已經放進棲息灣的巢（巢滿了的話換成珍珠）。</p>}
-          {run.daily && <p class="small accent">每日挑戰（{run.daily}）：今日最佳 {meta.daily?.best ?? 0} 站{pearls === 0 ? '・今天的珍珠已經領過了' : ''}。每日挑戰的夥伴不會帶回棲息灣。</p>}
-          {!run.daily && (run.star ?? 0) > 0 && <p class="small accent">潮位 {'★'.repeat(run.star ?? 0)}：珍珠 +{(run.star ?? 0) * 20}%{win && (meta.maxStar ?? 0) > (run.star ?? 0) ? `・解鎖了 ★${meta.maxStar}！` : ''}</p>}
+          {(run.eggs?.length ?? 0) > 0 && <p class="small accent"><Icon name="egg" /> 帶回 {run.eggs!.length} 顆潮汐卵。回港時放進巢，巢滿則換成珍珠。</p>}
+          {run.daily && <p class="small accent">每日挑戰（{run.daily}）：今日最佳 {Math.max(meta.daily?.day === run.daily ? meta.daily.best : 0, totalStation(run))} 站{pearls === 0 ? '・今天的珍珠已經領過了' : ''}。每日挑戰的夥伴不會帶回棲息灣。</p>}
+          {!run.daily && (run.star ?? 0) > 0 && <p class="small accent">潮位 {'★'.repeat(run.star ?? 0)}：珍珠 +{(run.star ?? 0) * 20}%{win && (run.star ?? 0) >= (meta.maxStar ?? 0) && (run.star ?? 0) < MAX_STAR ? `・回港後解鎖 ★${(run.star ?? 0) + 1}！` : ''}</p>}
           <div class="end-stats">
             <span>抵達</span><b class="num">{zoneOf(run).name} 第 {run.station + 1} 站（共 {totalStation(run)} 站）</b>
             <span>勝利</span><b class="num">{run.battlesWon} 場</b>
             <span>收服</span><b class="num">{run.caught} 隻</b>
-            <span>獲得珍珠</span><b class="num accent">◆ {pearls}（共 {meta.pearls}）</b>
+            <span>獲得珍珠</span><b class="num accent">◆ {pearls}</b>
           </div>
-          {done && <p class="accent">{done}</p>}
-          {left > 0 && candidates.length > 0 && <>
+          {kept.length > 0 && <div class="row-gap">
+            <p class="accent">準備帶回 {all.filter(mon => kept.some(choice => choice.uid === mon.uid)).map(mon => formOf(mon).name).join('、')}。</p>
+            {!settlement.submitted && <button class="chip-btn" disabled={busy} onClick={() => persist({ ...settlement, kept: [], picked: undefined })}>重新選擇</button>}
+          </div>}
+          {!settlement.submitted && left > 0 && candidates.length > 0 && <>
             <h3 class="sub-h">要帶誰回棲息灣？還可以帶 {left} 隻（棲息灣 {meta.bay.length}/{bayCap(meta)}）</h3>
             {!picked ? (
               <div class="pick-grid">
                 {candidates.map((m) => (
-                  <button class="pick" key={m.uid} onClick={() => (full ? setPicked(m) : keep(m))}>
+                  <button class="pick" key={m.uid} disabled={busy} onClick={() => (full ? persist({ ...settlement, picked: m.uid }) : keep(m))}>
                     <Sprite form={m.form} size={48} mutant={m.mutant} />
                     <span class="grow"><b>{formOf(m).name}</b><span class="small dim">Lv{m.lv}・回港後以 {FORMS[ancestryOf(m.form)[0].id].name} 的樣子重新出發</span></span>
                   </button>
@@ -872,19 +920,20 @@ export function End({ vp, run, win, pearls, onTitle }: { vp: Viewport; run: RunS
               <>
                 <p class="small">棲息灣滿了，要讓誰離開，換 {formOf(picked).name} 住進來？</p>
                 <div class="pick-grid">
-                  {meta.bay.map((b) => (
-                    <button class="pick" key={b.id} onClick={() => keep(picked, b.id)}>
+                  {residents.map((b) => (
+                    <button class="pick" key={b.id} disabled={busy} onClick={() => keep(picked, b.id)}>
                       <Sprite form={b.form} size={48} mutant={b.mutant} /><span class="grow"><b>{FORMS[b.form].name}</b><span class="small">羈絆 {b.bond}</span></span>
                     </button>
                   ))}
                 </div>
-                <MenuItem onClick={() => setPicked(null)}>算了</MenuItem>
+                <MenuItem disabled={busy} onClick={() => persist({ ...settlement, picked: undefined })}>算了</MenuItem>
               </>
             )}
           </>}
-          {run.party.some((m) => m.bayId) && <p class="small dim">從棲息灣帶出來的夥伴，羈絆 +1，已經自動回港。</p>}
+          {run.party.some((m) => m.bayId) && <p class="small dim">從棲息灣帶出來的夥伴，回港時自動歸隊，羈絆 +1。</p>}
           {releasePearls > 0 && <p class="small dim">沒有帶回去的 {released.length} 隻夥伴會回到大海，留下 ◆ {releasePearls} 顆珍珠。{slots < 3 ? '（港口的「船艙擴建」可以多帶幾隻）' : ''}</p>}
-          <MenuItem onClick={leave} hot>回到港口</MenuItem>
+          {error && <p class="warn-text" role="alert">結算尚未存妥，請再試一次。</p>}
+          <MenuItem onClick={leave} disabled={busy || (!!picked && !settlement.submitted)} hot>回到港口</MenuItem>
         </Win>
       } />
   );
@@ -896,7 +945,7 @@ type Snap = { shells: number; bait: number; star: number; legend: number; items:
 const sumOld = (r: RunState, uids: string[], f: (m: RunState['party'][number]) => number) => r.party.filter((m) => uids.includes(m.uid)).reduce((a, m) => a + f(m), 0);
 const snap = (r: RunState): Snap => ({ shells: r.shells, bait: r.catchBait, star: r.lures.star, legend: r.lures.legend, items: { ...r.items }, life: r.lifeStones ?? 0, held: r.heldBag?.length ?? 0,
   uids: r.party.map((m) => m.uid), hp: r.party.reduce((a, m) => a + Math.max(0, m.hp), 0), lv: r.party.reduce((a, m) => a + m.lv, 0), boons: Object.values(r.boons ?? {}).reduce((a, b) => a + b, 0) });
-type Chip = { icon: string; text: string; good: boolean; form?: string };
+type Chip = EventResult['chips'][number];
 function diffChips(a: Snap, r: RunState): Chip[] {
   const b = snap(r), out: Chip[] = [];
   const n = (icon: string, name: string, d: number) => { if (d) out.push({ icon, text: `${name} ${d > 0 ? '+' : ''}${d}`, good: d > 0 }); };
@@ -912,27 +961,39 @@ function diffChips(a: Snap, r: RunState): Chip[] {
   return out;
 }
 
-export function EventScreen({ vp, run, ev, onDone }: { vp: Viewport; run: RunState; ev: GameEvent; onDone: () => void }) {
-  const [result, setResult] = useState<{ text: string; chips: Chip[] } | null>(null);
+export function EventScreen({ vp, run, ev, onDone }: { vp: Viewport; run: RunState; ev: GameEvent; onDone: () => boolean }) {
+  const [result, setResult] = useState(run.event?.result);
+  const [saveFailed, setSaveFailed] = useState(false);
   const art = EVENT_ART[ev.id] ?? 'boat';
-  const pick = (o: GameEvent['options'][number]) => {
-    const before = snap(run);
-    const text = o.act(run); saveRun(run);
-    const chips = diffChips(before, run);
-    sfx(chips.some((c) => c.good) ? 'coin' : chips.length ? 'debuff' : 'select');
-    setResult({ text, chips });
+  const recordCatches = (event: EventResult) => event.caught.every(form => markCaught(form, run.zone));
+  useEffect(() => { if (result) setSaveFailed(!recordCatches(result)); }, [result]);
+  const pick = (option: GameEvent['options'][number]) => {
+    if (run.event?.result || (option.can && !option.can(run))) return;
+    const draft = structuredClone(run);
+    const before = snap(draft);
+    const text = option.act(draft);
+    const chips = diffChips(before, draft);
+    const caught = draft.party.filter(mon => !before.uids.includes(mon.uid)).map(mon => mon.form);
+    const next = { text, chips, caught };
+    draft.event = { id: ev.id, result: next };
+    if (!saveRun(draft)) { setSaveFailed(true); return; }
+    Object.assign(run, draft);
+    setSaveFailed(false);
+    sfx(chips.some(c => c.good) ? 'coin' : chips.length ? 'debuff' : 'select');
+    setResult(next);
   };
   return (
     <GameScreen vp={vp} scene={<SceneCanvas draw={(c, t) => { drawSea(c, t, zoneOf(run).theme); drawEventArt(c, t, art); }} label={ev.title} />}
       panel={
         <Win class="big-panel event" title={ev.title}>
           <p>{ev.text}</p>
+          {saveFailed && <p class="warn-text" role="alert">事件結果未能存檔，請再試一次。</p>}
           {result ? <>
             <p class="accent">{result.text}</p>
             {result.chips.length > 0 && <div class="ev-chips">{result.chips.map((c, i) => (
               <span key={i} class={`ev-chip ${c.good ? 'good' : 'bad'}`} style={{ animationDelay: `${i * 0.08}s` }}>{c.form ? <Sprite form={c.form} size={24} still /> : <Icon name={c.icon} />}{c.text}</span>
             ))}</div>}
-            <MenuItem onClick={onDone} hot>{run.eventFight ? <><Icon name="attack" /> 開始戰鬥</> : '繼續航行'}</MenuItem>
+            <MenuItem onClick={() => setSaveFailed(!recordCatches(result) || !onDone())} hot>{run.eventFight ? <><Icon name="attack" /> 開始戰鬥</> : '繼續航行'}</MenuItem>
           </> : ev.options.map((o, i) => {
             const ok = o.can ? o.can(run) : true;
             return <MenuItem key={i} disabled={!ok} onClick={() => pick(o)} sub={o.hint}>{o.label}</MenuItem>;

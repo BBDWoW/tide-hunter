@@ -149,6 +149,35 @@ const todLuck = (run: RunState) => ({ day: 0, dusk: 0.5, night: 1 })[timeOfDay(r
 export const spotName = (run: RunState, spot: SpotKind) => zoneOf(run).spots[spot];
 const firstStop = (run: RunState) => run.zoneNo === 0 && run.station === 0;
 
+export interface RunSettlement {
+  id: string;
+  win: boolean;
+  kept: { uid: string; replaceId?: string }[];
+  picked?: string;
+  submitted?: boolean;
+  pearls?: number;
+}
+
+export type AfterTask =
+  | { k: 'full'; mon: Mon }
+  | { k: 'learn'; uid: string; skill: string; selected?: number | 'skip' }
+  | { k: 'evolve'; uid: string; to: string; started?: boolean; completed?: { from: string; learn: string[] } };
+
+export interface BattleReview {
+  outcome: 'win' | 'caught' | 'fled' | 'lose';
+  step: 'caught' | 'results' | 'tasks' | 'boon' | 'end';
+  lines: { uid: string; text: string }[];
+  tasks: AfterTask[];
+  evolved?: string[];
+  caught?: { mon: Mon; first: boolean; recordedAt: string };
+}
+
+export interface EventResult {
+  text: string;
+  chips: { icon: string; text: string; good: boolean; form?: string }[];
+  caught: string[];
+}
+
 export interface RunState {
   oracleQuest?: { stage: 'purify' | 'fight' | 'choice' | 'done'; mon: Mon; order: number[]; answer: number; result?: string };
   version: 4;
@@ -165,6 +194,7 @@ export interface RunState {
   notice?: string; // 回到海圖時要顯示的訊息
   lifeStones?: number; // 生命石：全滅時可以讓全隊復活
   seenEvents?: string[]; // 這一局已經遇過的事件（不重複）
+  event?: { id: string; result?: EventResult; encounter?: Encounter };
   eventFight?: { form: string; lv: number }; // 事件引發的戰鬥
   catchBait: number;
   lures: Record<'star' | 'legend', number>;
@@ -180,7 +210,8 @@ export interface RunState {
   heldBag?: HeldId[]; // 還沒裝上的攜帶道具
   star?: number; // 潮位（難度）
   daily?: string; // 每日挑戰的日期
-  after?: { boons?: string[]; bossWin?: string }; // 戰鬥已結算、還沒離開這一站（中途關掉 App 也能接著繼續）
+  settlement?: RunSettlement;
+  after?: { boons?: string[]; bossWin?: string; review?: BattleReview }; // 戰鬥已結算、還沒離開這一站（中途關掉 App 也能接著繼續）
   camp?: { key: string; text: string }; // 這個營地已經做過的事
   shopStock?: { key: string; held: HeldId[]; refreshes: number }; // 這間商店的攜帶道具貨架
   station: number;
@@ -594,7 +625,7 @@ export function loadRun(): RunState | null {
 }
 
 /** legend：圖鑑的「傳說」紀錄（統領者・潮汐默旭）：遇過了沒、打倒幾次、第一次打倒的日期 */
-export interface Dex { discoveries?: Record<string, { date: string; place?: ZoneId | 'port' }>; seen: string[]; caught: string[]; bestStation: number; clears: number; bosses?: string[]; evolved?: string[]; mutants?: number; legend?: { met: boolean; wins: number; first?: string } }
+export interface Dex { lastSettlementId?: string; lastBattleCatchId?: string; discoveries?: Record<string, { date: string; place?: ZoneId | 'port' }>; seen: string[]; caught: string[]; bestStation: number; clears: number; bosses?: string[]; evolved?: string[]; mutants?: number; legend?: { met: boolean; wins: number; first?: string } }
 export function loadDex(): Dex {
   try {
     const d = JSON.parse(localStorage.getItem(DEX_KEY) || 'null');
@@ -609,18 +640,39 @@ export function loadDex(): Dex {
 export function updateDex(fn: (d: Dex) => void) {
   const d = loadDex();
   fn(d);
-  try { localStorage.setItem(DEX_KEY, JSON.stringify(d)); } catch { /* 略過 */ }
+  try { localStorage.setItem(DEX_KEY, JSON.stringify(d)); return true; }
+  catch { return false; }
 }
-function recordDiscovery(d: Dex, form: string, place?: ZoneId | 'port') {
+function recordDiscovery(d: Dex, form: string, place?: ZoneId | 'port', date = todayKey()) {
   if (d.seen.includes(form)) return;
   d.seen.push(form);
-  (d.discoveries ??= {})[form] = { date: todayKey(), place };
+  (d.discoveries ??= {})[form] = { date, place };
 }
-export const markSeen = (form: string, place?: ZoneId | 'port') => updateDex(d => recordDiscovery(d, form, place));
-export const markCaught = (form: string, place?: ZoneId | 'port') => updateDex(d => {
-  recordDiscovery(d, form, place);
+function recordCaught(d: Dex, form: string, place?: ZoneId | 'port', date?: string) {
+  recordDiscovery(d, form, place, date);
   if (!d.caught.includes(form)) d.caught.push(form);
-});
+}
+
+export function recordBattleCatch(mon: Mon, place: ZoneId, date: string): boolean {
+  return updateDex(d => {
+    if (d.lastBattleCatchId === mon.uid) return;
+    recordCaught(d, mon.form, place, date);
+    if (mon.mutant) d.mutants = (d.mutants ?? 0) + 1;
+    d.lastBattleCatchId = mon.uid;
+  });
+}
+
+export function recordBattleEvolutions(forms: string[], place: ZoneId): boolean {
+  return updateDex(d => {
+    for (const form of forms) {
+      recordCaught(d, form, place);
+      if (!(d.evolved ??= []).includes(form)) d.evolved.push(form);
+    }
+  });
+}
+
+export const markSeen = (form: string, place?: ZoneId | 'port') => updateDex(d => recordDiscovery(d, form, place));
+export const markCaught = (form: string, place?: ZoneId | 'port') => updateDex(d => recordCaught(d, form, place));
 
 // ── 商店 ──
 // ── 攜帶道具 ──

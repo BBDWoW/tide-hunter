@@ -4,7 +4,7 @@ import { Finale } from './Finale';
 import { ensureSprite } from '../render/art';
 import { GuardianReward, ZoneCutscene } from './Special';
 import { GodHandScreen, settleGodHand } from './GodHand';
-import { settleEggs } from '../game/eggs';
+import { completeSettlement } from '../game/settlement';
 import { ChestReveal } from './Treasure';
 import type { DomainId } from '../data/domains';
 // 開發用：網址加 ?cut=forest-enter 可以直接看過場動畫
@@ -14,18 +14,18 @@ const devGH = import.meta.env.DEV && new URLSearchParams(location.search).has('g
 const devCut = import.meta.env.DEV ? new URLSearchParams(location.search).get('cut')?.split('-') ?? null : null;
 import { HandFilter } from './Icon';
 import { useEffect, useState } from 'preact/hooks';
-import { NIGHT_STYLE, timeOfDay, GODHAND_CHANCE, rollGodHand, dailyPartner, MAX_STAR, pearlMul, todayKey, boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, healParty, isBoss, loadRun, nodeOf, totalStation, markCaught, markSeen, newRun, rollCrew, rollEncounter, saveRun, updateDex, FINAL_BOSS, FINAL_PEARLS, makeFinalBoss, type Encounter, type RunState } from '../game/run';
+import { NIGHT_STYLE, timeOfDay, GODHAND_CHANCE, rollGodHand, dailyPartner, todayKey, boon, enterZone, zoneOf, FINAL_ZONE, LANDING_BONUS, healParty, isBoss, loadRun, nodeOf, markCaught, markSeen, newRun, rollCrew, rollEncounter, saveRun, updateDex, FINAL_BOSS, makeFinalBoss, type Encounter, type RunState } from '../game/run';
 import { AfterBattle, ResumeBoon } from './AfterBattle';
 import { Battle, type BattleResult } from './Battle';
 import { Fishing } from './Fishing';
 import { Dex, End, EventScreen, Help, Port, StarterPick, Title, Voyage, ZonePick } from './Screens';
 import { EVENTS, pickEvent, type GameEvent } from '../game/events';
-import { loadMeta, monFromBay, newBayMon, pearlsFor, returnFromRun, saveMeta, selectedBay } from '../game/meta';
+import { loadMeta, monFromBay, newBayMon, saveMeta, selectedBay } from '../game/meta';
 import { Bay } from './Bay';
 import { Gacha } from './Gacha';
 import type { Mon } from '../game/creature';
 import { useViewport } from './layout';
-import { makeMon, makeMutant, maxHp } from '../game/creature';
+import { makeMon, makeMutant, maxHp, newUid } from '../game/creature';
 import { next } from '../game/rng';
 import { FORMS } from '../data/creatures';
 import { APP_VERSION, fetchLatestVersion } from '../game/version';
@@ -81,8 +81,8 @@ function devEncounter(): Encounter | null {
 
 type Screen =
   | { k: 'title' } | { k: 'starter' } | { k: 'voyage' } | { k: 'fishing' }
-  | { k: 'battle'; enc: Encounter } | { k: 'after'; result: BattleResult }
-  | { k: 'end'; win: boolean; pearls: number } | { k: 'dex' } | { k: 'help' } | { k: 'port' }
+  | { k: 'battle'; enc: Encounter } | { k: 'after'; result?: BattleResult }
+  | { k: 'end' } | { k: 'dex' } | { k: 'help' } | { k: 'port' }
   | { k: 'oracle' } | { k: 'event'; ev: GameEvent } | { k: 'boon' } | { k: 'zonepick' } | { k: 'bay'; hint?: string } | { k: 'gacha'; from: 'bay' | 'port' } | { k: 'guardian' } | { k: 'godhand' } | { k: 'finale' };
 
 export function App() {
@@ -109,27 +109,10 @@ export function App() {
   }, [screen.k, run?.zone, boss, n]);
   const go = (s: Screen) => { setScreen(s); setN((x) => x + 1); };
 
-  // 冒險結束：結算珍珠、讓棲息灣的夥伴回港
   const finishRun = (win: boolean, r: RunState = run!) => {
-    const meta = loadMeta();
-    let pearls = Math.round(pearlsFor({ station: totalStation(r), battlesWon: r.battlesWon, caught: r.caught, win }) * pearlMul(r.star ?? 0));
-    // 打倒統領者：額外的珍珠
-    if (r.finale === 'won') pearls += Math.round(FINAL_PEARLS * pearlMul(r.star ?? 0));
-    if (r.daily) {
-      // 每日挑戰：記錄當天最好的成績，珍珠只有當天第一次結算時拿得到
-      const d = meta.daily?.day === r.daily ? meta.daily : { day: r.daily, best: 0, win: false, paid: false };
-      d.best = Math.max(d.best, totalStation(r)); d.win ||= win;
-      if (d.paid) pearls = 0;
-      d.paid = true; meta.daily = d;
-    } else if (win && (r.star ?? 0) >= (meta.maxStar ?? 0) && (meta.maxStar ?? 0) < MAX_STAR) meta.maxStar = (r.star ?? 0) + 1;
-    meta.pearls += pearls; meta.totalPearls += pearls; meta.runs++;
-    // 潮汐卵：棲息灣的蛋前進一格，這局拿到的蛋放進去
-    settleEggs(meta, r.eggs ?? []);
-    saveMeta(meta);
-    returnFromRun(meta, r.party);
-    updateDex((d) => { d.bestStation = Math.max(d.bestStation, totalStation(r)); if (win) d.clears++; });
-    saveRun(null);
-    go({ k: 'end', win, pearls });
+    r.settlement ??= { id: newUid(), win, kept: [] };
+    saveRun(r);
+    go({ k: 'end' });
   };
 
   const startRun = (mon: Mon, daily?: string) => { const m = loadMeta(); const r = newRun(mon, m, { star: m.star ?? 0, daily }); if (!daily) markCaught(mon.form); saveRun(r); setRun(r); go({ k: 'voyage' }); };
@@ -141,20 +124,24 @@ export function App() {
     startRun(monFromBay(b));
   };
 
-  const advance = (r: RunState | null = run) => {
-    if (!r) return;
-    r.path.push(r.picked ?? 0);
-    r.station++;
-    r.picked = null;
-    saveRun(r);
-    go({ k: 'voyage' });
+  const proceed = (run: RunState, next: RunState, screen: Screen) => {
+    if (!saveRun(next)) return false;
+    Object.assign(run, next);
+    go(screen);
+    return true;
   };
-  /** 打倒主海域霸主之後：選下一片海域；最後一片海域打完，統領者登場 */
-  const afterBoss = (r: RunState) => {
-    if (r.zoneNo < FINAL_ZONE) { r.pendingZone = true; saveRun(r); go({ k: 'zonepick' }); return; }
-    // 決戰前：全隊回復一半 HP，倒下的夥伴也會醒來（跟前往下一片海域一樣）
-    healParty(r, 0.5, true);
-    r.finale = 'intro'; saveRun(r); go({ k: 'finale' });
+  const advance = (r: RunState | null = run, next = r) => {
+    if (!r || !next) return false;
+    return proceed(r, {
+      ...next, event: undefined, eventFight: undefined,
+      path: [...next.path, next.picked ?? 0], station: next.station + 1, picked: null,
+    }, { k: 'voyage' });
+  };
+  /** 打倒主海域霸主之後：選下一片海域；最後一片海域打完後進入決戰 */
+  const afterBoss = (r: RunState, next = structuredClone(r)) => {
+    if (next.zoneNo < FINAL_ZONE) return proceed(r, { ...next, pendingZone: true }, { k: 'zonepick' });
+    healParty(next, 0.5, true);
+    return proceed(r, { ...next, finale: 'intro' }, { k: 'finale' });
   };
   /** 最終決戰：統領者・潮汐默旭 */
   const finalFight = (r: RunState) => {
@@ -173,33 +160,94 @@ export function App() {
   /** 戰鬥結算完、離開這一站（打倒霸主時前往下一片海域或通關） */
   const finishAfter = (r: RunState) => {
     const bossWin = r.after?.bossWin;
-    r.after = undefined;
+    const draft = structuredClone(r);
+    draft.after = undefined;
     if (bossWin) {
-      updateDex((d) => { d.bosses = [...new Set([...(d.bosses ?? []), bossWin])]; });
-      if (r.returnTo) { r.guardianWin = r.zone; saveRun(r); go({ k: 'guardian' }); return; }
-      // 超特殊事件：神之手（0.5%）
-      if (devGH || next(r.rng) < GODHAND_CHANCE) { r.godHand = rollGodHand(r, bossWin, zoneOf(r).bossLv + ((r.star ?? 0) >= 4 ? 2 : 0)); saveRun(r); go({ k: 'godhand' }); return; }
-      afterBoss(r);
-      return;
+      if (!updateDex(d => { d.bosses = [...new Set([...(d.bosses ?? []), bossWin])]; })) return false;
+      if (draft.returnTo) return proceed(r, { ...draft, guardianWin: draft.zone }, { k: 'guardian' });
+      if (devGH || next(draft.rng) < GODHAND_CHANCE) {
+        draft.godHand = rollGodHand(draft, bossWin, zoneOf(draft).bossLv + ((draft.star ?? 0) >= 4 ? 2 : 0));
+        return proceed(r, draft, { k: 'godhand' });
+      }
+      return afterBoss(r, draft);
     }
-    if (r.dailyRule?.id !== 'drought') healParty(r, 0.15 + boon(r, 'breeze') * 0.15);
+    if (draft.dailyRule?.id !== 'drought') healParty(draft, 0.15 + boon(draft, 'breeze') * 0.15);
     // 林之恩惠：倒下的夥伴會醒來
-    if (boon(r, 'g_forest')) for (const m of r.party) if (m.hp <= 0) m.hp = Math.ceil(maxHp(m) * 0.3);
-    advance(r);
+    if (boon(draft, 'g_forest')) for (const m of draft.party) if (m.hp <= 0) m.hp = Math.ceil(maxHp(m) * 0.3);
+    return advance(r, draft);
+  };
+
+  const startEventBattle = (r: RunState) => {
+    const draft = structuredClone(r);
+    const fight = draft.eventFight!;
+    const mon = makeMon(fight.form, fight.lv, false, true, () => next(draft.rng));
+    const enc: Encounter = { mon, rarity: FORMS[fight.form].rarity };
+    draft.event ??= { id: '' };
+    draft.event.encounter = enc;
+    draft.eventFight = undefined;
+    const saved = proceed(r, draft, { k: 'battle', enc: structuredClone(enc) });
+    if (saved) markSeen(mon.form, r.zone);
+    return saved;
+  };
+
+  const continueRun = () => {
+    const saved = loadRun();
+    if (!saved) return;
+    setRun(saved);
+    if (saved.settlement) go({ k: 'end' });
+    else if (saved.oracleQuest) go({ k: 'oracle' });
+    else if (saved.godHand) {
+      if (saved.godHand.stage === 'fight') saved.godHand.stage = 'ask';
+      go({ k: 'godhand' });
+    } else if (saved.finale === 'intro' || saved.finale === 'fight' || saved.finale === 'ending') {
+      if (saved.finale === 'fight') saved.finale = 'intro';
+      go({ k: 'finale' });
+    } else if (saved.guardianWin) go({ k: 'guardian' });
+    else if (saved.after?.review) go({ k: 'after' });
+    else if (saved.after?.boons) go({ k: 'boon' });
+    else if (saved.after) finishAfter(saved);
+    else if (saved.event?.encounter) go({ k: 'battle', enc: structuredClone(saved.event.encounter) });
+    else if (saved.event) {
+      const event = EVENTS.find(e => e.id === saved.event!.id);
+      if (event) go({ k: 'event', ev: event });
+      else advance(saved);
+    } else if (saved.eventFight) startEventBattle(saved);
+    else go(saved.pendingZone ? { k: 'zonepick' } : { k: 'voyage' });
+  };
+
+  const visitNode = (r: RunState) => {
+    const kind = nodeOf(r).kind;
+    if (kind === 'event') {
+      if (r.event || r.oracleQuest) return;
+      if (devEv === 'oracle' || (!devEv && next(r.rng) < 0.02)) {
+        startOracleQuest(r);
+        go({ k: 'oracle' });
+      } else {
+        const event = (devEv && EVENTS.find(e => e.id === devEv)) || pickEvent(r);
+        r.event = { id: event.id };
+        saveRun(r);
+        go({ k: 'event', ev: event });
+      }
+    } else if (kind === 'crew') {
+      const enc = rollCrew(r);
+      enc.team!.forEach(mon => markSeen(mon.form, r.zone));
+      saveRun(r);
+      go({ k: 'battle', enc });
+    } else go({ k: 'fishing' });
   };
 
   let body;
   switch (screen.k) {
     case 'title':
       body = <Title vp={vp} hasSave={!!loadRun()} onNew={onNew} onDaily={() => { const day = todayKey(); startRun(dailyPartner(day), day); }} onBay={() => go({ k: 'bay' })}
-        onContinue={() => { const r = loadRun(); if (!r) return; setRun(r); if (r.oracleQuest) go({ k: 'oracle' }); else if (r.godHand) { if (r.godHand.stage === 'fight') r.godHand.stage = 'ask'; go({ k: 'godhand' }); } else if (r.finale === 'intro' || r.finale === 'fight' || r.finale === 'ending') { if (r.finale === 'fight') r.finale = 'intro'; go({ k: 'finale' }); } else if (r.guardianWin) go({ k: 'guardian' }); else if (r.after?.boons) go({ k: 'boon' }); else if (r.after) finishAfter(r); else go(r.pendingZone ? { k: 'zonepick' } : { k: 'voyage' }); }}
+        onContinue={continueRun}
         onDex={() => go({ k: 'dex' })} onHelp={() => go({ k: 'help' })} onPort={() => go({ k: 'port' })} />;
       break;
     case 'starter':
       body = <StarterPick vp={vp} onBack={() => go({ k: 'title' })} onPick={(form) => { const m = loadMeta(); const b = newBayMon(form); m.bay.push(b); m.selected = b.id; saveMeta(m); startRun(monFromBay(b)); }} />;
       break;
     case 'voyage':
-      body = <Voyage vp={vp} run={run!} onGo={() => { const k = nodeOf(run!).kind; if (k === 'event' && (devEv === 'oracle' || (!devEv && next(run!.rng) < 0.02))) { startOracleQuest(run!); go({ k: 'oracle' }); } else if (k === 'event') go({ k: 'event', ev: (devEv && EVENTS.find((e) => e.id === devEv)) || pickEvent(run!) }); else if (k === 'crew') { const enc = rollCrew(run!); enc.team!.forEach((m) => markSeen(m.form, run!.zone)); saveRun(run); go({ k: 'battle', enc }); } else go({ k: 'fishing' }); }} onNext={() => advance()} onQuit={() => go({ k: 'title' })} />;
+      body = <Voyage vp={vp} run={run!} onGo={() => visitNode(run!)} onNext={() => advance()} onQuit={() => go({ k: 'title' })} />;
       break;
     case 'fishing':
       body = <Fishing vp={vp} run={run!} boss={boss} onDone={advance} onHook={(q, sh, landing) => {
@@ -241,24 +289,20 @@ export function App() {
       body = <ResumeBoon vp={vp} run={run!} onDone={() => finishAfter(run!)} />;
       break;
     case 'end':
-      body = <End vp={vp} run={run!} win={screen.win} pearls={screen.pearls} onTitle={() => { setRun(null); go({ k: 'port' }); }} />;
+      body = <End vp={vp} run={run!} onTitle={async () => {
+        if (!await completeSettlement(run!.settlement!.id)) return false;
+        setRun(null);
+        go({ k: 'port' });
+        return true;
+      }} />;
       break;
     case 'dex':
       body = <Dex vp={vp} onBack={() => go({ k: 'title' })} />;
       break;
     case 'event':
       body = <EventScreen vp={vp} run={run!} ev={screen.ev} onDone={() => {
-        if (run!.party.every((m) => m.hp <= 0)) { finishRun(false); return; }
-        // 事件引發的戰鬥：打完（或逃跑）後回到航線
-        const f = run!.eventFight;
-        if (f) {
-          run!.eventFight = undefined; saveRun(run);
-          const mon = makeMon(f.form, f.lv, false, true, () => next(run!.rng));
-          markSeen(mon.form, run!.zone);
-          go({ k: 'battle', enc: { mon, rarity: FORMS[f.form].rarity } });
-          return;
-        }
-        advance();
+        if (run!.party.every(mon => mon.hp <= 0)) { finishRun(false); return true; }
+        return run!.eventFight ? startEventBattle(run!) : advance();
       }} />;
       break;
     case 'oracle':

@@ -5,7 +5,7 @@ import { FORMS } from '../data/creatures';
 import type { Elem } from '../data/types';
 import { formOf, gainXp, makeMon, maxHp, xpToNext } from './creature';
 import { next } from './rng';
-import { giveHeld, applyBoon, boon, healParty, markCaught, PARTY_MAX, rollBoons, rollTreasure, zoneOf, type RunState, type ZoneId } from './run';
+import { giveHeld, applyBoon, boon, healParty, PARTY_MAX, rollBoons, rollTreasure, zoneOf, type RunState, type ZoneId } from './run';
 
 export interface EventOption {
   label: string;
@@ -38,7 +38,7 @@ const cureAll = (r: RunState) => { for (const m of r.party) m.status = null; };
 function addMon(r: RunState, rarities: string[]): string {
   if (r.party.length >= PARTY_MAX) { r.shells += 50; return '隊伍已經滿了，牠依依不捨地游走了，留下 50 枚貝殼幣當謝禮。'; }
   const m = zoneMon(r, rarities);
-  r.party.push(m); markCaught(m.form); r.caught++;
+  r.party.push(m); r.caught++;
   return `${formOf(m).name}（Lv${m.lv}）加入了隊伍！`;
 }
 
