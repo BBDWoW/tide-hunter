@@ -1,46 +1,5 @@
 // 初始夥伴的技能特效。像素圖塊只繪製一次，戰鬥時貼到角色目前的定位點。
-export type FxLayer = 'back' | 'front' | 'particles';
-export interface FxPoint { x: number; y: number }
-
-type DrawSkill = (ctx: CanvasRenderingContext2D, layer: FxLayer, frame: number, source: FxPoint, target: FxPoint, missed: boolean) => void;
-export interface AnimatedFx {
-  frames: number;
-  frameMs: number;
-  hitFrame: number;
-  socket: string;
-  draw: DrawSkill;
-  dash?: (frame: number, missed: boolean) => number;
-}
-
-function pixel(ctx: CanvasRenderingContext2D, color: string, x: number, y: number, w = 1, h = 1) {
-  ctx.fillStyle = color;
-  ctx.fillRect(Math.round(x), Math.round(y), w, h);
-}
-
-function tile(rows: string[], colors: Record<string, string>) {
-  const width = Math.max(...rows.map(row => row.length)), height = rows.length;
-  let canvas: HTMLCanvasElement | undefined;
-  return (ctx: CanvasRenderingContext2D, x: number, y: number, dir = 1, scale = 1) => {
-    if (!canvas) {
-      canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const paint = canvas.getContext('2d')!;
-      rows.forEach((row, y) => {
-        for (let x = 0; x < row.length; x++) {
-          if (row[x] !== '.') pixel(paint, colors[row[x]], x, y);
-        }
-      });
-    }
-    const w = Math.max(1, Math.round(width * scale)), h = Math.max(1, Math.round(height * scale));
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    ctx.translate(Math.round(x), Math.round(y));
-    ctx.scale(dir, 1);
-    ctx.drawImage(canvas, -Math.floor(w / 2), -Math.floor(h / 2), w, h);
-    ctx.restore();
-  };
-}
+import { dashProgress, direction, pixel, tile, travel, type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
 
 const bubble = tile([
   '....dddd.....',
@@ -129,14 +88,6 @@ const collision = tile([
   '........dwd............',
   '.........d.............',
 ], { d: '#634752', y: '#e6ab75', w: '#fff1cb' });
-
-const direction = (source: FxPoint, target: FxPoint) => target.x >= source.x ? 1 : -1;
-function travel(source: FxPoint, target: FxPoint, t: number, rise = 0): FxPoint {
-  return {
-    x: source.x + (target.x - source.x) * t,
-    y: source.y + (target.y - source.y) * t - 4 * rise * t * (1 - t),
-  };
-}
 
 const BUBBLE_HIT = 7;
 const BUBBLES = [
@@ -237,12 +188,8 @@ function drawLeafblade(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: num
 
 const TACKLE_HIT = 5;
 const DASH_STEPS = [0, -.04, -.07, .13, .57, 1, .8, .51, .22, .05, 0];
-function tackleDash(frame: number, missed: boolean) {
-  const at = Math.floor(frame), from = DASH_STEPS[at] ?? 0, to = DASH_STEPS[at + 1] ?? 0;
-  return (from + (to - from) * (frame - at)) * (missed ? .72 : 1);
-}
-function drawTackle(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: number, source: FxPoint, target: FxPoint, missed: boolean) {
-  const dir = direction(source, target), hit = frame - TACKLE_HIT;
+function drawTackle(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: number, source: FxPoint, target: FxPoint, missed: boolean, dir = direction(source, target)) {
+  const hit = frame - TACKLE_HIT;
   if (layer === 'back' && frame >= 2 && frame <= 6) {
     const length = [5, 11, 21, 24, 10][frame - 2];
     ctx.globalAlpha *= [.44, .58, .88, .76, .4][frame - 2];
@@ -269,7 +216,7 @@ function drawTackle(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: number
 
 export const STARTER_FX: Partial<Record<string, AnimatedFx>> = {
   bubble: { frames: 14, frameMs: 56, hitFrame: BUBBLE_HIT, socket: 'mouth', draw: drawBubble },
-  tackle: { frames: 11, frameMs: 52, hitFrame: TACKLE_HIT, socket: 'body', draw: drawTackle, dash: tackleDash },
+  tackle: { frames: 11, frameMs: 52, hitFrame: TACKLE_HIT, socket: 'body', draw: drawTackle, dash: (frame, missed) => dashProgress(DASH_STEPS, frame, missed) },
   ember: { frames: 12, frameMs: 58, hitFrame: EMBER_HIT, socket: 'mouth', draw: drawEmber },
   leafblade: { frames: 12, frameMs: 54, hitFrame: LEAF_HIT, socket: 'crown', draw: drawLeafblade },
 };

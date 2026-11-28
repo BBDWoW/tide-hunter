@@ -4,7 +4,9 @@ import { oracleImpact } from '../data/oracle';
 import MOXU_FX from '../art/moxu_vfx.json';
 import SKILL_FX from '../art/vfx_skills.json';
 import { spriteSockets } from './art';
-import { STARTER_FX, type AnimatedFx, type FxLayer, type FxPoint } from './starter-fx';
+import { SHORE_FX } from './shore-fx';
+import { type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
+import { STARTER_FX } from './starter-fx';
 import { drawWatergun, WATERGUN_FX } from './watergun';
 
 /** fc：這招有幾格（預設 12）；r = 'eclipse'：統領者的日蝕特效，用另一套定位方式（back 是整片舞台背景） */
@@ -16,8 +18,12 @@ type MoxuFx = (typeof MOXU_FX)[keyof typeof MOXU_FX];
 export const moxuFx = (code: string): MoxuFx | undefined => (MOXU_FX as Record<string, MoxuFx>)[code];
 const FW = 192, FH = 104;
 const LAYERS: FxLayer[] = ['back', 'front', 'particles'];
-const WATERGUN: AnimatedFx = { ...WATERGUN_FX, socket: 'mouth', draw: drawWatergun };
-export const animatedFx = (code: string) => code === 'watergun' ? WATERGUN : STARTER_FX[code];
+const ANIMATED_FX: Partial<Record<string, AnimatedFx>> = {
+  ...STARTER_FX,
+  ...SHORE_FX,
+  watergun: { ...WATERGUN_FX, socket: 'mouth', draw: drawWatergun },
+};
+export const animatedFx = (code: string) => Object.hasOwn(ANIMATED_FX, code) ? ANIMATED_FX[code] : undefined;
 
 const URLS = import.meta.glob('../art/vfx/*/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 type Atlas = HTMLImageElement | HTMLCanvasElement;
@@ -89,13 +95,13 @@ export function drawFx(ctx: CanvasRenderingContext2D, code: string, layer: FxLay
   if (animated) {
     const source = actorPoint(caster, sock(caster, animated.socket));
     const hit = actorPoint(target, sock(target, 'body'));
-    const dir = hit.x >= source.x ? 1 : -1;
+    const dir = animated.dash ? (caster.facesLeft ? -1 : 1) : (hit.x >= source.x ? 1 : -1);
     const contact = {
       x: hit.x - Math.round(target.rect.w * 0.12) * dir,
       y: hit.y - (missed ? Math.max(20, Math.round(target.rect.w * .45)) : 0),
     };
     ctx.save();
-    animated.draw(ctx, layer, frame, source, contact, missed);
+    animated.draw(ctx, layer, frame, source, contact, missed, dir);
     ctx.restore();
     return;
   }
