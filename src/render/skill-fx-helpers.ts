@@ -8,10 +8,12 @@ export interface AnimatedFx {
   frameMs: number;
   hitFrame: number;
   socket: string;
+  targetSocket?: string;
   draw: DrawSkill;
   self?: boolean;
   repeat?: boolean;
   dash?: (frame: number, missed: boolean) => number;
+  dashLift?: (frame: number) => number;
 }
 
 export function pixel(ctx: CanvasRenderingContext2D, color: string, x: number, y: number, w = 1, h = 1) {

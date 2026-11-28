@@ -239,14 +239,15 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       // 近戰：衝到對手面前再退回來
       a.dashT[side] = Math.max(0, a.dashT[side] - dt);
       const dashFx = a.fx.find(f => f.from === side && animatedFx(f.code)?.dash);
-      const dash = dashFx && animatedFx(dashFx.code)?.dash;
+      const motion = dashFx && animatedFx(dashFx.code);
+      const dash = motion && motion.dash;
       if (dashFx && dash) {
         const tg = posOf(dashFx.to, a.mons[dashFx.to].form);
         const k = dash(dashFx.e, !!dashFx.missed);
         const gap = Math.max(24, (p.cy - p.y + tg.cy - tg.y) / 2);
         const dx = (tg.cx - p.cx - Math.sign(tg.cx - p.cx) * gap) * k;
         v.x += dx;
-        v.y += (tg.cy - p.cy) * k;
+        v.y += (tg.cy - p.cy) * k + (motion.dashLift?.(dashFx.e) ?? 0);
         v.base.x += dx;
         v.base.y += (tg.by - p.by) * k;
       } else if (a.dashT[side] > 0) {

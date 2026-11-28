@@ -6,10 +6,13 @@ import SKILL_FX from '../art/vfx_skills.json';
 import { ADVANCED_NATURE_FX } from './advanced-nature-fx';
 import { ADVANCED_WATER_FX } from './advanced-water-fx';
 import { spriteSockets } from './art';
+import { FLIGHT_FX } from './flight-fx';
+import { REEF_FX } from './reef-fx';
 import { SHORE_FX } from './shore-fx';
 import { type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
 import { STARTER_FX } from './starter-fx';
 import { SUPPORT_FX } from './support-fx';
+import { TIDE_FX } from './tide-fx';
 import { drawWatergun, WATERGUN_FX } from './watergun';
 
 /** fc：這招有幾格（預設 12）；r = 'eclipse'：統領者的日蝕特效，用另一套定位方式（back 是整片舞台背景） */
@@ -27,6 +30,9 @@ const ANIMATED_FX: Partial<Record<string, AnimatedFx>> = {
   ...SUPPORT_FX,
   ...ADVANCED_WATER_FX,
   ...ADVANCED_NATURE_FX,
+  ...TIDE_FX,
+  ...FLIGHT_FX,
+  ...REEF_FX,
   watergun: { ...WATERGUN_FX, socket: 'mouth', draw: drawWatergun },
 };
 export const animatedFx = (code: string) => Object.hasOwn(ANIMATED_FX, code) ? ANIMATED_FX[code] : undefined;
@@ -110,10 +116,10 @@ export function drawFx(ctx: CanvasRenderingContext2D, code: string, layer: FxLay
       ctx.restore();
       return;
     }
-    const hit = actorPoint(target, sock(target, 'body'));
+    const hit = actorPoint(target, sock(target, animated.targetSocket ?? 'body'));
     const dir = animated.dash ? (caster.facesLeft ? -1 : 1) : (hit.x >= source.x ? 1 : -1);
     const contact = {
-      x: hit.x - Math.round(target.rect.w * 0.12) * dir,
+      x: animated.targetSocket ? hit.x : hit.x - Math.round(target.rect.w * 0.12) * dir,
       y: hit.y - (missed ? Math.max(20, Math.round(target.rect.w * .45)) : 0),
     };
     ctx.save();
