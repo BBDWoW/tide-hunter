@@ -1,10 +1,10 @@
-// 水槍：以場景像素畫出聚水、射流、命中水冠與落水，施術與命中點跟隨角色。
+// 水槍：水柱沿嘴部與命中點之間的直線發射，撞擊後水花再向外散開。
 export const WATERGUN_FX = { frames: 12, frameMs: 64, hitFrame: 5 };
 const INK = '#174675', BLUE = '#2580bf', WATER = '#43c6ef', RIM = '#a0f1ff', FOAM = '#f4ffff';
 
 type Point = { x: number; y: number };
-const JET_HEAD = [0.16, 0.44, 0.74, 1, 1];
-const JET_LENGTH = [13, 24, 31, 34, 19];
+const JET_HEAD = [0.07, 0.24, 0.45, 0.66, 0.85, 1, 1, 1, 1, 1];
+const JET_TAIL = [0, 0, 0, 0, 0, 0, 0, 0, 0.28, 0.68];
 const SPRAY = [
   [-1.3, -3.2, 3], [-2.6, -1.9, 2], [1.15, -3.55, 3], [2.35, -2.9, 3],
   [3.4, -1.45, 3], [3.65, 0.1, 2], [2.15, 1.1, 2], [-1.7, 0.45, 2],
@@ -19,27 +19,24 @@ function pixel(ctx: CanvasRenderingContext2D, color: string, x: number, y: numbe
 
 function drawJet(ctx: CanvasRenderingContext2D, frame: number, source: Point, target: Point, dir: number) {
   const distance = Math.max(1, Math.abs(target.x - source.x));
-  const head = JET_HEAD[frame - 2];
-  const length = Math.min(Math.ceil(head * distance), JET_LENGTH[frame - 2]);
-  for (let i = length; i >= 0; i--) {
-    const p = Math.max(0, head - i / distance);
-    const x = source.x + dir * p * distance;
-    const tail = i / Math.max(1, length);
-    const y = source.y + (target.y - source.y) * p - Math.sin(p * Math.PI) * 8
-      + Math.sin(i * 0.34 + frame) * tail * 2.5;
-    const nose = Math.sqrt(Math.min(1, (i + 1) / 6));
-    const width = Math.max(1, Math.round(nose * (1 - tail) ** 0.7 * (frame === 6 ? 4 : 6)));
-    pixel(ctx, INK, x, y - width, 1, 2 * width + 1);
-    if (width < 2) continue;
-    pixel(ctx, BLUE, x, y - width + 1, 1, 2 * width - 1);
-    const crest = Math.round(Math.sin(i * 0.38 - frame * 1.1) * 1.3);
-    pixel(ctx, WATER, x, y - width + 1, 1, Math.max(1, width + crest));
-    if ((i + frame * 3) % 13 < 9) pixel(ctx, RIM, x, y - width + 1);
-    if (width >= 4) {
-      if ((i + frame * 2) % 17 < 8) pixel(ctx, FOAM, x, y - 2 + crest);
-      if ((i + frame) % 11 < 4) pixel(ctx, WATER, x, y + 2);
-    }
+  const start = Math.round(JET_TAIL[frame] * distance);
+  const end = Math.round(JET_HEAD[frame] * distance);
+  ctx.save();
+  if (frame >= 8) ctx.globalAlpha *= frame === 8 ? 0.76 : 0.48;
+  for (let column = start; column <= end; column++) {
+    const p = column / distance;
+    const x = source.x + dir * column;
+    const y = source.y + (target.y - source.y) * p;
+    const wave = (column + frame * 6) % 19;
+    const radius = (frame < 2 ? 2 : 3) + (frame >= 2 && frame <= 7 && wave < 6 ? 1 : 0);
+    pixel(ctx, INK, x, y - radius, 1, radius * 2 + 1);
+    pixel(ctx, BLUE, x, y - radius + 1, 1, radius * 2 - 1);
+    pixel(ctx, WATER, x, y - radius + 1, 1, radius + 1);
+    pixel(ctx, RIM, x, y - 1);
+    if (wave < 8) pixel(ctx, FOAM, x, y - 1);
+    if (radius >= 3 && wave >= 11 && wave < 16) pixel(ctx, WATER, x, y + 1);
   }
+  ctx.restore();
 }
 
 export function drawWatergun(ctx: CanvasRenderingContext2D, layer: 'back' | 'front' | 'particles', frame: number, source: Point, target: Point) {
@@ -47,21 +44,7 @@ export function drawWatergun(ctx: CanvasRenderingContext2D, layer: 'back' | 'fro
   const hit = frame - WATERGUN_FX.hitFrame;
   ctx.save();
   if (layer === 'front') {
-    if (frame < 2) {
-      const x = source.x + (3 + frame * 2) * dir, y = source.y;
-      pixel(ctx, INK, x - 3, y - 1, 7, 4);
-      pixel(ctx, INK, x - 2, y - 3, 5, 8);
-      pixel(ctx, BLUE, x - 2, y - 2, 5, 6);
-      pixel(ctx, WATER, x - 2, y - 2, 5, 4);
-      pixel(ctx, RIM, x - 1, y - 2, 3);
-      pixel(ctx, FOAM, x + dir, y - 1);
-      if (frame === 1) {
-        pixel(ctx, RIM, x + 6 * dir, y - 4, 2);
-        pixel(ctx, WATER, x - 7 * dir, y + 4, 2);
-      }
-    } else if (frame <= 6) {
-      drawJet(ctx, frame, source, target, dir);
-    }
+    if (frame < JET_HEAD.length) drawJet(ctx, frame, source, target, dir);
     // 命中的水冠先向前翻開，之後只留下幾道較細的水絲。
     if (hit >= 0 && hit < 5) {
       ctx.globalAlpha *= [1, 1, 0.92, 0.74, 0.5][hit];
@@ -98,9 +81,9 @@ export function drawWatergun(ctx: CanvasRenderingContext2D, layer: 'back' | 'fro
   } else if (layer === 'particles') {
     if (hit < 0) {
       if (frame >= 2) {
-        const p = JET_HEAD[frame - 2] * 0.67;
+        const p = JET_HEAD[frame] * 0.67;
         const x = source.x + (target.x - source.x) * p;
-        const y = source.y + (target.y - source.y) * p - Math.sin(p * Math.PI) * 8;
+        const y = source.y + (target.y - source.y) * p;
         pixel(ctx, INK, x, y + 5, 4, 2);
         pixel(ctx, WATER, x + 1, y + 5, 2, 1);
         pixel(ctx, RIM, x - 5 * dir, y - 6, 2, 1);
