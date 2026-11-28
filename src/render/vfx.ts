@@ -4,7 +4,6 @@ import { oracleImpact } from '../data/oracle';
 import MOXU_FX from '../art/moxu_vfx.json';
 import SKILL_FX from '../art/vfx_skills.json';
 import { spriteSockets } from './art';
-import { drawWatergun, WATERGUN_FX } from './watergun';
 
 /** fc：這招有幾格（預設 12）；r = 'eclipse'：統領者的日蝕特效，用另一套定位方式（back 是整片舞台背景） */
 /** src／hue：借用別招的特效圖，再把顏色轉 hue 度（還沒有專屬美術的招式） */
@@ -23,12 +22,12 @@ const imgs = new Map<string, Partial<Record<Layer, Atlas>>>();
 
 export const hasFx = (code: string) => !!FX[code] || !!moxuFx(code);
 /** 這招的特效有幾格 */
-export const fxFrames = (code: string) => code === 'watergun' ? WATERGUN_FX.frames : moxuFx(code)?.frameCount ?? FX[code]?.fc ?? FX_FRAMES;
+export const fxFrames = (code: string) => moxuFx(code)?.frameCount ?? FX[code]?.fc ?? FX_FRAMES;
 export const fxSkill = (code: string) => FX[code];
 /** 先把招式的圖集載進來（用到時才載） */
 const loading = new Map<string, Promise<void>>();
 export function loadFx(code: string) {
-  if (code === 'watergun' || !hasFx(code)) return;
+  if (!hasFx(code)) return;
   if (loading.has(code)) return loading.get(code);
   const set: Partial<Record<Layer, Atlas>> = {};
   imgs.set(code, set);
@@ -75,7 +74,7 @@ export function actorPoint(a: Actor, uv: [number, number]): Pt {
 
 /** 這一格施術者／目標要偏移多少（素材裡的施法抖動），面向左時左右顛倒 */
 export function fxOffset(code: string, frame: number, who: 'caster' | 'target', facesLeft: boolean): [number, number] {
-  const s = FX[code]; if (!s || code === 'watergun') return [0, 0];
+  const s = FX[code]; if (!s) return [0, 0];
   const o = (who === 'caster' ? s.co : s.to)[Math.max(0, Math.min(fxFrames(code) - 1, frame))] ?? [0, 0];
   return [facesLeft ? -o[0] : o[0], o[1]];
 }
@@ -84,16 +83,8 @@ const RETURNING = new Set(['soulsip', 'bloodtide', 'engulf', 'energydrain', 'see
 
 /** 畫一層特效（照包內附的定位程式改寫） */
 export function drawFx(ctx: CanvasRenderingContext2D, code: string, layer: Layer, frame: number, caster: Actor, target: Actor, arena: { x: number; y: number; w: number; h: number }) {
-  if (frame < 0 || frame >= fxFrames(code)) return;
-  if (code === 'watergun') {
-    const source = actorPoint(caster, sock(caster, 'mouth'));
-    const hit = actorPoint(target, sock(target, 'body'));
-    const dir = hit.x >= source.x ? 1 : -1;
-    drawWatergun(ctx, layer, frame, source, { x: hit.x - Math.round(target.rect.w * 0.12) * dir, y: hit.y });
-    return;
-  }
   const s = FX[code], image = imgs.get(code)?.[layer];
-  if (!image) return;
+  if (!image || frame < 0 || frame >= fxFrames(code)) return;
   const ascended = moxuFx(code);
   if (ascended) {
     drawAscended(ctx, image, ascended, layer, frame, caster, target, arena);

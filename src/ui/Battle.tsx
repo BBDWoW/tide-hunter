@@ -22,7 +22,6 @@ import { foeMods, battleMods, boon, LANDING_BONUS, zoneOf } from '../game/run';
 import type { Encounter, RunState } from '../game/run';
 import { spriteSize } from '../render/pixel';
 import { drawFx, FX_MS, fxFrames, fxOffset, fxSkill, hasFx, loadFx, moxuFx } from '../render/vfx';
-import { WATERGUN_FX } from '../render/watergun';
 import { auraColor, burst, elemBurst, drawBattle, drawNet, fisherCanvas, H, monSlot, view, W, type Beam, type MonView, type Particle } from '../render/scene';
 import { Tip, AbilityLines, Bar, ElemChip, Elems, Energy, IvStars, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
@@ -245,7 +244,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     }
     // 技能特效：往前播，並套用素材裡施術者／目標的抖動
     const spd = hurry.current ? 4 : fastRef.current ? 2 : 1;
-    for (const f of a.fx) f.e += (dt * 1000 * spd) / (f.code === 'watergun' ? WATERGUN_FX.frameMs : f.code === 'oracle_tide' ? 90 : moxuFx(f.code)?.frameDurationMs ?? FX_MS);
+    for (const f of a.fx) f.e += (dt * 1000 * spd) / (f.code === 'oracle_tide' ? 90 : moxuFx(f.code)?.frameDurationMs ?? FX_MS);
     a.fx = a.fx.filter((f) => f.e < fxFrames(f.code));
     for (const v of a.mons) { v.ox = 0; v.oy = 0; v.castingOracle = false; }
     for (const f of a.fx) {
@@ -405,15 +404,6 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         sfx(kind === 'buff' ? 'buff' : kind === 'heal' ? 'item' : `skill:${sk.elem ?? 'none'}`);
         // 統領者的招式：畫面先暗一下、閃光、震動、四周冒出光點
         if (moxu) { jolt(3.5, 0.45, '#7fd8ff'); sfx('enrage'); for (let k = 0; k < 3; k++) burst(a.parts, me.x + (Math.random() - 0.5) * 40, me.y + (Math.random() - 0.5) * 30, 'buff', 'water'); await wait(260); }
-        if (e.skill === 'watergun') {
-          const animation = { code: e.skill, from, to, e: 0 };
-          a.fx.push(animation);
-          await new Promise<void>(done => {
-            const tick = () => animation.e >= WATERGUN_FX.hitFrame ? done() : requestAnimationFrame(tick);
-            requestAnimationFrame(tick);
-          });
-          break;
-        }
         if (hasFx(e.skill)) {
           // 有專屬特效的招式：播特效，角色只做衝刺／前傾的動作
           loadFx(e.skill); a.fx.push({ code: e.skill, from, to, e: 0, big: moxu && !e.skill.startsWith('moxu_') });
@@ -474,8 +464,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         d[v].hp = e.hp; d[v].shield = e.shield;
         if (e.shieldBroken) shieldBreak(v);
         const big = e.amount >= d[v].max * 0.25;
-        const watergunHit = e.elem === 'water' && a.fx.some(f => f.code === 'watergun' && f.to === v);
-        a.mons[v].flash = watergunHit ? 0 : e.crit ? 0.24 : 0.12;
+        a.mons[v].flash = e.crit ? 0.24 : 0.12;
         a.recoil[v] = e.crit || big ? 4 : 2;
         if (e.eff >= 2 && e.elem) {
           const c = center(v);
