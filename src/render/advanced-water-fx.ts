@@ -1,5 +1,5 @@
 // 初始夥伴進階水技。波紋、浪峰與回復水流各有自己的輪廓。
-import { direction, pixel, pixelArc, pixelStroke, tile, travel, type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
+import { direction, pixel, pixelArc, tile, travel, type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
 
 const SEA = { deep: '#214d84', blue: '#367db8', tide: '#4bc5df', light: '#a6eee9', foam: '#f1fff3' };
 const DROPS = [[-.9, -.8], [-.42, -1.12], [.2, -1.3], [.72, -.98], [1.14, -.6], [.95, .3], [-.78, .27]] as const;
@@ -43,6 +43,29 @@ const droplet = tile([
   'dtftd',
   'dtlbd',
   '.dbd.',
+], { d: SEA.deep, b: SEA.blue, t: SEA.tide, l: SEA.light, f: SEA.foam });
+
+const upwelling = tile([
+  '.............dd..........',
+  '............dftd.........',
+  '...........dfltd....d....',
+  '..........dtfltd...dftd..',
+  '.........dttfld...dtfbd..',
+  '........dbttfld..dtfbd...',
+  '....d..dbttlftd.dbtlbd...',
+  '...dtd.dbttltltdbtldd...',
+  '...dftdtbtltlltttldd....',
+  '....dftdbtlltftlldd.....',
+  '.....dfltttltlftld......',
+  '....dttfllltttlfld......',
+  '...dbtlttfllttltfld.....',
+  '..dbtllttltflltttld.....',
+  '..dbttltltttflltttd.....',
+  '.dbttttttttttfllttbd....',
+  '.dbbttlllttttttttttbd...',
+  'dbttllfffflllttttttbbddd',
+  'ddbtllttllllllttttbbbdd.',
+  '..dddddbbbbbbbbbdddd....',
 ], { d: SEA.deep, b: SEA.blue, t: SEA.tide, l: SEA.light, f: SEA.foam });
 
 const PULSE_HIT = 6;
@@ -114,22 +137,22 @@ function drawSurge(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: number,
   if (hit >= 2) ctx.globalAlpha *= [1, .91, .77, .61, .47, .29][hit - 2];
   if (layer === 'back') {
     const base = { x: center.x, y: center.y + 15 };
-    pixelArc(ctx, base, 11 + lift / 2.5, 6 + lift / 8, 0, 2 * Math.PI, SEA.deep, 2);
-    pixelArc(ctx, base, 10 + lift / 2.5, 6 + lift / 8, -Math.PI, 2.7, SEA.tide, 2);
-    if (frame >= 3) droplet(ctx, center.x - dir * 12, center.y + 14 - lift, dir, .75);
+    pixelArc(ctx, base, 11 + lift / 2.5, 6 + lift / 8, -Math.PI, Math.PI, SEA.blue, 2);
+    if (frame >= 2) {
+      const scale = .46 + lift * .023;
+      ctx.globalAlpha *= .68;
+      upwelling(ctx, center.x - dir * (11 + lift * .12), center.y + 11 - scale * 9, -dir, scale);
+    }
   } else if (layer === 'front') {
     ripple(ctx, center.x - dir * (8 + lift * .2), center.y + 14, dir, .9 + lift * .011);
     ripple(ctx, center.x + dir * (7 + lift * .2), center.y + 16, -dir, 1.03 + lift * .01);
     if (frame >= 2) {
-      const ribbon = [
-        { x: center.x + dir * 16, y: center.y + 12 },
-        { x: center.x + dir * (23 + lift / 9), y: center.y + 11 - lift / 2 },
-        { x: center.x + dir * 20, y: center.y + 14 - lift },
-        { x: center.x + dir * 13, y: center.y + 11 - lift },
-      ];
-      pixelStroke(ctx, ribbon, SEA.blue, 4);
-      pixelStroke(ctx, ribbon, SEA.light, 2);
-      droplet(ctx, ribbon[3].x, ribbon[3].y - 2, -dir, .65);
+      const scale = .51 + lift * .025;
+      upwelling(ctx, center.x + dir * (12 + lift * .13), center.y + 10 - scale * 10, dir, scale);
+      if (lift >= 16) {
+        droplet(ctx, center.x + dir * (12 + lift * .24), center.y + 10 - scale * 22, dir, .58);
+        droplet(ctx, center.x - dir * 18, center.y + 7 - scale * 19, -dir, .48);
+      }
     }
     if (hit >= 0 && hit <= 2) {
       pixel(ctx, SEA.foam, center.x - 4, center.y - 15, 9, 2);

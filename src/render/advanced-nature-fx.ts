@@ -20,6 +20,26 @@ const flare = tile([
   '.....dddddd.....',
 ], { d: FIRE.ink, r: FIRE.red, o: FIRE.orange, y: FIRE.gold, w: FIRE.white });
 
+const heatBloom = tile([
+  '............d.......',
+  '...........drd......',
+  '..........drood.....',
+  '.....d....drood.....',
+  '....drd..drooyd.....',
+  '...drod..drooyd...d.',
+  '...drooddrooyyd..drd',
+  '..drooydrooyyoddrod.',
+  '..drooyyroyyyodroyd.',
+  '.drooyyoooyywoodoyd.',
+  '.drooywyooywwyoooyd.',
+  '.drooywwyoywwyyoyyd.',
+  'drooyywwywyywyyoyord',
+  'drooyywyywywwyooyord',
+  '.drrooyyyywyyyooorrd',
+  '..ddrrrroooooorrdd..',
+  '....dddddddddddd....',
+], { d: FIRE.ink, r: FIRE.red, o: FIRE.orange, y: FIRE.gold, w: FIRE.white });
+
 const fireJaw = tile([
   '..........dddddddddd.........',
   '......dddrroooooooooooddd....',
@@ -52,6 +72,64 @@ const leaflet = tile([
   '.dlddd......',
   '..d.........',
 ], { d: PETAL.ink, g: PETAL.green, l: PETAL.lime, w: PETAL.bright });
+
+const vineColors = { d: '#214a49', b: '#3d6651', g: '#649754', l: '#a6c674', w: '#dceaa4', r: '#96754f' };
+const vineSprig = tile([
+  '............ddd.........',
+  '.........dddglddd.......',
+  '........dglllwlgd.......',
+  '.......dgllwllgd...ddd..',
+  '....dd..dgglgbd.dddgldd.',
+  '...dgld..ddgbdddgllwlgd.',
+  '..dgllgdddgbrdgllwllgd..',
+  '.dgllllgddrbdgggblgdd...',
+  '..ddgllbdrbdggbdddd.....',
+  '...dddggdrgbbddd........',
+  '.....ddrgbrddgld........',
+  '..dddrgrbd..dglldd......',
+  'ddrgrbdd.....dgllgdd....',
+  '.dddd.........dgglggd...',
+  '................dddd....',
+], vineColors);
+const vineBough = tile([
+  '................dd......',
+  '.............dddlddd....',
+  '............dgllwlgd....',
+  '......dd...dgllwlgd.....',
+  '.....dgld..dggllgd......',
+  '....dgllld..dgggd.......',
+  '.....dgllgddrbgd........',
+  '......dgggdrbddd....dd..',
+  '........ddrgd....dddgld.',
+  '.........drgd...dgllwlgd',
+  '.........drbd..dgllwlgd.',
+  '........drgbdddgllggdd..',
+  '.....dddrgbrdrgbbbddd...',
+  '...ddgldgbrdrgbrdd......',
+  '..dgllwggbdgbrdd........',
+  '.dgllgdddgrbdd..........',
+  '..dddd.drgbrd...........',
+  '.......drgbrd...........',
+  '.....ddrrgbrd.ddd.......',
+  '...ddrbrgbrdddbrdd......',
+  '.ddrrbrgbrdrgbbrrddd....',
+  'drgbrdddbrrrdddbgrbrd...',
+  '.ddddd..dddd....dddd....',
+], vineColors);
+const vineRoots = tile([
+  '...........dd.............',
+  '......dd..drgd....dd......',
+  '.....dgld.dbrd...dglgd....',
+  '...ddgllgddrgdddgllwlgd...',
+  '..dgglllggdrgdgllwwlgd....',
+  '...dddgbbdrgbrdbllgdd.....',
+  '......ddrgrgbrrrddd..ddd..',
+  '...dddrgrgrddrrgbddddbrd..',
+  '.ddrrgrbdd...dddrrrbrddd..',
+  'ddrgrdd..........ddddd....',
+  '.ddd......................',
+], vineColors);
+
 const thorn = tile([
   '.....dd.....',
   '.....dld....',
@@ -141,29 +219,15 @@ function drawHeatup(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: number
   const hit = frame - HEAT_HIT, lift = [0, 2, 6, 9, 13, 18, 23, 26, 29, 31, 33, 35, 36][frame];
   if (hit >= 3) ctx.globalAlpha *= [1, .8, .63, .43, .24][hit - 3];
   if (layer === 'back') {
-    ctx.globalAlpha *= .65;
-    if (frame >= 2) {
-      for (const side of [-1, 1]) {
-        const rise = lift + (side === 1 ? 8 : 3);
-        const x = center.x + side * (14 + frame * .55);
-        const air = [
-          { x, y: center.y + 13 },
-          { x: x + side * 4, y: center.y + 10 - rise * .45 },
-          { x: x + side * 2, y: center.y + 10 - rise * .74 },
-          { x: x + side * 6, y: center.y + 10 - rise },
-        ];
-        pixelStroke(ctx, air, FIRE.red, 4);
-        pixelStroke(ctx, air, FIRE.orange, 2);
-      }
-    }
-    flare(ctx, center.x - dir * 9, center.y + 6 - lift * .55, -dir, .66 + lift * .038);
-    flare(ctx, center.x + dir * 11, center.y + 6 - lift * .54, dir, .6 + lift * .027);
+    const swell = [.34, .47, .61, .78, 1, 1.24, 1.38, 1.32, 1.24, 1.14, 1, .79, .6][frame];
+    ctx.globalAlpha *= .72;
+    heatBloom(ctx, center.x - dir * 13, center.y + 14 - swell * 9, -dir, swell);
+    heatBloom(ctx, center.x + dir * 13, center.y + 10 - swell * 7, dir, swell * .82);
   } else if (layer === 'front') {
-    flare(ctx, center.x - dir * (17 + Math.sin(frame) * 3), center.y + 13 - lift, -dir, .48 + lift * .025);
-    flare(ctx, center.x + dir * (20 + Math.sin(frame) * 2), center.y + 16 - lift * .81, dir, .58 + lift * .026);
-    const base = { x: center.x, y: center.y + 17 };
-    pixelArc(ctx, base, 14 + lift * .32, 5 + lift * .08, .13, 2.87, FIRE.red, 2);
-    pixelArc(ctx, base, 13 + lift * .31, 5 + lift * .08, .27, 2.43, FIRE.gold, 1);
+    const spread = 12 + Math.min(frame, 6) * 1.45;
+    flare(ctx, center.x - dir * spread, center.y + 11 - lift * .57, -dir, .48 + lift * .014);
+    flare(ctx, center.x + dir * (spread + 2), center.y + 14 - lift * .75, dir, .52 + lift * .016);
+    if (frame >= 3) flare(ctx, center.x - dir * (spread * .69), center.y + 1 - lift * .96, dir, .36 + lift * .006);
     if (hit >= 0 && hit < 3) pixel(ctx, FIRE.white, center.x - 1, center.y - 21, 3, 7);
   } else if (frame >= 2) {
     for (const [i, [x, y]] of MOTES.entries()) {
@@ -176,34 +240,31 @@ const VINE_HIT = 6;
 function drawVinebind(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: number, source: FxPoint, target: FxPoint, missed: boolean) {
   const dir = direction(source, target), hit = frame - VINE_HIT;
   if (layer === 'front' && (hit < 0 || (missed && hit < 2))) {
-    const p = [0, .075, .22, .42, .61, .81, 1, 1.12][frame];
-    const points = Array.from({ length: 13 }, (_, i) => {
-      const t = i / 12;
-      const point = travel(source, target, p * t);
-      const bend = Math.sin(t * Math.PI * 2.8 + frame * .32) * Math.sin(t * Math.PI);
-      return { x: point.x, y: point.y + bend * (3 + frame * 1.6) };
-    });
+    const lead = [0, .09, .24, .43, .62, .82, 1, 1.13][frame];
     ctx.globalAlpha *= hit >= 0 ? (hit ? .35 : .68) : 1;
-    pixelStroke(ctx, points, PETAL.ink, 5);
-    pixelStroke(ctx, points, PETAL.green, 3);
-    pixelStroke(ctx, points, PETAL.lime, 1);
-    leaflet(ctx, points[12].x + dir * 2, points[12].y, dir, .8);
-    if (frame >= 3) {
-      leaflet(ctx, points[5].x, points[5].y - 3, -dir, .62);
-      leaflet(ctx, points[8].x, points[8].y + 3, dir, .55);
+    // 葉簇依序向前展開。每簇有分枝和深淺葉面，路徑只用飄落的葉片串起來。
+    if (frame >= 2) {
+      const lower = travel(source, target, Math.max(0, lead - .14), -6);
+      vineSprig(ctx, lower.x, lower.y + 4, dir, .56 + frame * .035);
+      const shed = travel(source, target, Math.max(0, lead - .28), 6);
+      leaflet(ctx, shed.x, shed.y + 2, -dir, .57);
     }
+    const tip = travel(source, target, lead, 9);
+    vineSprig(ctx, tip.x, tip.y, dir, .58 + Math.min(frame, 4) * .117);
+    if (frame >= 3) leaflet(ctx, tip.x - dir * 16, tip.y - 6, -dir, .45);
   } else if (!missed && hit >= 0) {
     if ((layer === 'front' || layer === 'back') && hit <= 5) {
       ctx.globalAlpha *= [1, .98, .83, .67, .48, .29][hit];
-      const start = layer === 'front' ? -.07 : Math.PI - .07;
-      for (const [i, y] of [-9, 1, 11].entries()) {
-        const center = { x: target.x + dir * (6 - i * 2), y: target.y + y + (hit > 3 ? hit - 3 : 0) };
-        const width = 15 + i - Math.min(3, hit);
-        pixelArc(ctx, center, width, 4.5 - i * .5, start, Math.PI, PETAL.ink, 4);
-        pixelArc(ctx, center, width, 4 - i * .5, start, Math.PI, layer === 'front' ? PETAL.lime : PETAL.green, 2);
-        if (layer === 'front') leaflet(ctx, center.x + dir * (width - 1), center.y, dir, .63 + i * .03);
+      const reach = [16, 14, 12, 11, 13, 16][hit];
+      if (layer === 'back') {
+        vineBough(ctx, target.x - dir * reach, target.y + 4 - hit * 1.7, dir, .91 + Math.min(hit, 3) * .064);
+        vineBough(ctx, target.x + dir * (reach + 11), target.y + 6 - hit, -dir, .83 + Math.min(hit, 3) * .07);
+      } else {
+        vineRoots(ctx, target.x + 4 * dir, target.y + 12, dir, 1.53 - Math.min(hit, 3) * .1);
+        vineSprig(ctx, target.x + dir * (reach + 2), target.y + 4 - hit, -dir, 1 - hit * .072);
+        leaflet(ctx, target.x - dir * (reach - 3), target.y + 1 - hit * 2, dir, .83);
+        if (hit === 0) pixel(ctx, PETAL.bright, target.x - 2, target.y, 5, 2);
       }
-      if (layer === 'front' && hit === 0) pixel(ctx, PETAL.bright, target.x - 2, target.y, 5, 2);
     } else if (layer === 'particles') {
       ctx.globalAlpha *= 1 - hit / 8;
       for (const [i, [x, y]] of MOTES.entries()) {
