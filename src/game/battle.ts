@@ -88,6 +88,7 @@ export type BEvent = BEventBase & { slot?: number };
 type BEventBase =
   | { t: 'msg'; text: string }
   | { t: 'use'; side: SideId; skill: string }
+  | { t: 'strike'; side: SideId; skill: string }
   | { t: 'convergence'; side: SideId; loss: number; hp: number; max: number }
   | { t: 'omen'; side: SideId; marks: number[] }
   | { t: 'miss'; side: SideId }
@@ -506,6 +507,8 @@ function useSkill(s: BattleState, side: SideId, slot: number, ev: BEvent[]) {
     if (target.hp <= 0 || me.hp <= 0) break;
     const r = calcDamage(s, side, foe, sk, h);
     landed++;
+    // 後續連擊開始，讓畫面能在處理格擋和扣血前播放這一發。
+    if (h > 0 && fx.multi) ev.push({ t: 'strike', side, skill: sk.id });
     // 格擋：這一下傷害減少 40%
     if (target.status !== 'freeze' && target.status !== 'sleep' && chance(s.rng, blockRate(formOf(target)))) {
       r.dmg = Math.max(1, Math.floor(r.dmg * 0.6));
@@ -1081,7 +1084,7 @@ function resolveFinal(s: BattleState, actions: [Action, Action]): BEvent[] {
         const a = x.a;
         withSlot(s, tgt, () => {
           doAction(s, 0, a, ev); tagSlot(ev, from, tgt);
-          for (let i = from; i < ev.length; i++) { const e = ev[i]; if (e.t === 'use' && e.side === 0) e.slot = tgt; } // 讓畫面知道打的是哪一隻
+          for (let i = from; i < ev.length; i++) { const e = ev[i]; if ((e.t === 'use' || e.t === 'strike') && e.side === 0) e.slot = tgt; } // 讓畫面知道打的是哪一隻
         });
       } else doAction(s, 0, x.a, ev);
     } else {

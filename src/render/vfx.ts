@@ -7,6 +7,7 @@ import { spriteSockets } from './art';
 import { SHORE_FX } from './shore-fx';
 import { type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
 import { STARTER_FX } from './starter-fx';
+import { SUPPORT_FX } from './support-fx';
 import { drawWatergun, WATERGUN_FX } from './watergun';
 
 /** fc：這招有幾格（預設 12）；r = 'eclipse'：統領者的日蝕特效，用另一套定位方式（back 是整片舞台背景） */
@@ -21,6 +22,7 @@ const LAYERS: FxLayer[] = ['back', 'front', 'particles'];
 const ANIMATED_FX: Partial<Record<string, AnimatedFx>> = {
   ...STARTER_FX,
   ...SHORE_FX,
+  ...SUPPORT_FX,
   watergun: { ...WATERGUN_FX, socket: 'mouth', draw: drawWatergun },
 };
 export const animatedFx = (code: string) => Object.hasOwn(ANIMATED_FX, code) ? ANIMATED_FX[code] : undefined;
@@ -94,6 +96,16 @@ export function drawFx(ctx: CanvasRenderingContext2D, code: string, layer: FxLay
   const animated = animatedFx(code);
   if (animated) {
     const source = actorPoint(caster, sock(caster, animated.socket));
+    if (animated.self) {
+      const size = Math.min(1.6, Math.max(.72, caster.rect.w / 48));
+      const center = { x: 0, y: 0 };
+      ctx.save();
+      ctx.translate(source.x, source.y);
+      ctx.scale(size, size);
+      animated.draw(ctx, layer, frame, center, center, missed, caster.facesLeft ? -1 : 1);
+      ctx.restore();
+      return;
+    }
     const hit = actorPoint(target, sock(target, 'body'));
     const dir = animated.dash ? (caster.facesLeft ? -1 : 1) : (hit.x >= source.x ? 1 : -1);
     const contact = {

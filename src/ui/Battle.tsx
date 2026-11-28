@@ -389,9 +389,12 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     const a = anim.current, d = disp.current;
     switch (e.t) {
       case 'msg': say(e.text); await wait(560); break;
+      case 'strike':
       case 'use': {
+        const customFx = animatedFx(e.skill);
+        if (e.t === 'strike' && !customFx?.repeat) break;
         // 施術者、目標在畫面上是第幾隻（1 對 2 時看 slot）
-        const from = vi(e), to = e.side === 0 ? (e.slot != null && e.slot === allySlot.current ? 2 : 1) : 0;
+        const from = vi(e), to = customFx?.self ? from : e.side === 0 ? (e.slot != null && e.slot === allySlot.current ? 2 : 1) : 0;
         const moxu = from !== 0 && a.mons[from]?.form === 'tide_moxu';
         if (e.skill === 'oracle_tide') {
           await loadOracleArt().catch(() => {});
@@ -418,8 +421,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         a.dashTo[from] = to;
         sfx(kind === 'buff' ? 'buff' : kind === 'heal' ? 'item' : `skill:${sk.elem ?? 'none'}`);
         // 統領者的招式：畫面先暗一下、閃光、震動、四周冒出光點
-        if (moxu) { jolt(3.5, 0.45, '#7fd8ff'); sfx('enrage'); for (let k = 0; k < 3; k++) burst(a.parts, me.x + (Math.random() - 0.5) * 40, me.y + (Math.random() - 0.5) * 30, 'buff', 'water'); await wait(260); }
-        const customFx = animatedFx(e.skill);
+        if (moxu && e.t === 'use') { jolt(3.5, 0.45, '#7fd8ff'); sfx('enrage'); for (let k = 0; k < 3; k++) burst(a.parts, me.x + (Math.random() - 0.5) * 40, me.y + (Math.random() - 0.5) * 30, 'buff', 'water'); await wait(260); }
         if (customFx) {
           const animation = { code: e.skill, from, to, e: 0, missed };
           a.fx.push(animation);
@@ -486,7 +488,10 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         d[v].hp = e.hp; d[v].shield = e.shield;
         if (e.shieldBroken) shieldBreak(v);
         const big = e.amount >= d[v].max * 0.25;
-        const customHit = a.fx.some(f => !f.missed && f.to === v && SKILLS[f.code]?.elem === e.elem && animatedFx(f.code));
+        const customHit = a.fx.find(f => {
+          const skill = SKILLS[f.code], effect = animatedFx(f.code);
+          return !f.missed && f.to === v && skill?.power > 0 && skill.elem === e.elem && effect && f.e >= effect.hitFrame;
+        });
         a.mons[v].flash = customHit ? 0 : e.crit ? 0.24 : 0.12;
         a.recoil[v] = e.crit || big ? 4 : 2;
         if (e.eff >= 2 && e.elem) {
@@ -500,7 +505,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         pop(v, `-${e.amount}`, e.crit ? 'crit' : e.eff >= 2 ? 'super' : e.eff < 1 ? 'weak' : big ? 'big' : '', e.crit ? '暴擊！' : e.eff >= 2 ? '效果絕佳' : e.eff > 0 && e.eff < 1 ? '效果不好' : undefined);
         rerender();
         if (e.crit || big) await new Promise((r) => setTimeout(r, 110)); // 停頓不受快速模式影響
-        await wait(420); break;
+        await wait(customHit && animatedFx(customHit.code)?.repeat ? 175 : 420); break;
       }
       case 'heal': {
         const v = vi(e); d[v].hp = e.hp; const c = center(v);
@@ -658,15 +663,32 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
 
 
   async function play(evs: BEvent[]) {
+    let lastStrike = -1;
     for (let i = 0; i < evs.length; i++) {
       const e = evs[i], announcement = evs[i + 1];
-      if (e.t !== 'use' || !animatedFx(e.skill) || announcement?.t !== 'msg') {
+      if (e.t === 'msg' && i < lastStrike) {
+        say(e.text);
+        continue;
+      }
+      const customFx = e.t === 'use' || e.t === 'strike' ? animatedFx(e.skill) : undefined;
+      const announce = e.t === 'use' && announcement?.t === 'msg' ? announcement.text : undefined;
+      if (!customFx || (!announce && !(e.t === 'strike' && customFx.repeat))) {
         await apply(e);
         continue;
       }
       // 招式名稱在出招時顯示，格擋等文字隨命中處理，避免傷害晚一拍。
-      say(announcement.text);
-      i++;
+      if (announce) {
+        say(announce);
+        i++;
+      }
+      if (e.t === 'use' && customFx.repeat) {
+        // 連擊中的傷害敘述照樣進戰鬥紀錄，但不打斷下一發。
+        for (let next = i + 1; next < evs.length; next++) {
+          const event = evs[next];
+          if (event.t === 'use' || event.t === 'energy') break;
+          if (event.t === 'strike' && event.skill === e.skill && event.side === e.side) lastStrike = next;
+        }
+      }
       let contact = i + 1;
       while (evs[contact]?.t === 'msg' || evs[contact]?.t === 'block') contact++;
       const result = evs[contact]?.t;

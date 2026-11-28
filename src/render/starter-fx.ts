@@ -1,7 +1,7 @@
 // 初始夥伴的技能特效。像素圖塊只繪製一次，戰鬥時貼到角色目前的定位點。
 import { dashProgress, direction, pixel, tile, travel, type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
 
-const bubble = tile([
+export const waterBubble = tile([
   '....dddd.....',
   '..ddaaaadd...',
   '.daaawwaabd..',
@@ -107,7 +107,7 @@ function drawBubble(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: number
       const p = (frame - b.start) / (BUBBLE_HIT - b.start);
       const end = { x: target.x + dir * b.x, y: target.y + b.y };
       const q = travel(source, end, p, b.lift);
-      bubble(ctx, q.x, q.y, 1, b.size * Math.min(1, .48 + p * 2));
+      waterBubble(ctx, q.x, q.y, 1, b.size * Math.min(1, .48 + p * 2));
     }
   } else if (layer === 'front' && !missed && hit >= 0 && hit <= 4) {
     // 泡膜從每顆泡泡的位置破開，外圈留下短水弧。

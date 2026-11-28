@@ -9,6 +9,8 @@ export interface AnimatedFx {
   hitFrame: number;
   socket: string;
   draw: DrawSkill;
+  self?: boolean;
+  repeat?: boolean;
   dash?: (frame: number, missed: boolean) => number;
 }
 

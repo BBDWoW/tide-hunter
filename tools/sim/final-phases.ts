@@ -84,6 +84,25 @@ assert.deepEqual(finalSlots(other), [otherAllySlot]);
 assert(!shattered.some(event => event.t === 'faint' && event.slot === otherAllySlot));
 assert(shieldBeforeFaint > 0);
 
+// 對協戰霸主連射時，每發特效都應先於該發傷害，而且指向同一格。
+const volleyCaster = makeMon('bubcrab', 8, false, false, () => .5);
+volleyCaster.skills = ['bubblebarrage'];
+const volleyBoss = makeMon('tide_moxu', 11, false, true, () => .5);
+volleyBoss.hp = volleyBoss.hpFixed = 300;
+const volleyBattle = createBattle(makeRng(3), { team: [volleyCaster], name: '玩家' },
+  { team: [volleyBoss], name: '統領者' }, false);
+startFinal(volleyBattle);
+volleyBoss.hp = 0;
+resolveTurn(volleyBattle, [pass, pass]);
+const volleyAlly = volleyBattle.final!.ally!;
+volleyBattle.final!.allyPlan = pass;
+volOf(volleyBattle, 0).energy = 5;
+const volley = resolveTurn(volleyBattle, [{ type: 'skill', slot: 0, target: volleyAlly }, pass]);
+const shots = volley.filter(event => ((event.t === 'use' || event.t === 'strike') && event.skill === 'bubblebarrage')
+  || (event.t === 'dmg' && event.side === 1 && event.elem === 'water'));
+assert.deepEqual(shots.map(event => event.t), ['use', 'dmg', 'strike', 'dmg']);
+assert(shots.every(event => event.slot === volleyAlly));
+
 final.rodCd = 0;
 state.field = { id: 'lava', turns: 3 };
 state.traps = [0, 2];
