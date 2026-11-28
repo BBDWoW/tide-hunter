@@ -512,9 +512,14 @@ function shadow(ctx: CanvasRenderingContext2D, cx: number, cy: number, w: number
   for (let y = -2; y <= 2; y++) { const hw = Math.round(w * Math.sqrt(1 - (y * y) / 6.5)); ctx.fillRect(cx - hw, cy + y, hw * 2, 1); }
 }
 
+// 使用固定色環，讓統領者的光環不會為連續變化的色相反覆烤圖。
+const MOXU_AURA = Array.from({ length: 12 }, (_, i) => `hsl(${i * 30}, 90%, 68%)`);
+const AURA_OFFSETS = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1]] as const;
+
 export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number, mons: (MonView | null)[], parts: Particle[], beams: Beam[], theme: ThemeId = 'day', bfx: BattleFx = {}) {
   // 畫面震動（減少特效時關掉）
-  const q = fx.reduce ? 0 : bfx.quake ?? 0;
+  const reduce = fx.reduce;
+  const q = reduce ? 0 : bfx.quake ?? 0;
   ctx.save();
   if (q > 0) ctx.translate(Math.round((Math.random() - 0.5) * q * 2), Math.round((Math.random() - 0.5) * q * 2));
   if (bfx.sunAndMoon) drawSunMoonSea(ctx, t);
@@ -523,11 +528,11 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
   // 先算出每隻角色這一格實際畫在哪裡，技能特效用同一個矩形定位
   const pos = mons.map((m, i) => {
     if (!m || m.alpha <= 0) return null;
-    const sx = m.x + m.lunge * (m.flip ? -1 : 1) + (m.shake ? Math.round(Math.sin(t * 60) * 2) : 0) + (m.ox ?? 0);
+    const sx = m.x + m.lunge * (m.flip ? -1 : 1) + (!reduce && m.shake ? Math.round(Math.sin(t * 60) * 2) : 0) + (m.ox ?? 0);
     // 待機：呼吸般上下浮動，偶爾小跳一下；HP 很低時動作變慢、會發抖
     const ph = (t + i * 1.7) % (m.low ? 5 : 3.4);
     const hop = !m.low && ph < 0.32 ? -Math.round(Math.sin((ph / 0.32) * Math.PI) * 2) : 0;
-    const shiver = m.low && ph < 0.4 ? Math.round(Math.sin(t * 50)) : 0;
+    const shiver = !reduce && m.low && ph < 0.4 ? Math.round(Math.sin(t * 50)) : 0;
     // 霸主專屬版自帶整體浮動（spriteIdle），不再疊加通用的呼吸浮動，只保留 HP 很低時的發抖
     const own = !!spriteIdle(FORMS[m.form].sprite);
     const sy = m.y + (own ? 0 : Math.round(Math.sin(t * (m.low ? 1.4 : 2.4) + i) * 1.2) + hop) + (m.oy ?? 0);
@@ -546,18 +551,16 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
     const f = FORMS[m.form];
     const fr = m.castingOracle ? 0 : animFrame(f.sprite, t, i);
     const { sx, sy, sxx } = pos[i]!;
-    // 登場：前半段是白色剪影
-    const white = (m.flash > 0 && Math.floor(m.flash * 20) % 2 === 0) || (m.enter !== undefined && m.enter < 0.55);
+    // 減少特效時關掉登場與受擊的白色剪影。
+    const white = !reduce && ((m.flash > 0 && Math.floor(m.flash * 20) % 2 === 0) || (m.enter !== undefined && m.enter < 0.55));
     const rc = recolorOf(m.form, m.mutant);
-    // 統領者：光環一直變換顏色（閃彩）
-    if (m.form === 'tide_moxu' && m.aura) m.aura = `hsl(${Math.round((t * 80) % 360)}, 90%, 68%)`;
-    if (m.aura) {
-      // 光環：脈動的發光外框＋上升的能量粒子
+    if (!reduce && m.aura) {
+      const aura = m.form === 'tide_moxu' ? MOXU_AURA[Math.floor(t * 80 / 30) % MOXU_AURA.length] : m.aura;
       const n = spriteSize(f.sprite) * m.scale, pulse = 0.6 + 0.3 * Math.sin(t * 4 + i);
-      for (const [ox, oy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1]]) {
-        drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(sx) + ox, Math.round(sy) + oy, { f: fr, flip: m.flip, alpha: m.alpha * pulse, scale: m.scale, tint: m.aura });
+      for (const [ox, oy] of AURA_OFFSETS) {
+        drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(sx) + ox, Math.round(sy) + oy, { f: fr, flip: m.flip, alpha: m.alpha * pulse, scale: m.scale, tint: aura });
       }
-      if (Math.random() < dt * 14) parts.push({ x: sx + n * (0.15 + Math.random() * 0.7), y: sy + n * (0.5 + Math.random() * 0.4), vx: (Math.random() - 0.5) * 6, vy: -18 - Math.random() * 16, life: 0.9, max: 0.9, color: Math.random() < 0.5 ? m.aura : '#ffffff', size: Math.random() < 0.3 ? 2 : 1 });
+      if (Math.random() < dt * 14) parts.push({ x: sx + n * (0.15 + Math.random() * 0.7), y: sy + n * (0.5 + Math.random() * 0.4), vx: (Math.random() - 0.5) * 6, vy: -18 - Math.random() * 16, life: 0.9, max: 0.9, color: Math.random() < 0.5 ? aura : '#ffffff', size: Math.random() < 0.3 ? 2 : 1 });
     }
     drawSprite(ctx, f.sprite, PAL[f.pal], Math.round(sxx), Math.round(sy), { f: fr, flip: m.flip, alpha: m.alpha, scale: m.scale, tint: white ? '#ffffff' : m.tint, recolor: rc });
     if (m.omenMarks?.length && m.form === 'oracle') {
@@ -585,7 +588,7 @@ export function drawBattle(ctx: CanvasRenderingContext2D, t: number, dt: number,
   if (bfx.field) drawFieldFront(ctx, t, dt, bfx.field, parts);
   ctx.restore();
   // 全畫面閃光（效果絕佳、暴擊、狂暴）
-  if (!fx.reduce && (bfx.flash ?? 0) > 0) { ctx.globalAlpha = Math.min(0.55, bfx.flash!); ctx.fillStyle = bfx.flashColor ?? '#ffffff'; ctx.fillRect(-view.bleed, 0, W + view.bleed * 2, H); ctx.globalAlpha = 1; }
+  if (!reduce && (bfx.flash ?? 0) > 0) { ctx.globalAlpha = Math.min(0.55, bfx.flash!); ctx.fillStyle = bfx.flashColor ?? '#ffffff'; ctx.fillRect(-view.bleed, 0, W + view.bleed * 2, H); ctx.globalAlpha = 1; }
 }
 
 // ── 場地特效 ──

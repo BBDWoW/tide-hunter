@@ -77,7 +77,7 @@ export function Gacha({ vp, onBack }: { vp: Viewport; onBack: () => void }) {
               <div class="item-row" key={tier}><b style={{ color: TIER_COLOR[tier] }}>{ROD_NAME[tier]}</b><span class="num">{w}%</span>
                 <span class="small dim">{tier === 'broken' ? `可能釣不到（退還 ${BROKEN_REFUND} 顆珍珠）` : `${RARITY[tier].name}（${tier}）`}{TURN_RATES[tier] ? `・${Math.round(TURN_RATES[tier]! * 100)}% 會轉成更高一級` : ''}</span></div>
             ))}
-            <p class="small dim">「轉」可以連續發生。除了霸主以外，所有生物都可能被招募到；招募到的夥伴從最初的型態開始。</p>
+            <p class="small dim">「轉」可以連續發生。招募到的夥伴從最初的型態開始。霸主與隱藏角色無法招募。</p>
           </div>
         </Win>
       ) : results && results.length > 1 ? (

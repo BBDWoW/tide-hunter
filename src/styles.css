@@ -228,6 +228,10 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .pop.weak { color: #c8d2e8; font-size: max(10px, calc(var(--u) * 3.8)); }
 .pop.heal { color: var(--good); animation-name: heal-pop; }
 .pop.miss { color: #e0eaff; font-size: max(10px, calc(var(--u) * 3.6)); animation-name: heal-pop; }
+.pop.shield-break {
+  color: #d5f8ff; background: #173455; border: 1px solid #a7e3ff; padding: 0.15em 0.3em;
+  font-size: max(11px, calc(var(--u) * 3.7)); font-weight: bold; white-space: nowrap;
+}
 .pop.block { color: #9ec8ff; font-size: max(10px, calc(var(--u) * 3.6)); }
 @keyframes dmg-pop { 0% { opacity: 0; transform: translate(-50%, 0) scale(0.4); } 12% { opacity: 1; transform: translate(-50%, calc(var(--u) * -3)) scale(1.35); } 26% { transform: translate(-50%, calc(var(--u) * -2)) scale(1); } 70% { opacity: 1; transform: translate(-50%, calc(var(--u) * -4)) scale(1); } 100% { opacity: 0; transform: translate(-50%, calc(var(--u) * -8)) scale(0.9); } }
 @keyframes dmg-crit { 0% { opacity: 0; transform: translate(-50%, 0) scale(0.3) rotate(-8deg); } 10% { opacity: 1; transform: translate(-50%, calc(var(--u) * -4)) scale(1.6) rotate(4deg); } 18% { transform: translate(-48%, calc(var(--u) * -3)) scale(1.1) rotate(-3deg); } 26% { transform: translate(-52%, calc(var(--u) * -3)) scale(1.15) rotate(2deg); } 34% { transform: translate(-50%, calc(var(--u) * -3)) scale(1.1) rotate(0); } 75% { opacity: 1; transform: translate(-50%, calc(var(--u) * -5)) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, calc(var(--u) * -9)) scale(1); } }
@@ -489,7 +493,7 @@ h1, h2, h3, p { margin: 0; font-weight: 400; }
 .item-toast .grow { display: flex; flex-direction: column; gap: 0.2em; }
 /* 減少特效：關掉閃光與震動 */
 .reduce-fx .flash { display: none; }
-.reduce-fx .pop { animation-duration: 1.2s; }
+.reduce-fx .pop { animation: none; }
 .fx-row input[type=checkbox] { width: 1.3em; height: 1.3em; accent-color: #ffcf4a; }
 .fx-row { grid-template-columns: 7em auto 1fr; }
 
@@ -891,6 +895,7 @@ html.lock, html.lock body { position: fixed; inset: 0; width: 100%; height: 100%
 .rod-btn small { color: #ffcf4a; opacity: 1; }
 .rod-btn.ready { border-color: #ffcf4a; color: #ffe7a0; box-shadow: 0 0 calc(var(--u) * 2) rgba(255, 207, 74, 0.8); animation: rod-glow 1.2s ease-in-out infinite; }
 @keyframes rod-glow { 50% { box-shadow: 0 0 calc(var(--u) * 4) rgba(255, 220, 120, 1); } }
+.reduce-fx .rod-btn.ready { animation: none; }
 @media (prefers-reduced-motion: reduce) { .rod-btn.ready { animation: none; } }
 /* 最終決戰的劇情字卡 */
 .final-cut { position: absolute; inset: 0 calc(-1 * var(--bleed, 0px)); z-index: 22; cursor: pointer; display: grid; place-items: center; background: rgba(3, 6, 20, 0.72); animation: bi-fade 0.4s ease-out both; }

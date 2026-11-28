@@ -107,7 +107,7 @@ export function Title({ vp, hasSave, onNew, onDaily, onContinue, onDex, onHelp, 
           <label class="snd-row"><span>背景音樂</span><input type="range" min="0" max="100" value={Math.round(snd.music * 100)} onInput={(e) => updSnd({ music: Number((e.target as HTMLInputElement).value) / 100 })} /><b>{Math.round(snd.music * 100)}</b></label>
           <label class="snd-row"><span>海浪與環境音</span><input type="range" min="0" max="100" value={Math.round(snd.amb * 100)} onInput={(e) => updSnd({ amb: Number((e.target as HTMLInputElement).value) / 100 })} /><b>{Math.round(snd.amb * 100)}</b></label>
           <label class="snd-row"><span>音效</span><input type="range" min="0" max="100" value={Math.round(snd.sfx * 100)} onInput={(e) => updSnd({ sfx: Number((e.target as HTMLInputElement).value) / 100 })} onChange={() => sfx('hit')} /><b>{Math.round(snd.sfx * 100)}</b></label>
-          <label class="snd-row fx-row"><span>減少特效</span><input type="checkbox" checked={reduce} onChange={(e) => { const v = (e.target as HTMLInputElement).checked; setReduce(v); setReduceFx(v); }} /><span class="small dim">關掉畫面震動與閃光、減少粒子</span></label>
+          <label class="snd-row fx-row"><span>減少特效</span><input type="checkbox" checked={reduce} onChange={(e) => { const v = (e.target as HTMLInputElement).checked; setReduce(v); setReduceFx(v); }} /><span class="small dim">降低震動、閃光、光環與粒子效果</span></label>
           <MenuItem onClick={() => updSnd({ muted: !snd.muted })} hot={snd.muted}>{snd.muted ? <><Icon name="mute" /> 目前靜音，點一下開啟聲音</> : <><Icon name="sound" /> 點一下靜音</>}</MenuItem>
           <p class="small dim">聲音會在第一次點擊畫面後開始播放。電腦上也可以按 M 鍵切換靜音。</p>
         </Win>
@@ -226,7 +226,7 @@ export function Port({ vp, onBack, onGacha }: { vp: Viewport; onBack: () => void
           )}
           {tab === 'recruit' && (
             <div class="item-list">
-              <p>在港口邊拋下釣竿，就有機會釣到新的夥伴！各種生物都可能出現（霸主除外，霸主只能在冒險中靠特別的機緣得到）。</p>
+              <p>在港口邊拋下釣竿，就有機會釣到新的夥伴！霸主與隱藏角色無法招募。</p>
               <p class="small dim">一次 ◆ 200，十連 ◆ 1800。釣竿的顏色代表稀有度，水面變色就是「轉」，會再升一級。稀有的夥伴非常難釣到。</p>
               <MenuItem onClick={onGacha} hot><Icon name="rod" /> 前往招募</MenuItem>
             </div>

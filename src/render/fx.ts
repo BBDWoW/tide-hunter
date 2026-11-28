@@ -1,4 +1,4 @@
-// 特效設定：「減少特效」會關掉畫面震動、全畫面閃光，並減少粒子（記在這台裝置上）
+// 特效設定：「減少特效」會關掉戰鬥震動、閃光與光環，並減少粒子（記在這台裝置上）
 const KEY = 'tidehunter.fx';
 const sysReduce = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 function load(): { reduce: boolean } {

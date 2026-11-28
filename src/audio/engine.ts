@@ -261,7 +261,7 @@ export const stopSurf = () => { window.clearInterval(surfTimer); };
 
 // ── 音效：全部即時合成 ──
 export type SfxId =
-  | 'select' | 'confirm' | 'back' | 'hit' | 'crit' | 'super' | 'weak' | 'dodge' | 'block' | 'heal' | 'buff' | 'debuff' | 'status'
+  | 'select' | 'confirm' | 'back' | 'hit' | 'crit' | 'super' | 'weak' | 'dodge' | 'block' | 'shieldbreak' | 'heal' | 'buff' | 'debuff' | 'status'
   | 'faint' | 'enter' | 'enrage' | 'cast' | 'splash' | 'nibble' | 'bite' | 'shake' | 'catch' | 'escape' | 'levelup' | 'coin' | 'win' | 'lose'
   | 'turn' | 'reveal' | 'item' | 'energy' | 'fanfare' | 'bossdown'
   | `skill:${string}`;
@@ -301,6 +301,7 @@ export function sfx(id: SfxId) {
     case 'crit': hiss(t, 0.2, 0.7, 'lowpass', 4200, 300); tone(t, 'sine', 200, 40, 0.28, 0.7); tone(t, 'p50', 1760, 1700, 0.25, 0.09); tone(t + 0.03, 'p50', 2640, 2600, 0.2, 0.05); break;
     case 'dodge': hiss(t, 0.22, 0.35, 'bandpass', 600, 3200, 2); break;
     case 'block': tone(t, 'square', 320, 300, 0.09, 0.14); tone(t, 'square', 470, 460, 0.12, 0.1); hiss(t, 0.05, 0.25, 'highpass', 3000); break;
+    case 'shieldbreak': tone(t, 'triangle', 1120, 340, 0.16, 0.19); hiss(t, 0.13, 0.24, 'highpass', 3600); break;
     case 'heal': notes(t, [72, 76, 79, 84], 0.06, 'sine', 0.18, 0.18); break;
     case 'buff': tone(t, 'p25', 330, 990, 0.25, 0.1); tone(t + 0.12, 'p25', 660, 1320, 0.18, 0.07); break;
     case 'debuff': tone(t, 'p25', 880, 220, 0.3, 0.1); break;

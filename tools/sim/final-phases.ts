@@ -60,7 +60,7 @@ final.rodCd = 0;
 final.allyPlan = pass;
 const breakShield = resolveTurn(state, [{ type: 'rod' }, pass]);
 assert(breakShield.some(event => event.t === 'faint' && event.slot === 1));
-assert(breakShield.some(event => event.t === 'summonShield' && event.amount === 0));
+assert(breakShield.some(event => event.t === 'summonShield' && event.amount === 0 && !event.broken));
 assert.equal(boss.hp, 1);
 assert.equal(final.phase, 2);
 assert.deepEqual(finalSlots(state), [0]);
@@ -77,7 +77,7 @@ other.final!.summonShield = 1;
 other.final!.allyPlan = pass;
 otherBoss.hp = 1;
 const shattered = resolveTurn(other, [{ type: 'rod' }, pass]);
-assert(shattered.some(event => event.t === 'summonShield' && event.amount === 0));
+assert(shattered.some(event => event.t === 'summonShield' && event.amount === 0 && event.broken));
 assert.equal(otherBoss.hp, 0);
 assert.equal(other.final!.phase, 2);
 assert.deepEqual(finalSlots(other), [otherAllySlot]);
@@ -186,3 +186,13 @@ for (let star = 1; star <= 5; star++) {
 }
 assert.equal(recruitCaughtMon(makeMon('water1', 3, false, true)).lv, 1);
 console.log('潮位倍率、敵方生命與收服後等級、個體值和技能檢查通過');
+
+const defender = makeMon('water1', 26);
+const attacker = makeMon('fire1', 26);
+const shieldFight = createBattle(makeRng(7), { name: '玩家', team: [attacker] },
+  { name: '護盾測試', team: [defender] }, false);
+volOf(shieldFight, 0).lockOn = true;
+volOf(shieldFight, 1).shield = 1;
+const shieldHit = resolveTurn(shieldFight, [{ type: 'skill', slot: 0 }, pass]);
+assert(shieldHit.some(event => event.t === 'dmg' && event.side === 1 && event.shieldBroken));
+console.log('破盾事件與協戰霸主倒下解除護盾的事件區分通過');

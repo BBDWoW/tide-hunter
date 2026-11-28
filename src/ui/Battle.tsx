@@ -1,3 +1,4 @@
+import { fx as visualEffects } from '../render/fx';
 import { MOXU_ASCENDED, MOXU_ASCENDED_SKILLS } from '../data/moxu';
 import { ensureSprite } from '../render/art';
 import { drawOracleTide, loadOracleArt } from '../render/oracle';
@@ -198,12 +199,17 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     setPopups((p) => [...p, { id, side, text, cls, label, dx: (Math.random() - 0.5) * 8 }]);
     setTimeout(() => setPopups((p) => p.filter((x) => x.id !== id)), cls === 'crit' || cls === 'super' ? 1300 : 1000);
   };
+  const shieldBreak = (side: number) => {
+    sfx('shieldbreak');
+    pop(side, '破盾！', 'shield-break');
+  };
   /** 畫面震動、全畫面閃光 */
   const jolt = (quake: number, flash = 0, color = '#ffffff') => { const a = anim.current; a.quake = Math.max(a.quake, quake); if (flash) { a.flash = flash; a.flashColor = color; } };
 
   // 每一格畫面：更新動畫狀態後繪製
   const draw = (ctx: CanvasRenderingContext2D, t: number, dt: number) => {
     const a = anim.current;
+    const reduce = visualEffects.reduce;
     for (let side = 0; side < a.mons.length; side++) {
       const v = a.mons[side];
       a.enter[side] = Math.min(1, a.enter[side] + dt * 2.2);
@@ -244,9 +250,10 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     for (const f of a.fx) {
       if (f.code === 'oracle_tide') {
         const caster = a.mons[f.from]; caster.castingOracle = true;
-        caster.oy = f.e >= 2 && f.e < 7 ? 1 : 0;
+        caster.oy = !reduce && f.e >= 2 && f.e < 7 ? 1 : 0;
         continue;
       }
+      if (reduce) continue;
       const fr = Math.floor(f.e);
       for (const [sd, who] of [[f.from, 'caster'], [f.to, 'target']] as const) {
         const v = a.mons[sd]; if (!v) continue;
@@ -267,15 +274,19 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         const A = actor(f.from, r0, f.big), B = actor(f.to, r1), fr = Math.floor(f.e);
         // 統領者的日蝕特效：舞台背景鋪滿整個畫面（含左右延伸），維持比例、往下對齊
         const ar = moxuFx(f.code) ? { x: -view.bleed, y: 0, w: W + 2 * view.bleed, h: H * .72 } : f.code.startsWith('moxu_') ? (() => { const b = view.bleed, w = W + b * 2, k = Math.max(w / 192, H / 104), aw = 192 * k, ah = 104 * k; return { x: -b - (aw - w) / 2, y: (H - ah) * 0.65, w: aw, h: ah }; })() : FX_ARENA;
-        if (which === 'back') drawFx(c, f.code, 'back', fr, A, B, ar);
-        else { drawFx(c, f.code, 'front', fr, A, B, ar); drawFx(c, f.code, 'particles', fr, A, B, ar); }
+        if (which === 'back') {
+          if (!reduce || !f.code.startsWith('moxu_')) drawFx(c, f.code, 'back', fr, A, B, ar);
+        } else {
+          drawFx(c, f.code, 'front', fr, A, B, ar);
+          if (!reduce) drawFx(c, f.code, 'particles', fr, A, B, ar);
+        }
       }
     };
     // 震動、閃光慢慢消退
     const q = a.quake, fl = a.flash;
     a.quake = Math.max(0, a.quake - dt * 14); a.flash = Math.max(0, a.flash - dt * 2.2);
     drawBattle(ctx, t, dt, a.mons, a.parts, a.beams, zoneOf(run).theme, { sunAndMoon: a.mons[1].form === MOXU_ASCENDED, field: fieldRef.current, quake: q, flash: fl, flashColor: a.flashColor, fxLayer });
-    if (changeAt.current) {
+    if (!reduce && changeAt.current) {
       const progress = Math.min(1, (performance.now() - changeAt.current) / 1300);
       ctx.save();
       const radius = 12 + progress * 36;
@@ -451,6 +462,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           break;
         }
         d[v].hp = e.hp; d[v].shield = e.shield;
+        if (e.shieldBroken) shieldBreak(v);
         const big = e.amount >= d[v].max * 0.25;
         a.mons[v].flash = e.crit ? 0.24 : 0.12;
         a.recoil[v] = e.crit || big ? 4 : 2;
@@ -472,7 +484,11 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         if (e.amount > 0) { sfx('heal'); burst(a.parts, c.x, c.y, 'heal', null); pop(v, `+${e.amount}`, 'heal'); }
         rerender(); await wait(300); break;
       }
-      case 'summonShield': d[1].summonShield = e.amount; rerender(); break;
+      case 'summonShield': {
+        d[1].summonShield = e.amount;
+        if (e.broken) shieldBreak(1);
+        rerender(); break;
+      }
       case 'shield': d[vi(e)].shield = e.amount; rerender(); break;
       case 'status': if (e.status) sfx('status'); d[vi(e)].status = e.status; rerender(); break;
       case 'stat': { const v = vi(e); sfx(e.delta > 0 ? 'buff' : 'debuff'); const c = center(v); if (e.delta > 0) burst(a.parts, c.x, c.y, 'buff', null); else a.shakeT[v] = 0.2; pop(v, e.delta > 0 ? '▲' : '▼', e.delta > 0 ? 'heal' : 'weak'); break; }
@@ -796,8 +812,10 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         </>}
         {popups.map((p) => {
           const c = posOf(p.side, (disp.current[p.side] ?? disp.current[1]).form);
-          const top = Math.max(p.side === 1 ? 15 : 49, c.cy - 30);
-          return <span key={p.id} class={`pop ${p.cls}`} style={{ left: `${((c.cx + p.dx) / W) * 100}%`, top: `${(top / H) * 100}%` }}>{p.label && <small>{p.label}</small>}{p.text}</span>;
+          const block = p.cls === 'block', shatter = p.cls === 'shield-break';
+          const top = Math.max(p.side === 1 ? 15 : 49, c.cy - 30) + (block || shatter ? 12 : 0);
+          const x = c.cx + (block ? -12 : shatter ? 12 : p.dx);
+          return <span key={p.id} class={`pop ${p.cls}`} style={{ left: `${(x / W) * 100}%`, top: `${(top / H) * 100}%` }}>{p.label && <small>{p.label}</small>}{p.text}</span>;
         })}
         {bs.godhand && (bs.godhand.rewinds > 0 || loveLock) && <div class="gh-counter"><Icon name="heart" />{bs.godhand.rewinds > 0 && <span>（被倒退 {bs.godhand.rewinds} 次）</span>}{loveLock && <em>只能攻擊！</em>}</div>}
         {cut && <div class={`final-cut ${cut.tone ?? ''}`} onClick={() => { introSkip.current = true; }} role="button" aria-label="跳過劇情"><i class="bi-bar top" /><i class="bi-bar bottom" /><div class="fc-card"><b class="fc-title">{cut.title}</b>{cut.lines.map((l, i) => <p key={i} style={{ animationDelay: `${0.3 + i * 0.9}s` }}>{l}</p>)}</div><span class="bi-skip">點一下跳過</span></div>}

@@ -91,10 +91,10 @@ type BEventBase =
   | { t: 'convergence'; side: SideId; loss: number; hp: number; max: number }
   | { t: 'omen'; side: SideId; marks: number[] }
   | { t: 'miss'; side: SideId }
-  | { t: 'dmg'; side: SideId; elem?: Elem | null; amount: number; hp: number; eff: number; crit: boolean; shield: number }
+  | { t: 'dmg'; side: SideId; elem?: Elem | null; amount: number; hp: number; eff: number; crit: boolean; shield: number; shieldBroken?: boolean }
   | { t: 'heal'; side: SideId; amount: number; hp: number }
   | { t: 'shield'; side: SideId; amount: number }
-  | { t: 'summonShield'; side: 1; amount: number }
+  | { t: 'summonShield'; side: 1; amount: number; broken?: boolean }
   | { t: 'status'; side: SideId; status: StatusId | null }
   | { t: 'stat'; side: SideId; key: StatKey; delta: number }
   | { t: 'energy'; side: SideId; value: number }
@@ -644,8 +644,9 @@ function absorbSummonShield(s: BattleState, target: Mon, damage: number, ev: BEv
   if (!final?.summonShield || target !== s.sides[1].team[0]) return damage;
   const absorbed = Math.min(damage, final.summonShield);
   final.summonShield -= absorbed;
-  ev.push({ t: 'summonShield', side: 1, slot: 0, amount: final.summonShield });
-  if (final.summonShield === 0) ev.push({ t: 'msg', text: '統領者的召喚護盾被打破了！' });
+  const broken = final.summonShield === 0;
+  ev.push({ t: 'summonShield', side: 1, slot: 0, amount: final.summonShield, broken });
+  if (broken) ev.push({ t: 'msg', text: '統領者的召喚護盾被打破了！' });
   return damage - absorbed;
 }
 
@@ -662,7 +663,7 @@ function dealDamage(s: BattleState, side: SideId, dmg: number, eff: number, crit
     ev.push({ t: 'msg', text: `${nameOf(s, side)} 握緊了不屈珍珠，撐住了！` });
   }
   m.hp -= real;
-  ev.push({ t: 'dmg', side, elem, amount: real, hp: m.hp, eff, crit, shield: v.shield });
+  ev.push({ t: 'dmg', side, elem, amount: real, hp: m.hp, eff, crit, shield: v.shield, shieldBroken: absorbed > 0 && v.shield === 0 });
   if (absorbed) ev.push({ t: 'msg', text: `護盾擋下了 ${absorbed} 點傷害！` });
   const att: SideId = side === 0 ? 1 : 0, am = active(s, att);
   if (absorbed && bn(s, side, 'x_thorns') && am.hp > 0) {
