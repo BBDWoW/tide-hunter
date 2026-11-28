@@ -21,8 +21,7 @@ import { catchChance, rollShakes } from '../game/capture';
 import { foeMods, battleMods, boon, LANDING_BONUS, zoneOf } from '../game/run';
 import type { Encounter, RunState } from '../game/run';
 import { spriteSize } from '../render/pixel';
-import { drawFx, FX_MS, fxFrames, fxOffset, fxSkill, hasFx, loadFx, moxuFx } from '../render/vfx';
-import { WATERGUN_FX } from '../render/watergun';
+import { animatedFx, drawFx, FX_MS, fxFrames, fxOffset, fxSkill, hasFx, loadFx, moxuFx } from '../render/vfx';
 import { auraColor, burst, elemBurst, drawBattle, drawNet, fisherCanvas, H, monSlot, view, W, type Beam, type MonView, type Particle } from '../render/scene';
 import { Tip, AbilityLines, Bar, ElemChip, Elems, Energy, IvStars, RarityTag, SkillLine, Sprite, StageTag } from './components';
 import { GameScreen, SceneCanvas, Win, type Viewport } from './layout';
@@ -44,6 +43,10 @@ const FX_ARENA = { x: 20, y: 2, w: 216, h: 117 };
 const DASH = 0.5; // 近戰衝刺的時間（秒）
 const ROD_T = 1.7; // 漁夫的釣竿動畫的長度（秒）
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+const waitForFxFrame = (animation: { e: number }, frame: number) => new Promise<void>(done => {
+  const tick = () => animation.e >= frame ? done() : requestAnimationFrame(tick);
+  requestAnimationFrame(tick);
+});
 /** 漁夫的釣竿：漁夫從左下跳出來 → 甩竿，魚線帶著魚鉤橫掃過每一隻對手 → 落回去 */
 function drawRod(c: CanvasRenderingContext2D, t: number, foes: ({ cx: number; cy: number } | null)[]) {
   const img = fisherCanvas(false), fw = img.width * 2, fh = img.height * 2; // 放大兩倍，看得清楚
@@ -185,7 +188,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
     lungeT: [0, 0, 0], dashT: [0, 0, 0], shakeT: [0, 0, 0], recoil: [0, 0, 0], fade: [1, 1, 0] as number[], enter: [0, 0, 0] as number[],
     dashTo: [1, 0, 0] as number[], // 衝刺的目標（畫面上的第幾隻）
     parts: [] as Particle[], beams: [] as Beam[],
-    fx: [] as { code: string; from: number; to: number; e: number; big?: boolean }[], // 播放中的技能特效（e = 已播放幾格；big：統領者的招式放大）
+    fx: [] as { code: string; from: number; to: number; e: number; big?: boolean; missed?: boolean }[], // 播放中的技能特效（e = 已播放幾格；big：統領者的招式放大）
     rod: -1, // 漁夫的釣竿動畫進度（秒，-1 = 沒有在播）
     quake: 0, flash: 0, flashColor: '#ffffff',
   });
@@ -211,6 +214,15 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   const draw = (ctx: CanvasRenderingContext2D, t: number, dt: number) => {
     const a = anim.current;
     const reduce = visualEffects.reduce;
+    const spd = hurry.current ? 4 : fastRef.current ? 2 : 1;
+    for (const f of a.fx) {
+      const skillFx = animatedFx(f.code);
+      const frameMs = skillFx?.frameMs ?? (f.code === 'oracle_tide' ? 90 : moxuFx(f.code)?.frameDurationMs ?? FX_MS);
+      const next = f.e + (dt * 1000 * spd) / frameMs;
+      // 即使加速播放，也讓第一次碰撞的畫格真的出現在畫面上。
+      f.e = skillFx && f.e < skillFx.hitFrame ? Math.min(next, skillFx.hitFrame) : next;
+    }
+    a.fx = a.fx.filter(f => f.e < fxFrames(f.code));
     for (let side = 0; side < a.mons.length; side++) {
       const v = a.mons[side];
       a.enter[side] = Math.min(1, a.enter[side] + dt * 2.2);
@@ -226,7 +238,18 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       if (side === 2) v.y = p.y + (1 - e) * 40; // 被召喚的霸主從海裡升上來
       // 近戰：衝到對手面前再退回來
       a.dashT[side] = Math.max(0, a.dashT[side] - dt);
-      if (a.dashT[side] > 0) {
+      const dashFx = a.fx.find(f => f.from === side && animatedFx(f.code)?.dash);
+      const dash = dashFx && animatedFx(dashFx.code)?.dash;
+      if (dashFx && dash) {
+        const tg = posOf(dashFx.to, a.mons[dashFx.to].form);
+        const k = dash(dashFx.e, !!dashFx.missed);
+        const gap = Math.max(24, (p.cy - p.y + tg.cy - tg.y) / 2);
+        const dx = (tg.cx - p.cx - Math.sign(tg.cx - p.cx) * gap) * k;
+        v.x += dx;
+        v.y += (tg.cy - p.cy) * k;
+        v.base.x += dx;
+        v.base.y += (tg.by - p.by) * k;
+      } else if (a.dashT[side] > 0) {
         const other = a.dashTo[side], tg = posOf(other, a.mons[other]?.form ?? v.form);
         const k = Math.sin((1 - a.dashT[side] / DASH) * Math.PI);
         v.x += (tg.cx - p.cx - (side === 0 ? 28 : -28)) * k;
@@ -243,10 +266,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
       v.enter = a.enter[side] < 1 ? a.enter[side] : undefined;
       const dd = disp.current[side]; v.low = dd.hp > 0 && dd.hp / dd.max < 0.25;
     }
-    // 技能特效：往前播，並套用素材裡施術者／目標的抖動
-    const spd = hurry.current ? 4 : fastRef.current ? 2 : 1;
-    for (const f of a.fx) f.e += (dt * 1000 * spd) / (f.code === 'watergun' ? WATERGUN_FX.frameMs : f.code === 'oracle_tide' ? 90 : moxuFx(f.code)?.frameDurationMs ?? FX_MS);
-    a.fx = a.fx.filter((f) => f.e < fxFrames(f.code));
+    // 套用圖集裡施術者／目標的抖動
     for (const v of a.mons) { v.ox = 0; v.oy = 0; v.castingOracle = false; }
     for (const f of a.fx) {
       if (f.code === 'oracle_tide') {
@@ -276,10 +296,10 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         // 統領者的日蝕特效：舞台背景鋪滿整個畫面（含左右延伸），維持比例、往下對齊
         const ar = moxuFx(f.code) ? { x: -view.bleed, y: 0, w: W + 2 * view.bleed, h: H * .72 } : f.code.startsWith('moxu_') ? (() => { const b = view.bleed, w = W + b * 2, k = Math.max(w / 192, H / 104), aw = 192 * k, ah = 104 * k; return { x: -b - (aw - w) / 2, y: (H - ah) * 0.65, w: aw, h: ah }; })() : FX_ARENA;
         if (which === 'back') {
-          if (!reduce || !f.code.startsWith('moxu_')) drawFx(c, f.code, 'back', fr, A, B, ar);
+          if (!reduce || !f.code.startsWith('moxu_')) drawFx(c, f.code, 'back', fr, A, B, ar, f.missed);
         } else {
-          drawFx(c, f.code, 'front', fr, A, B, ar);
-          if (!reduce) drawFx(c, f.code, 'particles', fr, A, B, ar);
+          drawFx(c, f.code, 'front', fr, A, B, ar, f.missed);
+          if (!reduce) drawFx(c, f.code, 'particles', fr, A, B, ar, f.missed);
         }
       }
     };
@@ -365,7 +385,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   }
   const center = (v: number) => { const m = anim.current.mons[v] ?? anim.current.mons[1]; const p = posOf(v, m.form); return { x: p.cx, y: p.cy }; };
 
-  async function apply(e: BEvent) {
+  async function apply(e: BEvent, missed = false) {
     const a = anim.current, d = disp.current;
     switch (e.t) {
       case 'msg': say(e.text); await wait(560); break;
@@ -377,10 +397,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           await loadOracleArt().catch(() => {});
           say('卜潮靈龜使用了三卜鎮潮！'); sfx('skill:water');
           const fx = {code: e.skill, from, to, e: 0}; a.fx.push(fx);
-          await new Promise<void>(done => {
-            const tick = () => fx.e >= 9 ? done() : requestAnimationFrame(tick);
-            requestAnimationFrame(tick);
-          });
+          await waitForFxFrame(fx, 9);
           break;
         }
         const ascendedFx = moxuFx(e.skill);
@@ -390,10 +407,7 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
           sfx('enrage');
           const animation = { code: e.skill, from, to, e: 0 };
           a.fx.push(animation);
-          await new Promise<void>(done => {
-            const tick = () => animation.e >= ascendedFx.impactFrameIndex ? done() : requestAnimationFrame(tick);
-            requestAnimationFrame(tick);
-          });
+          await waitForFxFrame(animation, ascendedFx.impactFrameIndex);
           jolt(3, .18, '#badffb');
           break;
         }
@@ -405,13 +419,11 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         sfx(kind === 'buff' ? 'buff' : kind === 'heal' ? 'item' : `skill:${sk.elem ?? 'none'}`);
         // 統領者的招式：畫面先暗一下、閃光、震動、四周冒出光點
         if (moxu) { jolt(3.5, 0.45, '#7fd8ff'); sfx('enrage'); for (let k = 0; k < 3; k++) burst(a.parts, me.x + (Math.random() - 0.5) * 40, me.y + (Math.random() - 0.5) * 30, 'buff', 'water'); await wait(260); }
-        if (e.skill === 'watergun') {
-          const animation = { code: e.skill, from, to, e: 0 };
+        const customFx = animatedFx(e.skill);
+        if (customFx) {
+          const animation = { code: e.skill, from, to, e: 0, missed };
           a.fx.push(animation);
-          await new Promise<void>(done => {
-            const tick = () => animation.e >= WATERGUN_FX.hitFrame ? done() : requestAnimationFrame(tick);
-            requestAnimationFrame(tick);
-          });
+          await waitForFxFrame(animation, customFx.hitFrame);
           break;
         }
         if (hasFx(e.skill)) {
@@ -474,8 +486,8 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
         d[v].hp = e.hp; d[v].shield = e.shield;
         if (e.shieldBroken) shieldBreak(v);
         const big = e.amount >= d[v].max * 0.25;
-        const watergunHit = e.elem === 'water' && a.fx.some(f => f.code === 'watergun' && f.to === v);
-        a.mons[v].flash = watergunHit ? 0 : e.crit ? 0.24 : 0.12;
+        const customHit = a.fx.some(f => !f.missed && f.to === v && SKILLS[f.code]?.elem === e.elem && animatedFx(f.code));
+        a.mons[v].flash = customHit ? 0 : e.crit ? 0.24 : 0.12;
         a.recoil[v] = e.crit || big ? 4 : 2;
         if (e.eff >= 2 && e.elem) {
           const c = center(v);
@@ -645,7 +657,27 @@ export function Battle({ vp, run, enc, boss, onEnd }: { vp: Viewport; run: RunSt
   }
 
 
-  async function play(evs: BEvent[]) { for (const e of evs) await apply(e); }
+  async function play(evs: BEvent[]) {
+    for (let i = 0; i < evs.length; i++) {
+      const e = evs[i], announcement = evs[i + 1];
+      if (e.t !== 'use' || !animatedFx(e.skill) || announcement?.t !== 'msg') {
+        await apply(e);
+        continue;
+      }
+      // 招式名稱在出招時顯示，格擋等文字隨命中處理，避免傷害晚一拍。
+      say(announcement.text);
+      i++;
+      let contact = i + 1;
+      while (evs[contact]?.t === 'msg' || evs[contact]?.t === 'block') contact++;
+      const result = evs[contact]?.t;
+      await apply(e, result === 'miss' || result === 'dodge');
+      while (i + 1 < contact) {
+        const notice = evs[++i];
+        if (notice.t === 'msg') say(notice.text);
+        else await apply(notice);
+      }
+    }
+  }
 
   async function afterTurn() {
     if (bs.over) return finish();

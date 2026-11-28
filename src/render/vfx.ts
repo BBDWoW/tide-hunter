@@ -4,6 +4,7 @@ import { oracleImpact } from '../data/oracle';
 import MOXU_FX from '../art/moxu_vfx.json';
 import SKILL_FX from '../art/vfx_skills.json';
 import { spriteSockets } from './art';
+import { STARTER_FX, type AnimatedFx, type FxLayer, type FxPoint } from './starter-fx';
 import { drawWatergun, WATERGUN_FX } from './watergun';
 
 /** fc：這招有幾格（預設 12）；r = 'eclipse'：統領者的日蝕特效，用另一套定位方式（back 是整片舞台背景） */
@@ -14,23 +15,24 @@ export const FX_FRAMES = 12, FX_MS = 100;
 type MoxuFx = (typeof MOXU_FX)[keyof typeof MOXU_FX];
 export const moxuFx = (code: string): MoxuFx | undefined => (MOXU_FX as Record<string, MoxuFx>)[code];
 const FW = 192, FH = 104;
-type Layer = 'back' | 'front' | 'particles';
-const LAYERS: Layer[] = ['back', 'front', 'particles'];
+const LAYERS: FxLayer[] = ['back', 'front', 'particles'];
+const WATERGUN: AnimatedFx = { ...WATERGUN_FX, socket: 'mouth', draw: drawWatergun };
+export const animatedFx = (code: string) => code === 'watergun' ? WATERGUN : STARTER_FX[code];
 
 const URLS = import.meta.glob('../art/vfx/*/*.png', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 type Atlas = HTMLImageElement | HTMLCanvasElement;
-const imgs = new Map<string, Partial<Record<Layer, Atlas>>>();
+const imgs = new Map<string, Partial<Record<FxLayer, Atlas>>>();
 
-export const hasFx = (code: string) => !!FX[code] || !!moxuFx(code);
+export const hasFx = (code: string) => !!animatedFx(code) || !!FX[code] || !!moxuFx(code);
 /** 這招的特效有幾格 */
-export const fxFrames = (code: string) => code === 'watergun' ? WATERGUN_FX.frames : moxuFx(code)?.frameCount ?? FX[code]?.fc ?? FX_FRAMES;
+export const fxFrames = (code: string) => animatedFx(code)?.frames ?? moxuFx(code)?.frameCount ?? FX[code]?.fc ?? FX_FRAMES;
 export const fxSkill = (code: string) => FX[code];
 /** 先把招式的圖集載進來（用到時才載） */
 const loading = new Map<string, Promise<void>>();
 export function loadFx(code: string) {
-  if (code === 'watergun' || !hasFx(code)) return;
+  if (animatedFx(code) || !hasFx(code)) return;
   if (loading.has(code)) return loading.get(code);
-  const set: Partial<Record<Layer, Atlas>> = {};
+  const set: Partial<Record<FxLayer, Atlas>> = {};
   imgs.set(code, set);
   const src = FX[code]?.src ?? code, hue = FX[code]?.hue;
   const ready = Promise.all(LAYERS.map(async l => {
@@ -65,17 +67,15 @@ function hueShift(im: HTMLImageElement, deg: number): HTMLCanvasElement {
 
 export interface Rect { x: number; y: number; w: number }
 export interface Actor { rect: Rect; sprite: string; facesLeft: boolean; logical: number }
-interface Pt { x: number; y: number }
-
 const sock = (a: Actor, name: string): [number, number] => spriteSockets(a.sprite)?.[name] ?? spriteSockets(a.sprite)?.body ?? [0.5, 0.6];
-export function actorPoint(a: Actor, uv: [number, number]): Pt {
+export function actorPoint(a: Actor, uv: [number, number]): FxPoint {
   const r = a.rect;
   return { x: Math.round(r.x + r.w * (a.facesLeft ? 1 - uv[0] : uv[0])), y: Math.round(r.y + r.w * uv[1]) };
 }
 
 /** 這一格施術者／目標要偏移多少（素材裡的施法抖動），面向左時左右顛倒 */
 export function fxOffset(code: string, frame: number, who: 'caster' | 'target', facesLeft: boolean): [number, number] {
-  const s = FX[code]; if (!s || code === 'watergun') return [0, 0];
+  const s = FX[code]; if (!s || animatedFx(code)) return [0, 0];
   const o = (who === 'caster' ? s.co : s.to)[Math.max(0, Math.min(fxFrames(code) - 1, frame))] ?? [0, 0];
   return [facesLeft ? -o[0] : o[0], o[1]];
 }
@@ -83,13 +83,20 @@ export function fxOffset(code: string, frame: number, who: 'caster' | 'target', 
 const RETURNING = new Set(['soulsip', 'bloodtide', 'engulf', 'energydrain', 'seedleech', 'seagodbreath', 'azuretide']);
 
 /** 畫一層特效（照包內附的定位程式改寫） */
-export function drawFx(ctx: CanvasRenderingContext2D, code: string, layer: Layer, frame: number, caster: Actor, target: Actor, arena: { x: number; y: number; w: number; h: number }) {
+export function drawFx(ctx: CanvasRenderingContext2D, code: string, layer: FxLayer, frame: number, caster: Actor, target: Actor, arena: { x: number; y: number; w: number; h: number }, missed = false) {
   if (frame < 0 || frame >= fxFrames(code)) return;
-  if (code === 'watergun') {
-    const source = actorPoint(caster, sock(caster, 'mouth'));
+  const animated = animatedFx(code);
+  if (animated) {
+    const source = actorPoint(caster, sock(caster, animated.socket));
     const hit = actorPoint(target, sock(target, 'body'));
     const dir = hit.x >= source.x ? 1 : -1;
-    drawWatergun(ctx, layer, frame, source, { x: hit.x - Math.round(target.rect.w * 0.12) * dir, y: hit.y });
+    const contact = {
+      x: hit.x - Math.round(target.rect.w * 0.12) * dir,
+      y: hit.y - (missed ? Math.max(20, Math.round(target.rect.w * .45)) : 0),
+    };
+    ctx.save();
+    animated.draw(ctx, layer, frame, source, contact, missed);
+    ctx.restore();
     return;
   }
   const s = FX[code], image = imgs.get(code)?.[layer];
@@ -106,12 +113,12 @@ export function drawFx(ctx: CanvasRenderingContext2D, code: string, layer: Layer
   const sx = (frame % 4) * FW, sy = Math.floor(frame / 4) * FH;
   const face = hit.x >= source.x ? 1 : -1, style = s.style;
   ctx.save(); ctx.imageSmoothingEnabled = false;
-  const at = (p: Pt, x: number, y: number, mirror = face) => {
+  const at = (p: FxPoint, x: number, y: number, mirror = face) => {
     ctx.save(); ctx.translate(Math.round(p.x), Math.round(p.y)); ctx.scale(mirror * scale, scale);
     ctx.drawImage(image, sx, sy, FW, FH, -x, -y, FW, FH); ctx.restore();
   };
   // 沿著兩點之間一欄一欄拉伸（光束、衝擊波之類）
-  const path = (a: Pt, b: Pt, start = 69, end = 145, baseY = 55) => {
+  const path = (a: FxPoint, b: FxPoint, start = 69, end = 145, baseY = 55) => {
     const span = b.x - a.x, sign = span < 0 ? -1 : 1, dist = Math.abs(span);
     const left = Math.floor(Math.min(a.x, b.x) - 80 * scale), right = Math.ceil(Math.max(a.x, b.x) + 80 * scale);
     for (let x = left; x <= right; x++) {
@@ -141,7 +148,7 @@ export function drawFx(ctx: CanvasRenderingContext2D, code: string, layer: Layer
  * 統領者的日蝕特效（照美術附的 eclipse-vfx.mjs 改寫）：
  * back 是整片舞台背景（鋪滿 arena，開頭結尾那一格淡入淡出）；front 從施術者的 socket 沿著兩點拉到命中點；particles 畫在命中點。
  */
-function drawEclipse(ctx: CanvasRenderingContext2D, image: Atlas, s: FxSkill, layer: Layer, t: number, caster: Actor, target: Actor, arena: { x: number; y: number; w: number; h: number }) {
+function drawEclipse(ctx: CanvasRenderingContext2D, image: Atlas, s: FxSkill, layer: FxLayer, t: number, caster: Actor, target: Actor, arena: { x: number; y: number; w: number; h: number }) {
   const n = s.fc ?? FX_FRAMES, sx = (t % 4) * FW, sy = Math.floor(t / 4) * FH;
   const source = actorPoint(caster, sock(caster, s.socket)), hit = actorPoint(target, sock(target, 'body'));
   const scale = caster.rect.w / caster.logical;
@@ -168,7 +175,7 @@ function drawEclipse(ctx: CanvasRenderingContext2D, image: Atlas, s: FxSkill, la
 }
 
 // 日月御潮圖集的前景依施術點和命中點定位，背景可延伸至寬螢幕邊緣。
-function drawAscended(ctx: CanvasRenderingContext2D, image: Atlas, skill: MoxuFx, layer: Layer, frame: number, caster: Actor, target: Actor, arena: Rect & { h: number }) {
+function drawAscended(ctx: CanvasRenderingContext2D, image: Atlas, skill: MoxuFx, layer: FxLayer, frame: number, caster: Actor, target: Actor, arena: Rect & { h: number }) {
   const { frameWidth: w, frameHeight: h, atlasColumns: cols, sourcePx, targetPx } = skill;
   const sx = (frame % cols) * w, sy = Math.floor(frame / cols) * h;
   const source = actorPoint(caster, sock(caster, 'weapon'));

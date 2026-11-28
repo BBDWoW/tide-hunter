@@ -39,14 +39,14 @@ function drawJet(ctx: CanvasRenderingContext2D, frame: number, source: Point, ta
   ctx.restore();
 }
 
-export function drawWatergun(ctx: CanvasRenderingContext2D, layer: 'back' | 'front' | 'particles', frame: number, source: Point, target: Point) {
+export function drawWatergun(ctx: CanvasRenderingContext2D, layer: 'back' | 'front' | 'particles', frame: number, source: Point, target: Point, missed = false) {
   const dir = target.x >= source.x ? 1 : -1;
   const hit = frame - WATERGUN_FX.hitFrame;
   ctx.save();
   if (layer === 'front') {
     if (frame < JET_HEAD.length) drawJet(ctx, frame, source, target, dir);
     // 命中的水冠先向前翻開，之後只留下幾道較細的水絲。
-    if (hit >= 0 && hit < 5) {
+    if (!missed && hit >= 0 && hit < 5) {
       ctx.globalAlpha *= [1, 1, 0.92, 0.74, 0.5][hit];
       const spread = 1 + hit * 0.55;
       for (let i = 0; i < 8; i++) {
@@ -66,7 +66,7 @@ export function drawWatergun(ctx: CanvasRenderingContext2D, layer: 'back' | 'fro
         pixel(ctx, FOAM, target.x - 3, target.y - 2, 7, 3);
       }
     }
-  } else if (layer === 'back' && hit >= 0) {
+  } else if (layer === 'back' && hit >= 0 && !missed) {
     // 透明的水環落在角色後方，留出水冠和前景水珠的層次。
     ctx.globalAlpha *= (1 - hit / 7) * 0.74;
     const radius = 8 + hit * 4;
@@ -90,7 +90,7 @@ export function drawWatergun(ctx: CanvasRenderingContext2D, layer: 'back' | 'fro
         pixel(ctx, BLUE, x - 10 * dir, y + 3, 2, 1);
         pixel(ctx, WATER, x - 14 * dir, y + 7);
       }
-    } else {
+    } else if (!missed) {
       const travel = 2.5 + hit * 1.65;
       ctx.globalAlpha *= 1 - hit / 8;
       for (const [i, [vx, vy, size]] of SPRAY.entries()) {
