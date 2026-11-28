@@ -1,5 +1,5 @@
 // 初始夥伴的火、草進階技能，以及淺灘常見的咬擊與咆哮。
-import { dashProgress, direction, pixel, pixelArc, pixelStroke, tile, travel, type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
+import { dashProgress, direction, drawJawPair, pixel, pixelArc, pixelStroke, tile, travel, type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
 
 const FIRE = { ink: '#654056', red: '#be5036', orange: '#f17b3e', gold: '#ffd073', white: '#fff1a4' };
 const SHADOW = { ink: '#312341', purple: '#655282', violet: '#957ac0', pale: '#dbc7f2' };
@@ -143,15 +143,6 @@ const thorn = tile([
   '..ddddddd...',
 ], { d: PETAL.ink, g: '#568b55', l: '#b9cf79', c: '#729a70' });
 
-function jaws(ctx: CanvasRenderingContext2D, jaw: typeof fireJaw, point: FxPoint, dir: number, gap: number, scale: number) {
-  jaw(ctx, point.x, point.y - gap, dir, scale);
-  ctx.save();
-  ctx.translate(point.x, point.y + gap);
-  ctx.scale(1, -1);
-  jaw(ctx, 0, 0, dir, scale);
-  ctx.restore();
-}
-
 const FIREBITE_HIT = 5;
 const FIREBITE_DASH = [0, -.07, -.05, .2, .66, 1, .89, .62, .35, .12, 0];
 function drawFlamebite(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: number, source: FxPoint, target: FxPoint, missed: boolean, dir: number) {
@@ -162,12 +153,12 @@ function drawFlamebite(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: num
   }
   if (layer === 'front' && frame <= 4) {
     flare(ctx, source.x - dir * 3, source.y - 2, dir, .58 + frame * .11);
-    if (frame === 4) jaws(ctx, fireJaw, { x: source.x + dir * 7, y: source.y }, dir, 9, .78);
+    if (frame === 4) drawJawPair(ctx, fireJaw, { x: source.x + dir * 7, y: source.y }, dir, 9, .78);
   }
   if (hit < 0 || missed) return;
   if (layer === 'front' && hit <= 4) {
     ctx.globalAlpha *= [1, .98, .81, .58, .34][hit];
-    jaws(ctx, fireJaw, target, dir, [5, 3, 4, 6, 8][hit], [1.09, 1.16, 1.1, .95, .83][hit]);
+    drawJawPair(ctx, fireJaw, target, dir, [5, 3, 4, 6, 8][hit], [1.09, 1.16, 1.1, .95, .83][hit]);
     flare(ctx, target.x + dir * (8 + hit * 3), target.y - 4 - hit * 4, dir, .86 + hit * .12);
     if (hit < 2) pixel(ctx, FIRE.white, target.x - 3, target.y - 1, 7, 3);
   } else if (layer === 'particles') {
@@ -194,12 +185,12 @@ function drawDarkbite(ctx: CanvasRenderingContext2D, layer: FxLayer, frame: numb
   if (layer === 'front' && frame <= 4) {
     const mouth = { x: source.x + dir * (5 + frame), y: source.y };
     if (frame <= 2) pixelArc(ctx, mouth, 5 + frame, 3 + frame, -.5 * Math.PI, Math.PI, SHADOW.violet, 2);
-    else jaws(ctx, shadeJaw, mouth, dir, frame === 3 ? 9 : 12, frame === 3 ? .64 : .82);
+    else drawJawPair(ctx, shadeJaw, mouth, dir, frame === 3 ? 9 : 12, frame === 3 ? .64 : .82);
   }
   if (hit < 0 || missed) return;
   if (layer === 'front' && hit <= 4) {
     ctx.globalAlpha *= [1, .9, .7, .47, .25][hit];
-    jaws(ctx, shadeJaw, target, dir, [5, 2, 3, 5, 7][hit], [1.14, 1.22, 1.1, .98, .87][hit]);
+    drawJawPair(ctx, shadeJaw, target, dir, [5, 2, 3, 5, 7][hit], [1.14, 1.22, 1.1, .98, .87][hit]);
     if (hit <= 1) {
       pixel(ctx, SHADOW.ink, target.x - 6, target.y - 3, 13, 7);
       pixel(ctx, SHADOW.pale, target.x - 2, target.y - 1, 5, 3);

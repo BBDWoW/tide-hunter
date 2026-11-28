@@ -46,6 +46,15 @@ export function tile(rows: string[], colors: Record<string, string>) {
   };
 }
 
+export function drawJawPair(ctx: CanvasRenderingContext2D, jaw: ReturnType<typeof tile>, point: FxPoint, dir: number, gap: number, scale: number) {
+  jaw(ctx, point.x, point.y - gap, dir, scale);
+  ctx.save();
+  ctx.translate(point.x, point.y + gap);
+  ctx.scale(1, -1);
+  jaw(ctx, 0, 0, dir, scale);
+  ctx.restore();
+}
+
 export const direction = (source: FxPoint, target: FxPoint) => target.x >= source.x ? 1 : -1;
 export function travel(source: FxPoint, target: FxPoint, t: number, rise = 0): FxPoint {
   return {

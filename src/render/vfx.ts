@@ -6,7 +6,9 @@ import SKILL_FX from '../art/vfx_skills.json';
 import { ADVANCED_NATURE_FX } from './advanced-nature-fx';
 import { ADVANCED_WATER_FX } from './advanced-water-fx';
 import { spriteSockets } from './art';
+import { FISSURE_FX } from './fissure-fx';
 import { FLIGHT_FX } from './flight-fx';
+import { FROST_FX } from './frost-fx';
 import { REEF_FX } from './reef-fx';
 import { SHORE_FX } from './shore-fx';
 import { type AnimatedFx, type FxLayer, type FxPoint } from './skill-fx-helpers';
@@ -33,6 +35,8 @@ const ANIMATED_FX: Partial<Record<string, AnimatedFx>> = {
   ...TIDE_FX,
   ...FLIGHT_FX,
   ...REEF_FX,
+  ...FROST_FX,
+  ...FISSURE_FX,
   watergun: { ...WATERGUN_FX, socket: 'mouth', draw: drawWatergun },
 };
 export const animatedFx = (code: string) => Object.hasOwn(ANIMATED_FX, code) ? ANIMATED_FX[code] : undefined;
